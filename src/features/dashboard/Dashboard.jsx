@@ -28,21 +28,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         const unsubCards = onSnapshot(collection(db, ...userCollectionPath, userId, 'cards'), snapshot => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubSubscriptions = onSnapshot(collection(db, ...userCollectionPath, userId, 'subscriptions'), snapshot => setSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         
+        // ✅ CORREÇÃO: Função de mapeamento robusta para ler os dados corretamente
+        const safeDataMapper = (doc) => {
+            const data = doc.data();
+            const convertedDate = data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date + 'T00:00:00') : null);
+            // Garante compatibilidade com registros antigos ('amount') e novos ('value').
+            const value = data.value !== undefined ? data.value : (data.amount !== undefined ? data.amount : 0);
+            return { id: doc.id, ...data, date: convertedDate, value };
+        };
+
         const unsubExpenses = onSnapshot(collection(db, ...userCollectionPath, userId, 'expenses'), snapshot => {
-            const expenseData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                const convertedDate = data.date?.toDate ? data.date.toDate() : new Date(data.date + 'T00:00:00');
-                return { id: doc.id, ...data, date: convertedDate, value: data.amount }; // Padroniza 'amount' para 'value'
-            });
-            setExpenses(expenseData);
+            setExpenses(snapshot.docs.map(safeDataMapper));
         });
         const unsubIncomes = onSnapshot(collection(db, ...userCollectionPath, userId, 'incomes'), snapshot => {
-            const incomeData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                const convertedDate = data.date?.toDate ? data.date.toDate() : new Date(data.date + 'T00:00:00');
-                return { id: doc.id, ...data, date: convertedDate, value: data.amount }; // Padroniza 'amount' para 'value'
-            });
-            setIncomes(incomeData);
+            setIncomes(snapshot.docs.map(safeDataMapper));
         });
 
         return () => { unsubLoans(); unsubClients(); unsubCards(); unsubSubscriptions(); unsubExpenses(); unsubIncomes(); };
@@ -133,14 +132,15 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             }
         });
 
+        // ✅ CORREÇÃO: Lógica de data padronizada para UTC.
         expenses.forEach(expense => {
             const expenseDate = expense.date; 
             if (expenseDate instanceof Date && !isNaN(expenseDate)) {
-                let faturaMonth = expenseDate.getMonth() + 1;
-                let faturaYear = expenseDate.getFullYear();
+                let faturaMonth = expenseDate.getUTCMonth() + 1;
+                let faturaYear = expenseDate.getUTCFullYear();
                 if (expense.cardId) {
                     const card = cards.find(c => c.id === expense.cardId);
-                    if (card && typeof card.closingDay === 'number' && expenseDate.getDate() >= card.closingDay) {
+                    if (card && typeof card.closingDay === 'number' && expenseDate.getUTCDate() >= card.closingDay) {
                         faturaMonth += 1;
                         if (faturaMonth > 12) { faturaMonth = 1; faturaYear += 1; }
                     }

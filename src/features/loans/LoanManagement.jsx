@@ -1,7 +1,7 @@
 // src/features/loans/LoanManagement.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import GenericModal from '../../components/GenericModal';
@@ -10,7 +10,7 @@ import GenericModal from '../../components/GenericModal';
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
-const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
+const ChevronUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>;
 
 function LoanManagement() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
@@ -18,6 +18,7 @@ function LoanManagement() {
     const [loans, setLoans] = useState([]);
     const [clients, setClients] = useState([]);
     const [cards, setCards] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
 
     const [editingLoan, setEditingLoan] = useState(null);
     const [purchaseType, setPurchaseType] = useState('normal');
@@ -37,14 +38,14 @@ function LoanManagement() {
     const [showInstallments, setShowInstallments] = useState({});
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [loanToDelete, setLoanToDelete] = useState(null);
+    const [showPaidLoans, setShowPaidLoans] = useState(false);
 
-    // Efeitos
     useEffect(() => {
         if (!isAuthReady || !db || !userId) return;
         const userCollectionPath = getUserCollectionPathSegments();
         const clientsRef = collection(db, ...userCollectionPath, userId, 'clients');
         const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-        const loansRef = collection(db, ...userCollectionPath, userId, 'loans');
+        const loansRef = query(collection(db, ...userCollectionPath, userId, 'loans'), orderBy('createdAt', 'desc'));
 
         const unsubClients = onSnapshot(clientsRef, snapshot => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubCards = onSnapshot(cardsRef, snapshot => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
@@ -56,7 +57,7 @@ function LoanManagement() {
     useEffect(() => {
         if (loanDate && selectedCard && cards.length > 0) {
             const card = cards.find(c => c.id === selectedCard);
-            if (card) {
+            if (card && card.closingDay && card.dueDay) {
                 const purchaseDate = new Date(loanDate + "T12:00:00Z");
                 let dueDate = new Date(purchaseDate);
                 if (purchaseDate.getUTCDate() >= card.closingDay) {
@@ -84,24 +85,233 @@ function LoanManagement() {
         }
     }, [totalValueInput, person1ShareInput, purchaseType]);
 
-    const resetForm = () => { /* ... */ };
-    const handleSubmit = async (e) => { /* ... */ };
-    const handleEdit = (loan) => { /* ... */ };
-    const confirmDeleteLoan = (loanId) => { /* ... */ };
-    const handleDeleteLoanConfirmed = async () => { /* ... */ };
-    const handleMarkInstallmentAsPaid = async (loanId, personKey, instNum) => { /* ... */ };
+    const resetForm = () => {
+        setEditingLoan(null);
+        setPurchaseType('normal');
+        setDescription('');
+        setTotalValueInput('');
+        setInstallmentsCount('1');
+        setLoanDate(new Date().toISOString().split('T')[0]);
+        setFirstDueDate('');
+        setSelectedCard('');
+        setSelectedClient('');
+        setSelectedClient1('');
+        setSelectedClient2('');
+        setPerson1ShareInput('');
+        setPerson2ShareDisplay('R$ 0,00');
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true); // ✅ Desativa o botão para evitar duplicatas
+
+        const totalValue = parseCurrencyInput(totalValueInput);
+        const installmentsNum = parseInt(installmentsCount, 10);
+
+        if (!description.trim() || !totalValue || installmentsNum < 1 || !loanDate || !selectedCard || !firstDueDate) {
+            showToast('Preencha todos os campos obrigatórios da compra.', 'warning');
+            setIsLoading(false);
+            return;
+        }
+
+        const calculateInstallments = (value, count, startDate) => {
+            const installmentValue = parseFloat((value / count).toFixed(2));
+            const firstInstallmentDate = new Date(startDate + "T12:00:00Z");
+            const installments = [];
+            for (let i = 0; i < count; i++) {
+                const dueDate = new Date(firstInstallmentDate);
+                dueDate.setUTCMonth(dueDate.getUTCMonth() + i);
+                installments.push({
+                    number: i + 1,
+                    value: installmentValue,
+                    dueDate: dueDate.toISOString().split('T')[0],
+                    status: 'Pendente',
+                    paidDate: null
+                });
+            }
+            const totalCalculated = installments.reduce((acc, inst) => acc + inst.value, 0);
+            if (totalCalculated !== value) {
+                installments[count - 1].value = parseFloat((installments[count - 1].value + (value - totalCalculated)).toFixed(2));
+            }
+            return installments;
+        };
+
+        let loanData = { description, totalValue, installmentsCount: installmentsNum, purchaseDate: loanDate, cardId: selectedCard, userId, valuePaidClient: 0, balanceDueClient: totalValue, statusPaymentClient: 'Pendente' };
+
+        if (purchaseType === 'normal') {
+            if (!selectedClient) {
+                showToast('Selecione uma pessoa para a compra.', 'warning');
+                setIsLoading(false);
+                return;
+            }
+            loanData.clientId = selectedClient;
+            loanData.isShared = false;
+            loanData.installments = calculateInstallments(totalValue, installmentsNum, firstDueDate);
+        } else {
+            const person1Share = parseCurrencyInput(person1ShareInput);
+            const person2Share = totalValue - person1Share;
+
+            if (!selectedClient1 || !selectedClient2 || person1Share <= 0 || person2Share < 0) {
+                showToast('Preencha todos os campos da compra compartilhada.', 'warning');
+                setIsLoading(false);
+                return;
+            }
+            if (selectedClient1 === selectedClient2) {
+                showToast('As pessoas 1 e 2 devem ser diferentes.', 'warning');
+                setIsLoading(false);
+                return;
+            }
+            
+            loanData.isShared = true;
+            loanData.sharedDetails = {
+                person1: { clientId: selectedClient1, shareAmount: person1Share, installments: calculateInstallments(person1Share, installmentsNum, firstDueDate), valuePaid: 0, balanceDue: person1Share, statusPayment: 'Pendente' },
+                person2: { clientId: selectedClient2, shareAmount: person2Share, installments: person2Share > 0 ? calculateInstallments(person2Share, installmentsNum, firstDueDate) : [], valuePaid: 0, balanceDue: person2Share, statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' }
+            };
+        }
+
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            if (editingLoan) {
+                const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', editingLoan.id);
+                await updateDoc(loanDocRef, { ...loanData, updatedAt: serverTimestamp() });
+                showToast('Compra atualizada com sucesso!', 'success');
+            } else {
+                const loansRef = collection(db, ...userCollectionPath, userId, 'loans');
+                await addDoc(loansRef, { ...loanData, createdAt: serverTimestamp() });
+                showToast('Compra adicionada com sucesso!', 'success');
+            }
+            resetForm();
+        } catch (error) {
+            console.error("Erro ao salvar compra:", error);
+            showToast(`Erro ao salvar: ${error.message}`, 'error');
+        } finally {
+            setIsLoading(false); // ✅ Reativa o botão
+        }
+    };
+    
+    const handleEdit = (loan) => {
+        window.scrollTo(0, 0);
+        setEditingLoan(loan);
+        setDescription(loan.description);
+        setTotalValueInput(formatCurrencyForInput(loan.totalValue));
+        setInstallmentsCount(loan.installmentsCount.toString());
+        setLoanDate(loan.purchaseDate);
+        setSelectedCard(loan.cardId);
+        
+        if (loan.isShared) {
+            setPurchaseType('shared');
+            setSelectedClient1(loan.sharedDetails.person1.clientId);
+            setPerson1ShareInput(formatCurrencyForInput(loan.sharedDetails.person1.shareAmount));
+            setSelectedClient2(loan.sharedDetails.person2.clientId);
+        } else {
+            setPurchaseType('normal');
+            setSelectedClient(loan.clientId);
+        }
+    };
+
+    const confirmDeleteLoan = (loanId) => {
+        setLoanToDelete(loanId);
+        setIsConfirmationModalOpen(true);
+    };
+
+    const handleDeleteLoanConfirmed = async () => {
+        if (!loanToDelete) return;
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            await deleteDoc(doc(db, ...userCollectionPath, userId, 'loans', loanToDelete));
+            showToast("Compra deletada com sucesso!", "success");
+        } catch (error) {
+            showToast(`Erro ao deletar: ${error.message}`, "error");
+        } finally {
+            setIsConfirmationModalOpen(false);
+            setLoanToDelete(null);
+        }
+    };
+
+    const handleMarkInstallmentAsPaid = async (loanId, personKey, instNum) => {
+        const loanToUpdate = loans.find(l => l.id === loanId);
+        if (!loanToUpdate) return;
+
+        const updatedLoan = JSON.parse(JSON.stringify(loanToUpdate));
+        let installmentsList, shareAmount, detailsToUpdate;
+
+        if (personKey) {
+            detailsToUpdate = updatedLoan.sharedDetails[personKey];
+            installmentsList = detailsToUpdate.installments;
+            shareAmount = detailsToUpdate.shareAmount;
+        } else {
+            installmentsList = updatedLoan.installments;
+        }
+
+        const instIndex = installmentsList.findIndex(i => i.number === instNum);
+        if (instIndex === -1) return;
+
+        installmentsList[instIndex].status = 'Paga';
+        installmentsList[instIndex].paidDate = new Date().toISOString().split('T')[0];
+        
+        const newValuePaid = installmentsList.filter(i => i.status === 'Paga').reduce((sum, i) => sum + i.value, 0);
+        const newBalanceDue = parseFloat(((personKey ? shareAmount : updatedLoan.totalValue) - newValuePaid).toFixed(2));
+        const newStatus = newBalanceDue <= 0.005 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+
+        if (personKey) {
+            detailsToUpdate.valuePaid = newValuePaid;
+            detailsToUpdate.balanceDue = newBalanceDue;
+            detailsToUpdate.statusPayment = newStatus;
+        } else {
+            updatedLoan.valuePaidClient = newValuePaid;
+            updatedLoan.balanceDueClient = newBalanceDue;
+            updatedLoan.statusPaymentClient = newStatus;
+        }
+
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
+            await updateDoc(loanDocRef, updatedLoan);
+            showToast('Parcela marcada como paga!', 'success');
+        } catch (error) {
+            showToast(`Erro ao atualizar parcela: ${error.message}`, 'error');
+        }
+    };
+
     const toggleInstallments = (loanId) => setShowInstallments(prev => ({ ...prev, [loanId]: !prev[loanId] }));
     const getClientName = (clientId) => clients.find(c => c.id === clientId)?.name || 'N/A';
-    const getCardInfo = (cardId) => cards.find(c => c.id === cardId) || { name: 'N/A', color: '#ccc' };
+    const getCardName = (cardId) => cards.find(c => c.id === cardId)?.name || 'N/A';
 
+    const filteredLoans = useMemo(() => 
+        loans.filter(loan => showPaidLoans || (loan.isShared ? (loan.sharedDetails.person1.statusPayment !== 'Pago Total' || loan.sharedDetails.person2.statusPayment !== 'Pago Total') : loan.statusPaymentClient !== 'Pago Total')),
+    [loans, showPaidLoans]);
+
+    const renderInstallments = (installments, loanId, personKey = null) => (
+        <div className="p-4 bg-gray-900/50">
+            <h4 className="font-bold text-sm mb-2 text-gray-300">Parcelas:</h4>
+            <ul className="space-y-2">
+                {installments.map(inst => (
+                    <li key={inst.number} className="flex justify-between items-center text-sm">
+                        <div>
+                            <span>{inst.number}ª - {new Date(inst.dueDate + "T00:00:00").toLocaleDateString('pt-BR')} - </span>
+                            <span className="font-semibold">{formatCurrencyDisplay(inst.value)} - </span>
+                            <span className={inst.status === 'Paga' ? 'text-green-400' : inst.status === 'Atrasado' ? 'text-red-400' : 'text-yellow-400'}>{inst.status}</span>
+                            {inst.status === 'Paga' && inst.paidDate && <span className="text-xs text-gray-500"> (pago em {new Date(inst.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
+                        </div>
+                        {inst.status === 'Pendente' && (
+                            <button onClick={() => handleMarkInstallmentAsPaid(loanId, personKey, inst.number)} className="bg-green-500/20 text-green-300 px-2 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
+                                Marcar Paga
+                            </button>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+    
     return (
         <div className="space-y-6">
             <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
                 <h2 className="text-xl font-bold text-white mb-4">{editingLoan ? 'Editando Compra' : 'Adicionar Compra no Cartão'}</h2>
                 
                 <div className="flex justify-center p-1 bg-gray-700 rounded-lg max-w-sm mx-auto mb-6">
-                    <button onClick={() => setPurchaseType('normal')} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'normal' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'}`}>Compra Normal</button>
-                    <button onClick={() => setPurchaseType('shared')} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'shared' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'}`}>Compra Compartilhada</button>
+                    <button onClick={() => setPurchaseType('normal')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'normal' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Normal</button>
+                    <button onClick={() => setPurchaseType('shared')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'shared' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Compartilhada</button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -113,9 +323,8 @@ function LoanManagement() {
                         </select>
                         <input type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
                     </div>
-
                     {purchaseType === 'normal' && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-700">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                            <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                                 <option value="">Selecione a Pessoa</option>
                                 {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
@@ -124,50 +333,94 @@ function LoanManagement() {
                             <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
                         </div>
                     )}
-
+                    {/* ✅ CORREÇÃO DE LAYOUT: Campos da compra compartilhada integrados na grade principal */}
                     {purchaseType === 'shared' && (
-                         <div className="pt-4 border-t border-gray-700 space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input type="text" placeholder="Valor Total da Compra" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                                <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-900/50 rounded-lg">
-                                 <select value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                    <option value="">Pessoa 1</option>
-                                    {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                                </select>
-                                <input type="text" placeholder="Valor da Pessoa 1" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                                <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300">{person2ShareDisplay}</div>
-                            </div>
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-900/50 rounded-lg">
-                                <select value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white md:col-start-2" required>
-                                    <option value="">Pessoa 2</option>
-                                    {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                                </select>
-                            </div>
+                         <div className="pt-4 border-t border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <input type="text" placeholder="Valor Total da Compra" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                            <div/>
+                             <select value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Pessoa 1</option>
+                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                            </select>
+                            <input type="text" placeholder="Valor da Pessoa 1" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-full flex items-center justify-center font-bold">{person2ShareDisplay}</div>
+
+                            <select value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Pessoa 2</option>
+                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                            </select>
                         </div>
                     )}
                     
-                    <div className="col-span-full flex justify-end gap-4 pt-4 border-t border-gray-700">
-                        {editingLoan && <button type="button" onClick={resetForm} className="py-2 px-6 bg-gray-600 hover:bg-gray-500 rounded-md text-white font-semibold transition">Cancelar</button>}
-                        <button type="submit" className="py-2 px-6 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold transition">{editingLoan ? 'Atualizar' : 'Adicionar Compra'}</button>
+                    <div className="flex justify-end gap-4 pt-4 border-t border-gray-700">
+                        {editingLoan && <button type="button" onClick={resetForm} className="py-2 px-6 bg-gray-600 hover:bg-gray-500 rounded-md text-white font-semibold transition">Cancelar Edição</button>}
+                        <button type="submit" disabled={isLoading} className="py-2 px-6 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold transition disabled:bg-purple-800 disabled:cursor-not-allowed">
+                            {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar Compra' : 'Adicionar Compra'}
+                        </button>
                     </div>
                 </form>
             </div>
             
-             <div className="overflow-x-auto">
-                <table className="min-w-full bg-gray-800/50 rounded-lg">
-                    {/* ... Thead da Tabela ... */}
-                    <tbody className="divide-y divide-gray-700">
-                        {/* ... Mapeamento e renderização das linhas (tr) ... */}
-                    </tbody>
-                </table>
+            <div className="flex justify-end items-center mb-4">
+                <label className="flex items-center text-sm text-gray-400 cursor-pointer">
+                    <input type="checkbox" checked={showPaidLoans} onChange={() => setShowPaidLoans(!showPaidLoans)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded mr-2" />
+                    Mostrar compras pagas
+                </label>
             </div>
+
+            <div className="space-y-4">
+                {filteredLoans.map(loan => (
+                    <div key={loan.id} className="bg-gray-800/50 rounded-lg border border-gray-700">
+                        <div className="grid grid-cols-4 md:grid-cols-6 gap-4 p-4 items-center">
+                            <div className="text-sm font-semibold text-white">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
+                            <div className="text-sm text-gray-400">{getCardName(loan.cardId)}</div>
+                            <div className="text-sm text-gray-300">{loan.isShared ? `${loan.installmentsCount}x de ${formatCurrencyDisplay((loan.sharedDetails.person1.installments[0]?.value || 0) + (loan.sharedDetails.person2.installments[0]?.value || 0))}` : `${loan.installmentsCount}x de ${formatCurrencyDisplay(loan.installments[0]?.value)}`}</div>
+                            <div className="font-bold text-white">{formatCurrencyDisplay(loan.totalValue)}</div>
+                            <div className="text-sm">
+                                {loan.isShared ? (
+                                    <>
+                                        <span className={loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P1: {loan.sharedDetails.person1.statusPayment}</span><br/>
+                                        <span className={loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P2: {loan.sharedDetails.person2.statusPayment}</span>
+                                    </>
+                                ) : (
+                                    <span className={loan.statusPaymentClient === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>{loan.statusPaymentClient}</span>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-end gap-4">
+                                <button onClick={() => handleEdit(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
+                                <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
+                                    {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
+                                </button>
+                            </div>
+                        </div>
+                        {showInstallments[loan.id] && (
+                            <div className="border-t border-gray-700">
+                                {loan.isShared ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-700">
+                                        <div className="bg-gray-800 p-2">
+                                            <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person1.clientId)}</h5>
+                                            {renderInstallments(loan.sharedDetails.person1.installments, loan.id, 'person1')}
+                                        </div>
+                                        <div className="bg-gray-800 p-2">
+                                            <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person2.clientId)}</h5>
+                                            {renderInstallments(loan.sharedDetails.person2.installments, loan.id, 'person2')}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    renderInstallments(loan.installments, loan.id)
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+
 
             <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" message="Tem certeza que deseja deletar esta compra e todas as suas parcelas?" isConfirmation={true} theme={theme} />
         </div>
     );
 }
 
-// ✅ CORREÇÃO: ADICIONANDO A EXPORTAÇÃO PADRÃO
 export default LoanManagement;

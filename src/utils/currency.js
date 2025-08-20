@@ -39,27 +39,32 @@ export const parseCurrencyInput = (inputString) => {
 };
 
 /**
- * Formata um valor numérico para ser usado em um campo de input (ex: 1234.56 -> "1234,56").
+ * Formata um valor numérico para ser usado em um campo de input (ex: 1234.56 -> "1.234,56").
+ * ✅ CORREÇÃO: Usa toLocaleString para formatar corretamente com pontos de milhar.
  * @param {number} value - O valor numérico.
  * @returns {string} O valor formatado para um campo de input.
  */
 export const formatCurrencyForInput = (value) => {
     const num = Number(value);
     if (isNaN(num)) return '';
-    // Formata com duas casas decimais e substitui o ponto pela vírgula.
-    return num.toFixed(2).replace('.', ',');
+    // Usa toLocaleString para obter a formatação completa, incluindo pontos de milhar
+    return num.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 };
 
 
 /**
  * Manipulador de eventos onChange para campos de input de moeda.
  * Garante que a entrada do usuário seja sempre formatada corretamente como um valor monetário.
+ * ✅ CORREÇÃO: Lógica refeita para ser mais robusta e não gerar formatos inválidos.
  * @param {function} setter - A função setState do React para atualizar o valor do estado.
  */
 export const handleCurrencyInputChange = (setter) => (e) => {
   let value = e.target.value;
   
-  // 1. Remove tudo exceto dígitos.
+  // 1. Remove tudo que não for dígito.
   value = value.replace(/\D/g, '');
 
   // 2. Se estiver vazio, define como string vazia.
@@ -68,14 +73,14 @@ export const handleCurrencyInputChange = (setter) => (e) => {
     return;
   }
 
-  // 3. Converte para número (ex: "12345" -> 123.45)
-  const numberValue = parseInt(value, 10) / 100;
+  // 3. Converte para número para remover zeros à esquerda (ex: "0050" -> 50)
+  const numberValue = parseInt(value, 10);
 
-  // 4. Formata de volta para uma string com vírgula (ex: 123.45 -> "123,45")
-  const formattedValue = numberValue.toLocaleString('pt-BR', {
+  // 4. Formata de volta para uma string com vírgula e pontos (ex: 123456 -> "1.234,56")
+  const formattedValue = (numberValue / 100).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).replace('.', ','); // Garante que a vírgula seja o separador decimal
+  });
 
   // 5. Atualiza o estado
   setter(formattedValue);

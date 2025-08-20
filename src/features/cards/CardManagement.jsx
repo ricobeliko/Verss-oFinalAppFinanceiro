@@ -39,7 +39,14 @@ export default function CardManagement() {
         const subsColRef = collection(db, ...userCollectionPath, userId, 'subscriptions');
         const expensesColRef = collection(db, ...userCollectionPath, userId, 'expenses');
 
-        const unsubCards = onSnapshot(cardsRef, (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubCards = onSnapshot(cardsRef, (snapshot) => {
+            // ✅ NOVO LOG DE DEBUG AQUI
+            console.log("DATABASE SYNC: 'onSnapshot' para cartões foi acionado!");
+            const updatedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("DATABASE SYNC: Novos dados dos cartões recebidos:", updatedCards);
+            setCards(updatedCards);
+        });
+
         const unsubLoans = onSnapshot(loansColRef, (snapshot) => setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubSubs = onSnapshot(subsColRef, (snapshot) => setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubExpenses = onSnapshot(expensesColRef, (snapshot) => setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
@@ -49,11 +56,9 @@ export default function CardManagement() {
 
     const calculateCurrentMonthInvoiceForCard = (card) => {
         if (!card || !card.closingDay) return 0;
-    
         const today = new Date();
         let targetInvoiceMonth = today.getMonth();
         let targetInvoiceYear = today.getFullYear();
-    
         if (today.getDate() >= card.closingDay) {
             targetInvoiceMonth += 1;
             if (targetInvoiceMonth > 11) {
@@ -61,9 +66,7 @@ export default function CardManagement() {
                 targetInvoiceYear += 1;
             }
         }
-    
         let totalInvoice = 0;
-    
         allLoans.forEach(loan => {
             if (loan.cardId === card.id && Array.isArray(loan.installments)) {
                 loan.installments.forEach(inst => {
@@ -74,19 +77,11 @@ export default function CardManagement() {
                 });
             }
         });
-    
-        allSubscriptions.forEach(sub => {
-            if (sub.cardId === card.id && sub.isActive) {
-                totalInvoice += sub.amount;
-            }
-        });
-
         allExpenses.forEach(expense => {
             if (expense.cardId === card.id) {
                 const expenseDate = new Date(expense.date + "T00:00:00");
                 let expenseInvoiceMonth = expenseDate.getMonth();
                 let expenseInvoiceYear = expenseDate.getFullYear();
-
                 if (expenseDate.getDate() >= card.closingDay) {
                     expenseInvoiceMonth += 1;
                     if (expenseInvoiceMonth > 11) {
@@ -94,13 +89,26 @@ export default function CardManagement() {
                         expenseInvoiceYear += 1;
                     }
                 }
-                
                 if (expenseInvoiceMonth === targetInvoiceMonth && expenseInvoiceYear === targetInvoiceYear) {
                     totalInvoice += expense.value;
                 }
             }
         });
-    
+        const closingDate = new Date(Date.UTC(targetInvoiceYear, targetInvoiceMonth - 1, card.closingDay));
+        const periodStartDate = new Date(Date.UTC(targetInvoiceYear, targetInvoiceMonth - 2, card.closingDay));
+        allSubscriptions.forEach(sub => {
+            if (sub.cardId === card.id && sub.isActive) {
+                const chargeDateInClosingMonth = new Date(Date.UTC(closingDate.getUTCFullYear(), closingDate.getUTCMonth(), sub.dueDate));
+                if (chargeDateInClosingMonth > periodStartDate && chargeDateInClosingMonth <= closingDate) {
+                    totalInvoice += sub.amount;
+                    return;
+                }
+                const chargeDateInStartMonth = new Date(Date.UTC(periodStartDate.getUTCFullYear(), periodStartDate.getUTCMonth(), sub.dueDate));
+                if (chargeDateInStartMonth > periodStartDate && chargeDateInStartMonth <= closingDate) {
+                     totalInvoice += sub.amount;
+                }
+            }
+        });
         return totalInvoice;
     };
 
@@ -133,13 +141,11 @@ export default function CardManagement() {
             showToast('Todos os campos são obrigatórios.', 'warning');
             return;
         }
-        
         const cardLimit = parseCurrencyInput(cardLimitInput);
         if (isNaN(cardLimit) || cardLimit <= 0) {
             showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
             return;
         }
-
         const userCollectionPath = getUserCollectionPathSegments();
         const cardData = { 
             name: cardName, 
@@ -149,7 +155,6 @@ export default function CardManagement() {
             color: cardColor,
             userId
         };
-        
         try {
             const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
             await addDoc(cardsRef, cardData);
@@ -164,16 +169,22 @@ export default function CardManagement() {
             showToast('Erro ao adicionar cartão. Tente novamente.', 'error');
         }
     };
-
+    
     const handleUpdateCard = async () => {
+        console.log("1. 'handleUpdateCard' foi chamada.");
+        console.log("2. Cartão sendo editado:", editingCard);
+        console.log("3. Valores do formulário para salvar:", editingValues);
+
         if (!editingCard || !editingValues.name.trim() || !editingValues.limitInput || !editingValues.closingDay || !editingValues.dueDay) {
             showToast('Todos os campos são obrigatórios.', 'warning');
+            console.error("Falha na validação: um campo obrigatório está vazio.");
             return;
         }
 
         const cardLimit = parseCurrencyInput(editingValues.limitInput);
         if (isNaN(cardLimit) || cardLimit <= 0) {
             showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
+            console.error("Falha na validação: limite do cartão é inválido.", editingValues.limitInput);
             return;
         }
         
@@ -186,13 +197,19 @@ export default function CardManagement() {
             color: editingValues.color
         };
         
+        console.log("4. Objeto de dados que será enviado para o Firestore:", cardData);
+
         try {
-            const cardDoc = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
-            await updateDoc(cardDoc, cardData);
+            const cardDocRef = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
+            console.log("5. Caminho do documento no Firestore:", cardDocRef.path);
+
+            await updateDoc(cardDocRef, cardData);
+            
+            console.log("6. Atualização no Firestore bem-sucedida!");
             showToast('Cartão atualizado com sucesso!', 'success');
             handleCloseEditModal();
         } catch (error) {
-            console.error("Erro ao atualizar o cartão:", error);
+            console.error("7. OCORREU UM ERRO na atualização do Firestore:", error);
             showToast('Erro ao atualizar o cartão. Tente novamente.', 'error');
         }
     };
@@ -294,7 +311,6 @@ export default function CardManagement() {
             </div>
             
             <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title={'Editar Cartão'} theme="dark">
-                {/* ✅ CORREÇÃO: O conteúdo do modal foi adicionado aqui */}
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>

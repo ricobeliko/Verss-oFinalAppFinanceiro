@@ -12,7 +12,6 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
     const hasProAccess = isPro || isTrialActive;
 
     useEffect(() => {
-        // A lógica de cálculo agora acontece aqui, com os dados já prontos
         if (!hasProAccess || !incomes || !selectedMonth) {
             setMonthlyIncome(0);
             return;
@@ -20,16 +19,13 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
 
         const [year, month] = selectedMonth.split('-').map(Number);
 
-        // ✅ CORREÇÃO:
-        // A verificação agora é mais simples. Como o Dashboard.jsx já converteu
-        // todas as datas para objetos Date, não precisamos mais chamar '.toDate()'.
-        // O código agora filtra diretamente usando os métodos getFullYear() e getMonth().
         const monthlyFilteredIncomes = incomes.filter(income => {
-            const incomeDate = income.date; // Já é um objeto Date
+            const incomeDate = income.date;
             return incomeDate && incomeDate.getFullYear() === year && incomeDate.getMonth() === month - 1;
         });
-
-        const total = monthlyFilteredIncomes.reduce((acc, doc) => acc + doc.value, 0);
+        
+        // ✅ CORREÇÃO: Adicionado (doc.value || 0) para evitar erros de cálculo com valores indefinidos.
+        const total = monthlyFilteredIncomes.reduce((acc, doc) => acc + (doc.value || 0), 0);
         setMonthlyIncome(total);
 
     }, [incomes, selectedMonth, hasProAccess]);
