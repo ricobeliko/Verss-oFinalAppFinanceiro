@@ -3,29 +3,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
-// ✅ 1. CORREÇÃO NO NOME DA FUNÇÃO IMPORTADA
 import { formatCurrencyDisplay } from '../../utils/currency';
-import UpgradePrompt from '../../components/UpgradePrompt';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
 import ProSummary from './ProSummary'; 
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast, isPro } = useAppContext(); 
+    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext(); 
     
     const [loans, setLoans] = useState([]);
     const [clients, setClients] = useState([]);
     const [cards, setCards] = useState([]);
     const [subscriptions, setSubscriptions] = useState([]);
     const [expenses, setExpenses] = useState([]);
+    const [incomes, setIncomes] = useState([]);
 
-    const [dashboardSummary, setDashboardSummary] = useState({
-        totalFatura: 0,
-        totalReceived: 0,
-        totalBalanceDue: 0,
-        totalSubscriptions: 0,
-    });
-    const [displayableItems, setDisplayableItems] = useState([]);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
 
     useEffect(() => {
@@ -35,8 +27,25 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         const unsubClients = onSnapshot(collection(db, ...userCollectionPath, userId, 'clients'), snapshot => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubCards = onSnapshot(collection(db, ...userCollectionPath, userId, 'cards'), snapshot => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubSubscriptions = onSnapshot(collection(db, ...userCollectionPath, userId, 'subscriptions'), snapshot => setSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubExpenses = onSnapshot(collection(db, ...userCollectionPath, userId, 'expenses'), snapshot => setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        return () => { unsubLoans(); unsubClients(); unsubCards(); unsubSubscriptions(); unsubExpenses(); };
+        
+        const unsubExpenses = onSnapshot(collection(db, ...userCollectionPath, userId, 'expenses'), snapshot => {
+            const expenseData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                const convertedDate = data.date?.toDate ? data.date.toDate() : new Date(data.date + 'T00:00:00');
+                return { id: doc.id, ...data, date: convertedDate, value: data.amount }; // Padroniza 'amount' para 'value'
+            });
+            setExpenses(expenseData);
+        });
+        const unsubIncomes = onSnapshot(collection(db, ...userCollectionPath, userId, 'incomes'), snapshot => {
+            const incomeData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                const convertedDate = data.date?.toDate ? data.date.toDate() : new Date(data.date + 'T00:00:00');
+                return { id: doc.id, ...data, date: convertedDate, value: data.amount }; // Padroniza 'amount' para 'value'
+            });
+            setIncomes(incomeData);
+        });
+
+        return () => { unsubLoans(); unsubClients(); unsubCards(); unsubSubscriptions(); unsubExpenses(); unsubIncomes(); };
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
     const handleMarkInstallmentAsPaidDashboard = async (originalLoanId, personKeyOrNull, installmentNumber) => {
@@ -78,26 +87,36 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         }
     };
 
-    const { filteredItemsForTable, filteredLoansForChart, filteredExpensesForChart, filteredSubscriptionsForChart } = useMemo(() => {
-        if (!isAuthReady || !clients.length || !cards.length) {
-            return { filteredItemsForTable: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [] };
+    const { 
+        displayableItems, 
+        filteredLoansForChart, 
+        filteredExpensesForChart, 
+        filteredSubscriptionsForChart,
+        summary 
+    } = useMemo(() => {
+        if (!isAuthReady || !clients.length) {
+            return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
         }
+
         const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
         const todayAtMidnight = new Date();
         todayAtMidnight.setHours(0, 0, 0, 0);
+
         const allItems = [];
 
         loans.forEach(loan => {
             const processInstallments = (installments, personDetails) => {
-                (installments || []).forEach(inst => {
-                    const instDate = new Date(inst.dueDate + "T00:00:00");
-                    if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
-                        (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
-                        (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
-                        let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
-                        allItems.push({ ...loan, ...inst, id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`, type: 'Parcela', loanId: loan.id, personKey: personDetails.key, clientId: personDetails.clientId, description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'), currentStatus: status });
-                    }
-                });
+                if (Array.isArray(installments)) {
+                    installments.forEach(inst => {
+                        const instDate = new Date(inst.dueDate + "T00:00:00");
+                        if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
+                            (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
+                            (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
+                            let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
+                            allItems.push({ ...loan, ...inst, id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`, type: 'Parcela', loanId: loan.id, personKey: personDetails.key, clientId: personDetails.clientId, description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'), currentStatus: status, dueDate: inst.dueDate, value: inst.value });
+                        }
+                    });
+                }
             };
             if (loan.isShared) {
                 if (loan.sharedDetails?.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
@@ -108,187 +127,146 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         });
 
         subscriptions.forEach(sub => {
-            if (sub.status === 'Ativa' && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
-                allItems.push({ ...sub, type: 'Assinatura', dueDate: selectedMonth, currentStatus: 'Pendente' });
+            if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
+                const day = String(sub.dueDate).padStart(2, '0');
+                allItems.push({ ...sub, type: 'Assinatura', description: sub.name, dueDate: `${selectedMonth}-${day}`, currentStatus: 'Recorrente', value: sub.amount });
             }
         });
 
         expenses.forEach(expense => {
-            const expenseDate = new Date(expense.date + "T00:00:00");
-            let faturaMonth = expenseDate.getMonth() + 1;
-            let faturaYear = expenseDate.getFullYear();
-
-            if (expense.cardId) {
-                const card = cards.find(c => c.id === expense.cardId);
-                if (card && typeof card.closingDay === 'number' && expenseDate.getDate() >= card.closingDay) {
-                    faturaMonth += 1;
-                    if (faturaMonth > 12) { faturaMonth = 1; faturaYear += 1; }
+            const expenseDate = expense.date; 
+            if (expenseDate instanceof Date && !isNaN(expenseDate)) {
+                let faturaMonth = expenseDate.getMonth() + 1;
+                let faturaYear = expenseDate.getFullYear();
+                if (expense.cardId) {
+                    const card = cards.find(c => c.id === expense.cardId);
+                    if (card && typeof card.closingDay === 'number' && expenseDate.getDate() >= card.closingDay) {
+                        faturaMonth += 1;
+                        if (faturaMonth > 12) { faturaMonth = 1; faturaYear += 1; }
+                    }
                 }
-            }
-            
-            if (faturaYear === filterYear && faturaMonth === filterMonth &&
-                (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
-                (!selectedClientFilter || !expense.clientId)) { // Despesas avulsas não têm cliente
-                allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date, currentStatus: 'Pendente' });
+                if (faturaYear === filterYear && faturaMonth === filterMonth && (!selectedCardFilter || expense.cardId === selectedCardFilter) && !selectedClientFilter) {
+                    allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date.toISOString().split('T')[0], currentStatus: 'Avulsa', value: expense.value });
+                }
             }
         });
 
         allItems.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-        
-        const loansForChart = allItems.filter(item => item.type === 'Parcela');
-        const expensesForChart = allItems.filter(item => item.type === 'Despesa');
-        const subscriptionsForChart = allItems.filter(item => item.type === 'Assinatura');
 
+        const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
+        const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
+        
         return { 
-            filteredItemsForTable: allItems, 
-            filteredLoansForChart: loansForChart, 
-            filteredExpensesForChart: expensesForChart,
-            filteredSubscriptionsForChart: subscriptionsForChart
+            displayableItems: allItems, 
+            filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'), 
+            filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
+            filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
+            summary: {
+                totalFatura: newTotalFatura,
+                totalRecebido: newTotalRecebido,
+                totalPendente: newTotalFatura - newTotalRecebido,
+            }
         };
     }, [loans, clients, cards, subscriptions, expenses, selectedMonth, selectedCardFilter, selectedClientFilter, isAuthReady]);
 
-    useEffect(() => {
-        setDisplayableItems(filteredItemsForTable);
-        const newTotalFatura = filteredItemsForTable.reduce((sum, item) => sum + item.value, 0);
-        const newTotalReceived = filteredItemsForTable.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + item.value, 0);
-        const newTotalSubscriptions = filteredItemsForTable.filter(item => item.type === 'Assinatura').reduce((sum, item) => sum + item.value, 0);
-        setDashboardSummary({ totalFatura: newTotalFatura, totalReceived: newTotalReceived, totalBalanceDue: newTotalFatura - newTotalReceived, totalSubscriptions: newTotalSubscriptions });
-    }, [filteredItemsForTable]);
-
     const getCardDisplayInfo = (cardId) => {
         const card = cards.find(c => c.id === cardId);
-        return card ? { name: card.name, color: card.color || '#cccccc' } : { name: 'N/A', color: '#cccccc' };
+        return card ? { name: card.name, color: card.color || '#374151' } : { name: 'N/A', color: '#374151' };
     };
 
-    const confirmMarkAllPaid = () => setIsMarkAllPaidConfirmationOpen(true);
-    const handleMarkAllInstallmentsAsPaid = async () => { /* ... */ };
-    const paidPercentage = dashboardSummary.totalFatura > 0 ? (dashboardSummary.totalReceived / dashboardSummary.totalFatura) * 100 : 0;
+    const paidPercentage = summary.totalFatura > 0 ? (summary.totalRecebido / summary.totalFatura) * 100 : 0;
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md dark:shadow-lg">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Resumo Financeiro</h2>
+        <div className="space-y-8">
+            <h2 className="text-2xl font-bold text-white">Resumo Financeiro</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                <div className="flex flex-col">
-                    <label htmlFor="month-filter" className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Mês:</label>
-                    <input type="month" id="month-filter" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-md" />
-                </div>
-                <div className="flex flex-col">
-                    <label htmlFor="card-filter" className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Cartão:</label>
-                    <select id="card-filter" value={selectedCardFilter} onChange={(e) => setSelectedCardFilter(e.target.value)} className="p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-md">
-                        <option value="">Todos os Cartões</option>
-                        {cards.map(card => (<option key={card.id} value={card.id} style={{ backgroundColor: card.color, color: theme === 'dark' ? '#FFF' : '#000' }}>{card.name}</option>))}
-                    </select>
-                </div>
-                <div className="flex flex-col">
-                    <label htmlFor="client-filter" className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Pessoa:</label>
-                    <select id="client-filter" value={selectedClientFilter} onChange={(e) => setSelectedClientFilter(e.target.value)} className="p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-md">
-                        <option value="">Todas as Pessoas</option>
-                        {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
-                    </select>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
+                <select value={selectedCardFilter} onChange={(e) => setSelectedCardFilter(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
+                    <option value="">Todos os Cartões</option>
+                    {cards.map(card => (<option key={card.id} value={card.id}>{card.name}</option>))}
+                </select>
+                <select value={selectedClientFilter} onChange={(e) => setSelectedClientFilter(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
+                    <option value="">Todas as Pessoas</option>
+                    {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
+                </select>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-3">
-                    <ProSummary selectedMonth={selectedMonth} totalExpenses={dashboardSummary.totalFatura} />
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+                        <h3 className="text-sm font-medium text-gray-400">Fatura Total do Mês</h3>
+                        <p className="text-3xl font-bold text-white mt-2">{formatCurrencyDisplay(summary.totalFatura)}</p>
+                    </div>
+                    <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+                        <h3 className="text-sm font-medium text-gray-400">Progresso de Pagamento</h3>
+                        <div className="w-full bg-gray-700 rounded-full h-2.5 my-3">
+                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${paidPercentage}%` }}></div>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-green-400">{formatCurrencyDisplay(summary.totalRecebido)} <span className="text-gray-500">Pago</span></span>
+                            <span className="text-yellow-400">{formatCurrencyDisplay(summary.totalPendente)} <span className="text-gray-500">Pendente</span></span>
+                        </div>
+                    </div>
+                    <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
                 </div>
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold mb-4">Despesas da Fatura</h3>
-                        <div className="mb-2">
-                            {/* ✅ 2. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
-                            <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">{formatCurrencyDisplay(dashboardSummary.totalFatura)}</span>
-                            <span className="text-gray-500 dark:text-gray-400 ml-2">Total do Mês</span>
-                        </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-2">
-                            <div className="bg-green-500 h-4 rounded-full" style={{ width: `${paidPercentage}%` }}></div>
-                        </div>
-                        <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-300">
-                            {/* ✅ 3. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
-                            <span>Pago: {formatCurrencyDisplay(dashboardSummary.totalReceived)}</span>
-                            <span>Restante: {formatCurrencyDisplay(dashboardSummary.totalBalanceDue)}</span>
-                        </div>
-                    </div>
-                    <div className="analytics-section">
-                        <ProAnalyticsCharts 
-                            loans={filteredLoansForChart} 
-                            clients={clients} 
-                            expenses={filteredExpensesForChart}
-                            subscriptions={filteredSubscriptionsForChart}
-                            theme={theme} 
-                        />
-                    </div>
-                </div>
-                <div className="space-y-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold mb-4">Próximos Vencimentos</h3>
-                        <ul className="space-y-3">
-                            {displayableItems.filter(item => item.type === 'Parcela' && item.currentStatus !== 'Paga').slice(0, 5).map(item => (
-                                <li key={item.id} className="flex justify-between items-center text-sm">
-                                    <span className="font-medium text-gray-700 dark:text-gray-200">{item.description}</span>
-                                    {/* ✅ 4. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
-                                    <span className="font-bold text-gray-900 dark:text-white">{formatCurrencyDisplay(item.value)}</span>
-                                </li>
-                            ))}
-                            {displayableItems.filter(item => item.type === 'Parcela' && item.currentStatus !== 'Paga').length === 0 && (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma parcela pendente para este mês.</p>
-                            )}
-                        </ul>
-                    </div>
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold mb-4">Assinaturas do Mês</h3>
-                        {/* ✅ 5. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
-                        <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{formatCurrencyDisplay(dashboardSummary.totalSubscriptions)}</p>
-                    </div>
+                <div className="lg:col-span-2">
+                    <ProAnalyticsCharts 
+                        loans={filteredLoansForChart} 
+                        clients={clients} 
+                        expenses={filteredExpensesForChart}
+                        subscriptions={filteredSubscriptionsForChart}
+                        theme={theme} 
+                    />
                 </div>
             </div>
 
-            <div className="mt-8">
-                <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Itens da Fatura (Mês Filtrado)</h3>
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg">
+                 <div className="p-4 border-b border-gray-800">
+                    <h3 className="text-lg font-semibold text-white">Itens da Fatura (Mês Selecionado)</h3>
+                </div>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Tipo</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Descrição</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Pessoa</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Cartão</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Valor</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Data</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Status</th>
-                                <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Ações</th>
+                    <table className="min-w-full">
+                        <thead>
+                            <tr className="border-b border-gray-800">
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Descrição</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pessoa</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {displayableItems.map((item) => {
+                        <tbody className="divide-y divide-gray-800">
+                            {displayableItems.length > 0 ? displayableItems.map((item) => {
                                 const cardInfo = getCardDisplayInfo(item.cardId);
-                                const clientName = clients.find(c => c.id === item.clientId)?.name || 'N/A';
+                                const clientName = clients.find(c => c.id === item.clientId)?.name || '---';
                                 return (
-                                    <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                        <td className="py-3 px-4">{item.type}</td>
-                                        <td className="py-3 px-4">{item.description}</td>
-                                        <td className="py-3 px-4">{item.clientId ? clientName : '---'}</td>
-                                        <td className="py-3 px-4 flex items-center">
-                                            <span className="w-4 h-4 rounded-sm mr-2" style={{ backgroundColor: cardInfo.color }}></span>{cardInfo.name}
-                                        </td>
-                                        {/* ✅ 6. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
-                                        <td className="py-3 px-4">{formatCurrencyDisplay(item.value)}</td>
-                                        <td className="py-3 px-4">{new Date(item.dueDate + "T00:00:00").toLocaleDateString('pt-BR')}</td>
-                                        <td className={`py-3 px-4 font-semibold ${item.currentStatus === 'Paga' ? 'text-green-500' : item.currentStatus === 'Atrasado' ? 'text-red-500' : 'text-yellow-500'}`}>{item.currentStatus}</td>
-                                        <td className="py-3 px-4">
-                                            {item.type === 'Parcela' && item.currentStatus !== 'Paga' && (
-                                                <button onClick={() => handleMarkInstallmentAsPaidDashboard(item.loanId, item.personKey, item.number)} className="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 text-sm">Marcar Paga</button>
+                                    <tr key={item.id} className="hover:bg-gray-800/60">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{new Date(item.dueDate + "T00:00:00").toLocaleDateString('pt-BR')}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{item.description}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{clientName}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-300">{formatCurrencyDisplay(item.value)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {item.type === 'Parcela' && item.currentStatus !== 'Paga' ? (
+                                                <button onClick={() => handleMarkInstallmentAsPaidDashboard(item.loanId, item.personKey, item.number)} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">Marcar Paga</button>
+                                            ) : (
+                                                <span className={`text-xs font-semibold ${item.currentStatus === 'Paga' ? 'text-green-400' : 'text-gray-500'}`}>{item.currentStatus || '---'}</span>
                                             )}
                                         </td>
                                     </tr>
                                 );
-                            })}
+                            }) : (
+                                <tr>
+                                    <td colSpan="5" className="text-center py-10 text-gray-500">
+                                        Nenhum item na fatura para os filtros selecionados.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
-            <GenericModal isOpen={isMarkAllPaidConfirmationOpen} onClose={() => setIsMarkAllPaidConfirmationOpen(false)} onConfirm={handleMarkAllInstallmentsAsPaid} title="Confirmar Ação" message={`Tem a certeza de que deseja marcar TODAS as parcelas pendentes ou atrasadas como PAGAS?`} isConfirmation={true} theme={theme} />
+            <GenericModal isOpen={isMarkAllPaidConfirmationOpen} onClose={() => setIsMarkAllPaidConfirmationOpen(false)} onConfirm={() => {}} title="Confirmar Ação" message="Tem a certeza de que deseja marcar TODAS as parcelas pendentes ou atrasadas como PAGAS?" isConfirmation={true} theme={theme} />
         </div>
     );
 }

@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy } from 'firebase/firestore';
+// src/features/expenses/ExpenseManagement.jsx
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy, where, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
-// ✅ 1. IMPORTAÇÕES CORRIGIDAS
-import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange } from '../../utils/currency';
+import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import GenericModal from '../../components/GenericModal';
 
+// --- Ícones ---
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+
 function ExpenseManagement() {
-    const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast, isPro } = useAppContext();
+    const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
 
     const [expenses, setExpenses] = useState([]);
     const [cards, setCards] = useState([]);
@@ -19,7 +24,6 @@ function ExpenseManagement() {
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [expenseToDelete, setExpenseToDelete] = useState(null);
 
-    // Categorias de despesas pré-definidas
     const expenseCategories = [
         "Alimentação", "Transporte", "Moradia", "Saúde", "Educação", 
         "Lazer", "Vestuário", "Cuidados Pessoais", "Dívidas", "Investimentos", "Outros"
@@ -30,7 +34,7 @@ function ExpenseManagement() {
         const userCollectionPath = getUserCollectionPathSegments();
         
         const expensesColRef = collection(db, ...userCollectionPath, userId, 'expenses');
-        const q = query(expensesColRef, orderBy("date", "desc"));
+        const q = query(expensesColRef, orderBy("createdAt", "desc"));
         const unsubscribeExpenses = onSnapshot(q, (snapshot) => {
             setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
@@ -40,10 +44,7 @@ function ExpenseManagement() {
             setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        return () => {
-            unsubscribeExpenses();
-            unsubscribeCards();
-        };
+        return () => { unsubscribeExpenses(); unsubscribeCards(); };
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
     const resetForm = () => {
@@ -55,25 +56,33 @@ function ExpenseManagement() {
         setEditingExpense(null);
     };
 
+    const handleEdit = (expense) => {
+        setEditingExpense(expense);
+        setDescription(expense.description);
+        setValueInput(formatCurrencyForInput(expense.value));
+        setDate(expense.date);
+        setCategory(expense.category);
+        setSelectedCard(expense.cardId || '');
+        window.scrollTo(0, 0);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!isPro) {
-            showToast('Funcionalidade Pro. Faça upgrade para continuar.', 'warning');
-            return;
-        }
         const value = parseCurrencyInput(valueInput);
         if (!description.trim() || !value || !date || !category) {
             showToast('Por favor, preencha todos os campos obrigatórios.', 'warning');
             return;
         }
         const userCollectionPath = getUserCollectionPathSegments();
-        const expenseData = { description, value, date, category, cardId: selectedCard || null };
+        const expenseData = { description, value, date, category, cardId: selectedCard || null, userId };
         try {
             if (editingExpense) {
-                await updateDoc(doc(db, ...userCollectionPath, userId, 'expenses', editingExpense.id), expenseData);
+                const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', editingExpense.id);
+                await updateDoc(expenseDocRef, { ...expenseData, updatedAt: serverTimestamp() });
                 showToast("Despesa atualizada com sucesso!", "success");
             } else {
-                await addDoc(collection(db, ...userCollectionPath, userId, 'expenses'), { ...expenseData, createdAt: new Date() });
+                const expensesRef = collection(db, ...userCollectionPath, userId, 'expenses');
+                await addDoc(expensesRef, { ...expenseData, createdAt: serverTimestamp() });
                 showToast("Despesa adicionada com sucesso!", "success");
             }
             resetForm();
@@ -81,16 +90,6 @@ function ExpenseManagement() {
             console.error("Erro ao salvar despesa:", error);
             showToast(`Erro ao salvar despesa: ${error.message}`, "error");
         }
-    };
-
-    const handleEdit = (expense) => {
-        setEditingExpense(expense);
-        setDescription(expense.description);
-        // ✅ 2. USO CORRETO DA FUNÇÃO DE FORMATAÇÃO
-        setValueInput(formatCurrencyDisplay(expense.value).replace('R$ ', ''));
-        setDate(expense.date);
-        setCategory(expense.category);
-        setSelectedCard(expense.cardId || '');
     };
 
     const confirmDelete = (id) => {
@@ -114,57 +113,63 @@ function ExpenseManagement() {
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md dark:shadow-lg relative">
-            {!isPro && <div className="absolute inset-0 bg-gray-800 bg-opacity-50 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg"></div>}
+        <div className="space-y-6">
+            <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
+                <h2 className="text-xl font-bold text-white mb-4">{editingExpense ? 'Editando Despesa Avulsa' : 'Gerenciar Despesas Avulsas'}</h2>
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <input type="text" placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                    <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
+                        <input type="text" placeholder="Valor" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required inputMode="decimal" />
+                    </div>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required>
+                        <option value="">Selecione a Categoria</option>
+                        {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
+                        <option value="">Pagamento Avulso (Dinheiro/PIX)</option>
+                        {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                    </select>
+                    <div className="lg:col-span-3 flex justify-end gap-4 mt-2">
+                         {editingExpense && (<button type="button" onClick={resetForm} className="py-2 px-6 bg-gray-600 hover:bg-gray-500 rounded-md text-white transition font-semibold">Cancelar</button>)}
+                        <button type="submit" className="py-2 px-6 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition font-semibold">{editingExpense ? 'Atualizar Despesa' : 'Adicionar Despesa'}</button>
+                    </div>
+                </form>
+            </div>
             
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Gerenciar Despesas Avulsas</h2>
-            <form onSubmit={handleSubmit} className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                <input type="text" placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} className="p-3 border border-gray-300 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                <input type="text" placeholder="Valor" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="p-3 border border-gray-300 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="p-3 border border-gray-300 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="p-3 border border-gray-300 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                    <option value="">Selecione a Categoria</option>
-                    {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-                <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="p-3 border border-gray-300 rounded-lg bg-white text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                    <option value="">Pagamento Avulso</option>
-                    {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                </select>
-                <div className="col-span-full flex justify-end gap-4 mt-4">
-                    <button type="submit" className="bg-red-600 text-white py-3 px-6 rounded-lg hover:bg-red-700" disabled={!isPro}>{editingExpense ? 'Atualizar Despesa' : 'Adicionar Despesa'}</button>
-                    {editingExpense && (<button type="button" onClick={resetForm} className="bg-gray-400 text-white py-3 px-6 rounded-lg hover:bg-gray-500">Cancelar</button>)}
-                </div>
-            </form>
             <div className="overflow-x-auto">
-                <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
+                <table className="min-w-full bg-gray-800/50 rounded-lg">
+                    <thead className="border-b border-gray-700">
                         <tr>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Descrição</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Valor</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Data</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Categoria</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Pagamento</th>
-                            <th className="py-3 px-4 text-left text-sm font-medium text-gray-600 dark:text-gray-300 uppercase">Ações</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Descrição</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Categoria</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pagamento</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody className="divide-y divide-gray-700">
                         {expenses.map((expense) => (
-                            <tr key={expense.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                <td className="py-3 px-4 whitespace-nowrap">{expense.description}</td>
-                                {/* ✅ 3. USO CORRETO DA FUNÇÃO DE FORMATAÇÃO */}
-                                <td className="py-3 px-4 whitespace-nowrap">{formatCurrencyDisplay(expense.value)}</td>
-                                <td className="py-3 px-4 whitespace-nowrap">{new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                                <td className="py-3 px-4 whitespace-nowrap">{expense.category}</td>
-                                <td className="py-3 px-4 whitespace-nowrap">{cards.find(c => c.id === expense.cardId)?.name || 'Avulso'}</td>
-                                <td className="py-3 px-4 whitespace-nowrap flex items-center gap-2">
-                                    <button onClick={() => handleEdit(expense)} className="text-blue-600 hover:text-blue-900" disabled={!isPro}>Editar</button>
-                                    <button onClick={() => confirmDelete(expense.id)} className="text-red-600 hover:text-red-900" disabled={!isPro}>Deletar</button>
+                            <tr key={expense.id} className="hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap font-medium text-white">{expense.description}</td>
+                                <td className="px-6 py-4 whitespace-nowrap font-bold text-red-400">{formatCurrencyDisplay(expense.value)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{expense.category}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{cards.find(c => c.id === expense.cardId)?.name || 'Avulso'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => handleEdit(expense)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                        <button onClick={() => confirmDelete(expense.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
             <GenericModal 
                 isOpen={isConfirmationModalOpen} 
                 onClose={() => setIsConfirmationModalOpen(false)} 
@@ -178,4 +183,5 @@ function ExpenseManagement() {
     );
 }
 
+// ✅ CORREÇÃO: ADICIONANDO A EXPORTAÇÃO PADRÃO
 export default ExpenseManagement;

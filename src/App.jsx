@@ -1,26 +1,55 @@
+// src/App.jsx
+
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useAppContext } from './context/AppContext';
 import AuthScreen from './features/auth/AuthScreen';
 import DashboardLayout from './features/dashboard/DashboardLayout';
-import LandingPage from './features/landing/LandingPage'; // Importando a Landing Page
-import Spinner from './components/Spinner'; // Um componente de carregamento
+import LandingPage from './features/landing/LandingPage';
+import Spinner from './components/Spinner';
 
 // Componente para proteger rotas que exigem autenticação
 function ProtectedRoute({ children }) {
-  const { user, isAuthReady } = useAppContext();
+  // ✅ 1. CORREÇÃO: Usando 'currentUser' do nosso novo AppContext
+  const { currentUser, isAuthReady } = useAppContext();
 
   if (!isAuthReady) {
     // Enquanto o estado de autenticação está sendo verificado, mostramos um spinner
+    // O fundo foi ajustado para combinar com o novo layout escuro.
     return <div className="flex justify-center items-center h-screen bg-gray-900"><Spinner /></div>;
   }
 
   // Se o usuário não estiver logado, redireciona para a tela de login
-  if (!user) {
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // ✅ 2. VERIFICAÇÃO DE E-MAIL
+  // Se o usuário estiver logado, mas o e-mail não foi verificado,
+  // ele é enviado de volta para a tela de login, que agora contém a lógica para lidar com isso.
+  if (!currentUser.emailVerified) {
     return <Navigate to="/login" replace />;
   }
 
-  // Se estiver logado, renderiza o componente filho (neste caso, o DashboardLayout)
+  // Se estiver logado e verificado, renderiza o componente filho (o DashboardLayout)
+  return children;
+}
+
+// Componente para rotas públicas que não devem ser acessadas por usuários logados
+function PublicRoute({ children }) {
+  const { currentUser, isAuthReady } = useAppContext();
+
+  if (!isAuthReady) {
+    // Mostra um spinner enquanto verifica o status de autenticação
+    return <div className="flex justify-center items-center h-screen bg-gray-900"><Spinner /></div>;
+  }
+  
+  // Se o usuário já estiver logado e verificado, redireciona para o dashboard
+  if (currentUser && currentUser.emailVerified) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Caso contrário, renderiza a rota pública (Login ou LandingPage)
   return children;
 }
 
@@ -29,16 +58,26 @@ function App() {
     <AppProvider>
       <Router>
         <Routes>
-          {/* ✅ ROTA INICIAL: A Landing Page */}
-          {/* Quando alguém aceder a "/", a LandingPage será mostrada. */}
-          <Route path="/" element={<LandingPage />} />
-
-          {/* ✅ ROTA DE LOGIN */}
-          {/* A tela de autenticação agora fica em "/login". */}
-          <Route path="/login" element={<AuthScreen />} />
+          {/* ✅ 3. ROTAS PÚBLICAS ATUALIZADAS */}
+          {/* Usamos o PublicRoute para garantir que usuários logados não vejam a landing page ou a tela de login */}
+          <Route 
+            path="/" 
+            element={
+              <PublicRoute>
+                <LandingPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <AuthScreen />
+              </PublicRoute>
+            } 
+          />
 
           {/* ✅ ROTA PROTEGIDA PARA O DASHBOARD */}
-          {/* A rota "/dashboard/*" só será acessível para usuários logados. */}
           <Route 
             path="/dashboard/*" 
             element={
@@ -49,7 +88,7 @@ function App() {
           />
           
           {/* ✅ REDIRECIONAMENTO PADRÃO */}
-          {/* Se um usuário logado tentar aceder a uma rota que não seja o dashboard, ele é redirecionado. */}
+          {/* Qualquer outra rota inválida redireciona para a página inicial */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>

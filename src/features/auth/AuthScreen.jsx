@@ -1,53 +1,64 @@
 // src/features/auth/AuthScreen.jsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+    createUserWithEmailAndPassword, 
+    sendEmailVerification, 
+    signInWithEmailAndPassword, 
+    signOut,
+    setPersistence,
+    browserLocalPersistence 
+} from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 
+// --- Ícones ---
+const FinControlLogo = ({ className }) => (
+    <svg className={className} width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
+
+// --- Componente Principal ---
 function AuthScreen() {
-    const { auth, db, currentUser, getUserCollectionPathSegments } = useAppContext();
+    const { auth, db, currentUser, getUserCollectionPathSegments, showToast } = useAppContext();
+    const navigate = useNavigate();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [userName, setUserName] = useState('');
     const [isRegistering, setIsRegistering] = useState(false);
-    const [authError, setAuthError] = useState('');
-    const [authMessage, setAuthMessage] = useState('');
-    const [postRegistrationMessage, setPostRegistrationMessage] = useState(null);
     const [rememberMe, setRememberMe] = useState(false);
-    const rememberMeCheckboxRef = useRef(null);
-    const [loginSuggestion, setLoginSuggestion] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
+    // Efeito para preencher o e-mail lembrado e redirecionar se já estiver logado
     useEffect(() => {
+        if (currentUser) {
+            navigate('/dashboard');
+        }
         const savedEmail = localStorage.getItem('rememberedEmail');
         if (savedEmail) {
             setEmail(savedEmail);
             setRememberMe(true);
         }
-    }, []);
-
-    const showAuthError = (message) => {
-        setAuthError(message);
-        setTimeout(() => setAuthError(''), 5000);
-    };
+    }, [currentUser, navigate]);
 
     const handleRegister = async (e) => {
         e.preventDefault();
-        setAuthError('');
-        setAuthMessage('');
-        setPostRegistrationMessage(null);
-
         if (password.length < 8) {
-            showAuthError('A senha deve ter no mínimo 8 caracteres.');
+            showToast('A senha deve ter no mínimo 8 caracteres.', 'warning');
             return;
         }
         if (password !== confirmPassword) {
-            showAuthError('As senhas não coincidem.');
+            showToast('As senhas não coincidem.', 'warning');
             return;
         }
 
+        setIsLoading(true);
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             await sendEmailVerification(userCredential.user);
@@ -58,18 +69,15 @@ function AuthScreen() {
                 name: userName,
                 email: email,
                 createdAt: new Date(),
-                plan: 'free'
-            }, { merge: true });
-
-            setAuthMessage('🎉 Quase lá! Enviamos um e-mail de verificação para você. Em instantes, você será redirecionado.');
-
-            setTimeout(async () => {
-                await signOut(auth);
-                setAuthMessage('');
-                setIsRegistering(false);
-                setPostRegistrationMessage('🎉 Falta Pouco! Por favor, verifique sua caixa de entrada e spam para fazer login!');
-            }, 10000);
-
+                plan: 'free',
+                isPro: false,
+                trialExpiresAt: null,
+            });
+            
+            showToast('Cadastro realizado! Verifique seu e-mail para ativar a conta.', 'success');
+            await signOut(auth);
+            setIsRegistering(false); // Volta para a tela de login
+            // Limpa os campos após o sucesso
             setEmail('');
             setPassword('');
             setConfirmPassword('');
@@ -78,133 +86,98 @@ function AuthScreen() {
         } catch (error) {
             console.error("Erro no cadastro:", error);
             if (error.code === 'auth/email-already-in-use') {
-                showAuthError('Este e-mail já está em uso. Tente fazer login ou use outro e-mail.');
+                showToast('Este e-mail já está em uso. Tente fazer login.', 'error');
             } else {
-                showAuthError(`Erro no cadastro: ${error.message}`);
+                showToast(`Erro no cadastro: ${error.message}`, 'error');
             }
+        } finally {
+            setIsLoading(false);
         }
     };
     
-    // ✅ FUNÇÃO DE LOGIN CORRIGIDA
     const handleLogin = async (e) => {
         e.preventDefault();
-        setAuthError('');
-        setAuthMessage('');
-        setPostRegistrationMessage(null);
-
-        // Adicionado um check de segurança para o objeto 'auth'
         if (!auth) {
-            showAuthError("Erro de configuração: Serviço de autenticação não encontrado.");
+            showToast("Serviço de autenticação indisponível.", "error");
             return;
         }
 
+        setIsLoading(true);
         try {
-            // Lógica de login por nome de usuário foi removida para corrigir o erro de permissão.
-            // O login agora funciona apenas com o e-mail.
+            // Define a persistência da sessão
             await setPersistence(auth, browserLocalPersistence);
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
             if (!userCredential.user.emailVerified) {
-                // A mensagem de verificação será mostrada pelo listener no App.jsx
+                showToast('Por favor, verifique seu e-mail antes de fazer login.', 'warning');
+                await signOut(auth); // Desloga o usuário se o e-mail não for verificado
                 return;
             }
 
-            if (rememberMeCheckboxRef.current?.checked) {
-                localStorage.setItem('rememberedEmail', email); // Salva o e-mail diretamente
+            if (rememberMe) {
+                localStorage.setItem('rememberedEmail', email);
             } else {
                 localStorage.removeItem('rememberedEmail');
             }
+            // O redirecionamento será tratado pelo useEffect que observa 'currentUser'
         } catch (error) {
             console.error("Erro no login:", error);
             if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                showAuthError('E-mail ou senha inválidos.');
+                showToast('E-mail ou senha inválidos.', 'error');
             } else {
-                showAuthError(`Erro no login: ${error.message}`);
+                showToast(`Erro no login: ${error.message}`, 'error');
             }
+        } finally {
+            setIsLoading(false);
         }
     };
     
-    const handleLogout = async () => {
-        try {
-            await signOut(auth);
-        } catch (error) {
-            console.error("Erro ao sair:", error);
-            showAuthError(`Erro ao sair: ${error.message}`);
-        }
-    };
-
-    const handleEmailInputChange = (e) => {
-        const typedValue = e.target.value;
-        setEmail(typedValue);
-        const remembered = localStorage.getItem('rememberedEmail');
-        if (remembered && typedValue && remembered.toLowerCase().startsWith(typedValue.toLowerCase()) && remembered !== typedValue) {
-            setLoginSuggestion(remembered);
-        } else {
-            setLoginSuggestion('');
-        }
-    };
-
-    const handleSuggestionClick = () => {
-        if (loginSuggestion) {
-            setEmail(loginSuggestion);
-            setLoginSuggestion('');
-        }
-    };
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md">
-                <h2 className="text-3xl font-bold text-center mb-6 text-gray-800 dark:text-gray-100">
-                    {isRegistering ? 'Registrar' : 'Entrar'}
-                </h2>
-                {authError && <div className="bg-red-100 border border-red-400 text-red-700 dark:bg-red-900 dark:border-red-700 dark:text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">{authError}</div>}
-                {authMessage && <div className="bg-green-100 border border-green-400 text-green-700 dark:bg-green-900 dark:border-green-700 dark:text-green-300 px-4 py-3 rounded-lg mb-4 text-sm">{authMessage}</div>}
-                {postRegistrationMessage && <div className="bg-blue-100 border border-blue-400 text-blue-700 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg mb-4 text-sm">{postRegistrationMessage}</div>}
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-200 p-4">
+            <div className="w-full max-w-md">
+                <div className="text-center mb-8">
+                    <FinControlLogo className="mx-auto text-purple-500" />
+                    <h1 className="text-3xl font-roboto font-bold tracking-wider text-white mt-2">FinControl</h1>
+                    <p className="text-gray-400 mt-1">Seu controle financeiro, simples e visual.</p>
+                </div>
 
-                {currentUser && !currentUser.emailVerified && !isRegistering && !authMessage && (
-                    <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 dark:bg-yellow-900 dark:border-yellow-700 dark:text-yellow-300 px-4 py-3 rounded-lg mb-4 text-sm text-center">
-                        Seu e-mail (<span className="font-semibold">{currentUser.email}</span>) ainda não foi verificado. Por favor, verifique sua caixa de entrada e spam.
-                        <button onClick={async () => { try { await sendEmailVerification(currentUser); setAuthMessage('🚀 Novo e-mail de verificação enviado!'); setTimeout(() => handleLogout(), 5000); } catch (error) { showAuthError(`Erro: ${error.message}`); } }} className="block w-full mt-3 bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600">Reenviar E-mail</button>
-                        <button onClick={handleLogout} className="block w-full mt-2 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600">Sair</button>
-                    </div>
-                )}
+                <div className="bg-gray-800 p-8 rounded-lg shadow-2xl">
+                    <h2 className="text-2xl font-bold text-center mb-6 text-white">
+                        {isRegistering ? 'Crie sua Conta' : 'Acesse sua Conta'}
+                    </h2>
 
-                {!(currentUser && !currentUser.emailVerified) && (
                     <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
                         {isRegistering && (
-                            <input type="text" placeholder="Seu Login (nome de usuário)" value={userName} onChange={(e) => setUserName(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700" required />
+                            <input type="text" placeholder="Seu nome" value={userName} onChange={(e) => setUserName(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 transition" required />
                         )}
-                        <div className="relative">
-                            {/* Placeholder atualizado para refletir a mudança */}
-                            <input type="text" placeholder="Seu E-mail" value={email} onChange={handleEmailInputChange} className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700" required autoComplete="username" />
-                            {loginSuggestion && (
-                                <div onClick={handleSuggestionClick} className="absolute z-10 w-full bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-b-lg shadow-lg cursor-pointer">
-                                    <div className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-500 text-sm text-gray-700 dark:text-gray-200">{loginSuggestion}</div>
-                                </div>
-                            )}
-                        </div>
-                        <input type="password" placeholder="Sua Senha (mínimo 8 caracteres)" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700" required autoComplete={isRegistering ? "new-password" : "current-password"} />
+                        <input type="email" placeholder="Seu e-mail" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 transition" required autoComplete="email" />
+                        <input type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 transition" required autoComplete={isRegistering ? "new-password" : "current-password"} />
                         {isRegistering && (
-                            <input type="password" placeholder="Repita a Senha" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700" required autoComplete="new-password" />
+                            <input type="password" placeholder="Confirme a senha" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 transition" required autoComplete="new-password" />
                         )}
+                        
                         {!isRegistering && (
-                            <div className="flex items-center">
-                                <input type="checkbox" id="rememberMe" ref={rememberMeCheckboxRef} checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                                <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-900 dark:text-gray-300">Lembrar meu e-mail</label>
+                            <div className="flex items-center justify-between">
+                                <label className="flex items-center text-sm text-gray-400">
+                                    <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded" />
+                                    <span className="ml-2">Lembrar e-mail</span>
+                                </label>
+                                {/* Futuramente, um link de "Esqueci a senha" pode ser adicionado aqui */}
                             </div>
                         )}
-                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md">{isRegistering ? 'Registrar' : 'Entrar'}</button>
-                    </form>
-                )}
 
-                {!(currentUser && !currentUser.emailVerified) && (
-                    <p className="mt-6 text-center text-gray-600 dark:text-gray-300">
+                        <button type="submit" disabled={isLoading} className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition duration-300 shadow-lg disabled:bg-purple-800 disabled:cursor-not-allowed">
+                            {isLoading ? 'Processando...' : (isRegistering ? 'Registrar' : 'Entrar')}
+                        </button>
+                    </form>
+                    
+                    <p className="mt-6 text-center text-sm text-gray-400">
                         {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}
-                        <button onClick={() => { setIsRegistering(prev => !prev); setAuthError(''); setAuthMessage(''); setPostRegistrationMessage(null); setPassword(''); setConfirmPassword(''); setUserName(''); setLoginSuggestion(''); }} className="text-blue-600 hover:underline ml-2 dark:text-blue-400">
-                            {isRegistering ? 'Iniciar Sessão' : 'Registre-se'}
+                        <button onClick={() => setIsRegistering(prev => !prev)} className="font-semibold text-purple-400 hover:text-purple-300 ml-1">
+                            {isRegistering ? 'Faça login' : 'Crie uma agora'}
                         </button>
                     </p>
-                )}
+                </div>
             </div>
         </div>
     );

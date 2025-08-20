@@ -1,49 +1,82 @@
 // src/utils/currency.js
 
 /**
- * Formata um número para exibição em moeda BRL.
- * @param {number} value - O valor numérico a ser formatado.
- * @returns {string} O valor formatado como string BRL (Ex: R$ 1.234,56).
+ * Formata um número para uma string de moeda BRL (R$ 1.234,56).
+ * Lida com 'null', 'undefined' e valores não numéricos de forma segura, retornando 'R$ 0,00'.
+ * @param {number | null | undefined} value - O valor numérico a ser formatado.
+ * @returns {string} O valor formatado como string BRL.
  */
 export const formatCurrencyDisplay = (value) => {
-  if (typeof value !== 'number' || isNaN(value)) {
-      return 'R$ 0,00';
+  const num = Number(value);
+  if (typeof num !== 'number' || isNaN(num)) {
+    return 'R$ 0,00';
   }
-  return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return num.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
 };
 
 /**
-* Analisa uma string de entrada de moeda BRL para um número.
-* @param {string} inputString - A string de entrada da moeda (Ex: "1.234,56").
-* @returns {number} O valor numérico analisado.
-*/
+ * Converte uma string de moeda formatada (ex: "1.234,56") para um número (ex: 1234.56).
+ * Remove todos os caracteres não numéricos, exceto a última vírgula, que é tratada como ponto decimal.
+ * @param {string} inputString - A string de entrada da moeda.
+ * @returns {number} O valor numérico analisado. Retorna 0 se a entrada for inválida.
+ */
 export const parseCurrencyInput = (inputString) => {
-  if (typeof inputString !== 'string') {
-      return 0;
+  if (typeof inputString !== 'string' || !inputString.trim()) {
+    return 0;
   }
-  // Remove "R$", espaços, e separadores de milhares (ponto), e substitui a vírgula decimal por ponto.
-  const cleanedString = inputString.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(/,/g, '.');
+  // Remove "R$", espaços, e pontos de milhar. Troca a última vírgula por um ponto.
+  const cleanedString = inputString
+    .replace(/\s/g, '')
+    .replace('R$', '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+    
   const parsed = parseFloat(cleanedString);
   return isNaN(parsed) ? 0 : parsed;
 };
 
 /**
-* Manipulador de eventos para campos de entrada de moeda.
-* Garante que apenas dígitos e vírgulas sejam permitidos.
-* @param {function} setter - A função setState do React para atualizar o valor.
-* @returns {function} Um manipulador de eventos onChange.
-*/
+ * Formata um valor numérico para ser usado em um campo de input (ex: 1234.56 -> "1234,56").
+ * @param {number} value - O valor numérico.
+ * @returns {string} O valor formatado para um campo de input.
+ */
+export const formatCurrencyForInput = (value) => {
+    const num = Number(value);
+    if (isNaN(num)) return '';
+    // Formata com duas casas decimais e substitui o ponto pela vírgula.
+    return num.toFixed(2).replace('.', ',');
+};
+
+
+/**
+ * Manipulador de eventos onChange para campos de input de moeda.
+ * Garante que a entrada do usuário seja sempre formatada corretamente como um valor monetário.
+ * @param {function} setter - A função setState do React para atualizar o valor do estado.
+ */
 export const handleCurrencyInputChange = (setter) => (e) => {
   let value = e.target.value;
-  // Permite apenas dígitos e vírgulas
-  value = value.replace(/[^\d,]/g, '');
-
-  // Garante apenas uma vírgula
-  const commaIndex = value.indexOf(',');
-  if (commaIndex !== -1) {
-      const afterComma = value.substring(commaIndex + 1).replace(/,/g, '');
-      value = value.substring(0, commaIndex + 1) + afterComma;
-  }
   
-  setter(value);
+  // 1. Remove tudo exceto dígitos.
+  value = value.replace(/\D/g, '');
+
+  // 2. Se estiver vazio, define como string vazia.
+  if (value === '') {
+    setter('');
+    return;
+  }
+
+  // 3. Converte para número (ex: "12345" -> 123.45)
+  const numberValue = parseInt(value, 10) / 100;
+
+  // 4. Formata de volta para uma string com vírgula (ex: 123.45 -> "123,45")
+  const formattedValue = numberValue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).replace('.', ','); // Garante que a vírgula seja o separador decimal
+
+  // 5. Atualiza o estado
+  setter(formattedValue);
 };

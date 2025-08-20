@@ -7,7 +7,6 @@ import {
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import UpgradePrompt from './UpgradePrompt';
-// ✅ 1. CORREÇÃO NO NOME DA FUNÇÃO IMPORTADA
 import { formatCurrencyDisplay } from '../utils/currency';
 
 // Funções e componentes auxiliares
@@ -21,7 +20,6 @@ const CustomTooltip = ({ active, payload, label }) => {
         return (
             <div className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
                 <p className="font-bold text-gray-800 dark:text-gray-100">{label}</p>
-                {/* ✅ 2. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
                 <p className="text-blue-500 dark:text-blue-400">{`Total Gasto: ${formatCurrencyDisplay(payload[0].value)}`}</p>
             </div>
         );
@@ -30,7 +28,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
-    const { isPro } = useAppContext();
+    // ✅ 1. PUXANDO O 'isTrialActive' DO CONTEXTO
+    const { isPro, isTrialActive } = useAppContext();
+
+    // ✅ 2. CRIANDO A VARIÁVEL DE ACESSO
+    const hasProAccess = isPro || isTrialActive;
 
     const dataForBarChart = useMemo(() => {
         const clientTotals = {};
@@ -43,22 +45,18 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
     
     const dataForPieChart = useMemo(() => {
         const categories = {};
-
         (expenses || []).forEach(expense => {
             const category = expense.category || 'Outros';
             categories[category] = (categories[category] || 0) + expense.value;
         });
-
         const totalLoans = (loans || []).reduce((acc, loan) => acc + loan.value, 0);
         if (totalLoans > 0) {
             categories['Compras Parceladas'] = (categories['Compras Parceladas'] || 0) + totalLoans;
         }
-
         const totalSubscriptions = (subscriptions || []).reduce((acc, sub) => acc + sub.value, 0);
         if (totalSubscriptions > 0) {
             categories['Assinaturas'] = (categories['Assinaturas'] || 0) + totalSubscriptions;
         }
-
         return Object.entries(categories).map(([name, value]) => ({ name, value }));
     }, [expenses, loans, subscriptions]);
     
@@ -66,12 +64,17 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
     const textColor = theme === 'dark' ? '#A3A3A3' : '#333';
 
     return (
-        <div className="mt-8 p-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-lg relative">
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div>
-                    <h3 className="text-xl font-bold text-blue-700 dark:text-blue-400 mb-4">Gastos por Pessoa (Fatura)</h3>
-                    <div className={!isPro ? 'relative blur-sm pointer-events-none' : ''}>
+        // ✅ 3. USANDO A NOVA VARIÁVEL PARA CONTROLAR O COMPONENTE INTEIRO
+        // O container principal agora é renderizado com base no 'hasProAccess'.
+        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 relative min-h-[380px]">
+            {!hasProAccess ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm rounded-lg">
+                    <UpgradePrompt />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 className="text-xl font-bold text-blue-400 mb-4">Gastos por Pessoa (Fatura)</h3>
                         {dataForBarChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={dataForBarChart}>
@@ -80,20 +83,17 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                     <YAxis tick={{ fill: textColor }} tickFormatter={formatYAxis} />
                                     <Tooltip content={<CustomTooltip />} cursor={{fill: theme === 'dark' ? 'rgba(96, 165, 250, 0.2)' : 'rgba(200, 200, 255, 0.3)'}}/>
                                     <Bar dataKey="Total Gasto" fill={theme === 'dark' ? '#60a5fa' : '#3b82f6'} radius={[4, 4, 0, 0]}>
-                                        {/* ✅ 3. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
                                         <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill={textColor} fontSize={12}/>
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="flex items-center justify-center h-[300px] text-gray-500 dark:text-gray-400">Nenhuma compra para os filtros.</div>
+                            <div className="flex items-center justify-center h-[300px] text-gray-500">Nenhuma compra para os filtros.</div>
                         )}
                     </div>
-                </div>
 
-                <div>
-                    <h3 className="text-xl font-bold text-green-700 dark:text-green-400 mb-4">Gastos Totais por Categoria</h3>
-                     <div className={!isPro ? 'relative blur-sm pointer-events-none' : ''}>
+                    <div>
+                        <h3 className="text-xl font-bold text-green-400 mb-4">Gastos Totais por Categoria</h3>
                         {dataForPieChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
@@ -102,21 +102,14 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    {/* ✅ 4. CORREÇÃO NO NOME DA FUNÇÃO UTILIZADA */}
                                     <Tooltip formatter={(value) => formatCurrencyDisplay(value)} />
                                     <Legend />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                             <div className="flex items-center justify-center h-[300px] text-gray-500 dark:text-gray-400">Nenhum gasto para os filtros.</div>
+                             <div className="flex items-center justify-center h-[300px] text-gray-500">Nenhum gasto para os filtros.</div>
                         )}
                     </div>
-                </div>
-            </div>
-
-            {!isPro && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 dark:bg-gray-800/50 rounded-lg">
-                    <UpgradePrompt />
                 </div>
             )}
         </div>
