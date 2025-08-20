@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
+import FinancialReportModal from './FinancialReportModal';
 
 // --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -13,9 +14,18 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" heig
 export default function ClientManagement() {
     const { userId, db, showToast } = useAppContext();
     const [clients, setClients] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentClient, setCurrentClient] = useState(null);
-    const [clientName, setClientName] = useState('');
+    
+    // --- Estados para o formulário de ADIÇÃO ---
+    const [newClientName, setNewClientName] = useState('');
+
+    // --- Estados para o modal de EDIÇÃO ---
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [clientToEdit, setClientToEdit] = useState(null);
+    const [editingClientName, setEditingClientName] = useState('');
+
+    // --- Estados para o modal de RELATÓRIO ---
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportClient, setReportClient] = useState(null);
 
     useEffect(() => {
         if (!userId) return;
@@ -26,37 +36,48 @@ export default function ClientManagement() {
         return () => unsubscribe();
     }, [userId, db]);
 
-    const handleOpenModal = (client = null) => {
-        setCurrentClient(client);
-        setClientName(client ? client.name : '');
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setCurrentClient(null);
-        setClientName('');
-    };
-
-    const handleSaveClient = async () => {
-        if (!clientName.trim()) {
+    const handleAddClient = async (e) => {
+        e.preventDefault();
+        if (!newClientName.trim()) {
             showToast('O nome da pessoa não pode estar vazio.', 'error');
             return;
         }
-        const clientsRef = collection(db, 'users_fallback', userId, 'clients');
         try {
-            if (currentClient) {
-                const clientDoc = doc(db, 'users_fallback', userId, 'clients', currentClient.id);
-                await updateDoc(clientDoc, { name: clientName });
-                showToast('Pessoa atualizada com sucesso!', 'success');
-            } else {
-                await addDoc(clientsRef, { name: clientName, userId });
-                showToast('Pessoa adicionada com sucesso!', 'success');
-            }
-            handleCloseModal();
+            const clientsRef = collection(db, 'users_fallback', userId, 'clients');
+            await addDoc(clientsRef, { name: newClientName, userId });
+            showToast('Pessoa adicionada com sucesso!', 'success');
+            setNewClientName('');
         } catch (error) {
-            console.error("Erro ao salvar pessoa:", error);
+            console.error("Erro ao adicionar pessoa:", error);
             showToast('Erro ao salvar pessoa. Tente novamente.', 'error');
+        }
+    };
+    
+    const handleOpenEditModal = (client) => {
+        setClientToEdit(client);
+        setEditingClientName(client.name);
+        setIsEditModalOpen(true);
+    };
+
+    const handleCloseEditModal = () => {
+        setIsEditModalOpen(false);
+        setClientToEdit(null);
+        setEditingClientName('');
+    };
+
+    const handleUpdateClient = async () => {
+        if (!editingClientName.trim() || !clientToEdit) {
+            showToast('O nome não pode estar vazio.', 'error');
+            return;
+        }
+        try {
+            const clientDoc = doc(db, 'users_fallback', userId, 'clients', clientToEdit.id);
+            await updateDoc(clientDoc, { name: editingClientName });
+            showToast('Pessoa atualizada com sucesso!', 'success');
+            handleCloseEditModal();
+        } catch (error) {
+            console.error("Erro ao atualizar pessoa:", error);
+            showToast('Erro ao atualizar pessoa. Tente novamente.', 'error');
         }
     };
 
@@ -73,18 +94,31 @@ export default function ClientManagement() {
         }
     };
     
-    // RESTAURADO: Função para o botão de relatório
-    const handleReport = (clientName) => {
-        alert(`Gerando relatório para: ${clientName}`);
-        // Aqui você pode adicionar a lógica para gerar ou navegar para a página de relatório
+    const handleReport = (client) => {
+        setReportClient(client);
+        setIsReportModalOpen(true);
     };
 
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-white">Gerenciamento de Pessoas</h1>
-                <button onClick={() => handleOpenModal()} className="bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">Adicionar Pessoa</button>
-            </div>
+            <h1 className="text-2xl font-bold text-white mb-6">Gerenciamento de Pessoas</h1>
+
+            {/* ✅ CORREÇÃO: Removido 'flex-col sm:flex-row' para que fique sempre em linha */}
+            <form onSubmit={handleAddClient} className="flex items-stretch gap-4 mb-8">
+                <input
+                    type="text"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    placeholder="Nome da Pessoa"
+                    className="flex-grow w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg focus:ring-purple-500 focus:border-purple-500 transition"
+                />
+                <button 
+                    type="submit" 
+                    className="flex-shrink-0 bg-purple-600 text-white font-semibold py-3 px-5 rounded-lg shadow-md hover:bg-purple-700 transition"
+                >
+                    Adicionar Pessoa
+                </button>
+            </form>
 
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-gray-800/50 rounded-lg">
@@ -100,11 +134,10 @@ export default function ClientManagement() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{client.name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div className="flex items-center gap-4">
-                                        <button onClick={() => handleOpenModal(client)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                        <button onClick={() => handleOpenEditModal(client)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
                                         <button onClick={() => handleDeleteClient(client.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
-                                        {/* RESTAURADO: Botão de Relatório */}
                                         <button 
-                                            onClick={() => handleReport(client.name)} 
+                                            onClick={() => handleReport(client)} 
                                             className="bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs font-semibold py-1 px-3 rounded-full transition"
                                         >
                                             Relatório
@@ -117,16 +150,22 @@ export default function ClientManagement() {
                 </table>
             </div>
 
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={currentClient ? 'Editar Pessoa' : 'Adicionar Pessoa'}>
+            <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title="Editar Pessoa">
                 <div>
                     <label htmlFor="clientName" className="block text-sm font-medium text-gray-300">Nome da Pessoa</label>
-                    <input type="text" id="clientName" value={clientName} onChange={(e) => setClientName(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white focus:ring-purple-500 focus:border-purple-500" placeholder="Ex: João Silva" />
+                    <input type="text" id="clientName" value={editingClientName} onChange={(e) => setEditingClientName(e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 text-white focus:ring-purple-500 focus:border-purple-500" placeholder="Ex: João Silva" />
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleSaveClient} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                    <button onClick={handleCloseEditModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
+                    <button onClick={handleUpdateClient} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
                 </div>
             </GenericModal>
+
+            <FinancialReportModal 
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                client={reportClient}
+            />
         </div>
     );
 }

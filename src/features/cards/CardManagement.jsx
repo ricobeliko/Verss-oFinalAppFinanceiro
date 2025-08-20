@@ -4,15 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
-// ✅ 1. IMPORTAÇÕES ATUALIZADAS
-// Importando todas as funções necessárias do nosso novo utilitário de moeda.
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 
 // --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
-const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-
 
 export default function CardManagement() {
     const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
@@ -20,63 +16,124 @@ export default function CardManagement() {
     const [cards, setCards] = useState([]);
     const [allLoans, setAllLoans] = useState([]);
     const [allSubscriptions, setAllSubscriptions] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentCard, setCurrentCard] = useState(null);
-
+    const [allExpenses, setAllExpenses] = useState([]);
+    
     const [cardName, setCardName] = useState('');
     const [cardLimitInput, setCardLimitInput] = useState('');
     const [closingDay, setClosingDay] = useState('');
     const [dueDay, setDueDay] = useState('');
     const [cardColor, setCardColor] = useState('#5E60CE');
+
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingCard, setEditingCard] = useState(null);
+    const [editingValues, setEditingValues] = useState({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '' });
     
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [cardToDelete, setCardToDelete] = useState(null);
 
-    // Efeitos para buscar os dados do Firestore
     useEffect(() => {
         if (!isAuthReady || !userId) return;
         const userCollectionPath = getUserCollectionPathSegments();
         const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
         const loansColRef = collection(db, ...userCollectionPath, userId, 'loans');
         const subsColRef = collection(db, ...userCollectionPath, userId, 'subscriptions');
+        const expensesColRef = collection(db, ...userCollectionPath, userId, 'expenses');
 
         const unsubCards = onSnapshot(cardsRef, (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubLoans = onSnapshot(loansColRef, (snapshot) => setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         const unsubSubs = onSnapshot(subsColRef, (snapshot) => setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubExpenses = onSnapshot(expensesColRef, (snapshot) => setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-        return () => { unsubCards(); unsubLoans(); unsubSubs(); };
+        return () => { unsubCards(); unsubLoans(); unsubSubs(); unsubExpenses(); };
     }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
 
-    const handleOpenModal = (card = null) => {
-        setCurrentCard(card);
-        setCardName(card ? card.name : '');
-        // ✅ 2. USO DA NOVA FUNÇÃO DE FORMATAÇÃO
-        // Ao editar, formatamos o número do banco de dados para a string "1234,56" que o input espera.
-        setCardLimitInput(card ? formatCurrencyForInput(card.limit) : '');
-        setClosingDay(card ? card.closingDay : '');
-        setDueDay(card ? card.dueDay : '');
-        setCardColor(card && card.color ? card.color : '#5E60CE');
-        setIsModalOpen(true);
+    const calculateCurrentMonthInvoiceForCard = (card) => {
+        if (!card || !card.closingDay) return 0;
+    
+        const today = new Date();
+        let targetInvoiceMonth = today.getMonth();
+        let targetInvoiceYear = today.getFullYear();
+    
+        if (today.getDate() >= card.closingDay) {
+            targetInvoiceMonth += 1;
+            if (targetInvoiceMonth > 11) {
+                targetInvoiceMonth = 0;
+                targetInvoiceYear += 1;
+            }
+        }
+    
+        let totalInvoice = 0;
+    
+        allLoans.forEach(loan => {
+            if (loan.cardId === card.id && Array.isArray(loan.installments)) {
+                loan.installments.forEach(inst => {
+                    const dueDate = new Date(inst.dueDate + "T00:00:00");
+                    if (dueDate.getMonth() === targetInvoiceMonth && dueDate.getFullYear() === targetInvoiceYear) {
+                        totalInvoice += inst.value;
+                    }
+                });
+            }
+        });
+    
+        allSubscriptions.forEach(sub => {
+            if (sub.cardId === card.id && sub.isActive) {
+                totalInvoice += sub.amount;
+            }
+        });
+
+        allExpenses.forEach(expense => {
+            if (expense.cardId === card.id) {
+                const expenseDate = new Date(expense.date + "T00:00:00");
+                let expenseInvoiceMonth = expenseDate.getMonth();
+                let expenseInvoiceYear = expenseDate.getFullYear();
+
+                if (expenseDate.getDate() >= card.closingDay) {
+                    expenseInvoiceMonth += 1;
+                    if (expenseInvoiceMonth > 11) {
+                        expenseInvoiceMonth = 0;
+                        expenseInvoiceYear += 1;
+                    }
+                }
+                
+                if (expenseInvoiceMonth === targetInvoiceMonth && expenseInvoiceYear === targetInvoiceYear) {
+                    totalInvoice += expense.value;
+                }
+            }
+        });
+    
+        return totalInvoice;
     };
 
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setCurrentCard(null);
-        setCardName('');
-        setCardLimitInput('');
-        setClosingDay('');
-        setDueDay('');
-        setCardColor('#5E60CE');
+    const calculateTotalDebtForCard = (cardId) => {
+        return allLoans
+            .filter(loan => loan.cardId === cardId)
+            .reduce((sum, loan) => sum + (loan.balanceDueClient || 0), 0);
     };
 
-    const handleSaveCard = async () => {
+    const handleOpenEditModal = (card) => {
+        setEditingCard(card);
+        setEditingValues({
+            name: card.name,
+            limitInput: formatCurrencyForInput(card.limit),
+            closingDay: card.closingDay,
+            dueDay: card.dueDay,
+            color: card.color || '#5E60CE'
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const handleCloseEditModal = () => {
+        setIsEditModalOpen(false);
+        setEditingCard(null);
+    };
+    
+    const handleAddCard = async (e) => {
+        e.preventDefault();
         if (!cardName.trim() || !cardLimitInput || !closingDay || !dueDay) {
             showToast('Todos os campos são obrigatórios.', 'warning');
             return;
         }
         
-        // ✅ 3. USO DA NOVA FUNÇÃO DE PARSE
-        // Convertemos a string do input (ex: "1.234,56") para um número (1234.56) antes de salvar.
         const cardLimit = parseCurrencyInput(cardLimitInput);
         if (isNaN(cardLimit) || cardLimit <= 0) {
             showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
@@ -89,23 +146,54 @@ export default function CardManagement() {
             limit: cardLimit,
             closingDay: parseInt(closingDay),
             dueDay: parseInt(dueDay),
-            color: cardColor
+            color: cardColor,
+            userId
         };
         
         try {
-            if (currentCard) {
-                const cardDoc = doc(db, ...userCollectionPath, userId, 'cards', currentCard.id);
-                await updateDoc(cardDoc, cardData);
-                showToast('Cartão atualizado com sucesso!', 'success');
-            } else {
-                const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-                await addDoc(cardsRef, { ...cardData, userId });
-                showToast('Cartão adicionado com sucesso!', 'success');
-            }
-            handleCloseModal();
+            const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
+            await addDoc(cardsRef, cardData);
+            showToast('Cartão adicionado com sucesso!', 'success');
+            setCardName('');
+            setCardLimitInput('');
+            setClosingDay('');
+            setDueDay('');
+            setCardColor('#5E60CE');
         } catch (error) {
-            console.error("Erro ao salvar cartão:", error);
-            showToast('Erro ao salvar cartão. Tente novamente.', 'error');
+            console.error("Erro ao adicionar cartão:", error);
+            showToast('Erro ao adicionar cartão. Tente novamente.', 'error');
+        }
+    };
+
+    const handleUpdateCard = async () => {
+        if (!editingCard || !editingValues.name.trim() || !editingValues.limitInput || !editingValues.closingDay || !editingValues.dueDay) {
+            showToast('Todos os campos são obrigatórios.', 'warning');
+            return;
+        }
+
+        const cardLimit = parseCurrencyInput(editingValues.limitInput);
+        if (isNaN(cardLimit) || cardLimit <= 0) {
+            showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
+            return;
+        }
+        
+        const userCollectionPath = getUserCollectionPathSegments();
+        const cardData = {
+            name: editingValues.name,
+            limit: cardLimit,
+            closingDay: parseInt(editingValues.closingDay),
+            dueDay: parseInt(editingValues.dueDay),
+            color: editingValues.color
+        };
+        
+        try {
+            const cardDoc = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
+            await updateDoc(cardDoc, cardData);
+            showToast('Cartão atualizado com sucesso!', 'success');
+            handleCloseEditModal();
+        } catch (error) {
+            console.error("Erro ao atualizar o cartão:", error);
+            showToast('Erro ao atualizar o cartão. Tente novamente.', 'error');
         }
     };
 
@@ -130,40 +218,25 @@ export default function CardManagement() {
         }
     };
     
-    // Função de cálculo da fatura (sem alterações na lógica)
-    const calculateCurrentMonthInvoiceForCard = (card) => {
-        if (!card) return 0;
-        const today = new Date();
-        let invoiceYear = today.getFullYear();
-        let invoiceMonth = today.getMonth();
-    
-        if (today.getDate() >= card.closingDay) {
-            invoiceMonth += 1;
-            if (invoiceMonth > 11) {
-                invoiceMonth = 0; 
-                invoiceYear += 1;
-            }
-        }
-        
-        let totalInvoice = 0;
-        allLoans.forEach(loan => { /* ...lógica mantida... */ });
-        allSubscriptions.forEach(sub => { /* ...lógica mantida... */ });
-        return totalInvoice;
-    };
-
-
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-white">Gerenciamento de Cartões</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione e controle os limites e datas dos seus cartões de crédito.</p>
+            <h1 className="text-2xl font-bold text-white mb-6">Gerenciar Cartões de Crédito</h1>
+
+            <form onSubmit={handleAddCard} className="space-y-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <input type="text" placeholder="Nome do Cartão" value={cardName} onChange={(e) => setCardName(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" />
+                    <input type="text" placeholder="Limite Total" value={cardLimitInput} onChange={handleCurrencyInputChange(setCardLimitInput)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" inputMode="decimal" />
+                    <input type="number" placeholder="Dia Fechamento" value={closingDay} onChange={(e) => setClosingDay(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" min="1" max="31" />
+                    <input type="number" placeholder="Dia Vencimento" value={dueDay} onChange={(e) => setDueDay(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" min="1" max="31" />
+                    <input type="color" value={cardColor} onChange={(e) => setCardColor(e.target.value)} className="w-full h-full p-1 bg-gray-700 border-2 border-gray-600 rounded-lg cursor-pointer" title="Escolha uma cor para o cartão" />
                 </div>
-                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
-                    <PlusIcon />
-                    Adicionar Cartão
-                </button>
-            </div>
+                <div className="flex justify-end">
+                    <button type="submit" className="bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-purple-700 transition">
+                        Adicionar Cartão
+                    </button>
+                </div>
+            </form>
+
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-gray-800/50 rounded-lg">
                     <thead className="border-b border-gray-700">
@@ -176,23 +249,40 @@ export default function CardManagement() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700">
-                        {cards.length > 0 ? cards.map((card) => (
-                            <tr key={card.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white flex items-center">
-                                    <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card.color }}></span>
-                                    {card.name}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatCurrencyDisplay(card.limit)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-bold">{formatCurrencyDisplay(calculateCurrentMonthInvoiceForCard(card))}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{`Dia ${card.closingDay} / Dia ${card.dueDay}`}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={() => handleOpenModal(card)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                        <button onClick={() => confirmDeleteCard(card.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        )) : (
+                        {cards.length > 0 ? cards.map((card) => {
+                            const totalDebt = calculateTotalDebtForCard(card.id);
+                            const limit = card.limit || 0;
+                            const usedPercentage = limit > 0 ? (totalDebt / limit) * 100 : 0;
+                            
+                            return (
+                                <tr key={card.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white flex items-center">
+                                        <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card.color }}></span>
+                                        {card.name}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                        <div>{formatCurrencyDisplay(limit)}</div>
+                                        <div className="w-full bg-gray-700 rounded-full h-2 my-1">
+                                            <div 
+                                                className="bg-purple-600 h-2 rounded-full" 
+                                                style={{ width: `${usedPercentage > 100 ? 100 : usedPercentage}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="text-xs text-gray-400">
+                                            Usado: {formatCurrencyDisplay(totalDebt)}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-bold">{formatCurrencyDisplay(calculateCurrentMonthInvoiceForCard(card))}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{`Dia ${card.closingDay} / Dia ${card.dueDay}`}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <div className="flex items-center gap-4">
+                                            <button onClick={() => handleOpenEditModal(card)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                            <button onClick={() => confirmDeleteCard(card.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        }) : (
                             <tr>
                                 <td colSpan="5" className="text-center py-10 text-gray-500">
                                     Nenhum cartão cadastrado ainda.
@@ -203,43 +293,41 @@ export default function CardManagement() {
                 </table>
             </div>
             
-            {/* Modal de Adicionar/Editar Cartão */}
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={currentCard ? 'Editar Cartão' : 'Adicionar Cartão'} theme="dark">
+            <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title={'Editar Cartão'} theme="dark">
+                {/* ✅ CORREÇÃO: O conteúdo do modal foi adicionado aqui */}
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="cardName" className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
-                        <input type="text" id="cardName" value={cardName} onChange={(e) => setCardName(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" placeholder="Ex: Cartão Principal" />
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
+                        <input type="text" value={editingValues.name} onChange={(e) => setEditingValues({...editingValues, name: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" />
                     </div>
                     <div>
-                        <label htmlFor="cardLimit" className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
-                        {/* ✅ 4. USO DO NOVO HANDLER NO INPUT */}
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
-                            <input type="text" id="cardLimit" value={cardLimitInput} onChange={handleCurrencyInputChange(setCardLimitInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" placeholder="5.000,00" inputMode="decimal" />
+                            <input type="text" value={editingValues.limitInput} onChange={handleCurrencyInputChange(val => setEditingValues({...editingValues, limitInput: val}))} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md" inputMode="decimal" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="closingDay" className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
-                            <input type="number" id="closingDay" value={closingDay} onChange={(e) => setClosingDay(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" min="1" max="31" />
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
+                            <input type="number" value={editingValues.closingDay} onChange={(e) => setEditingValues({...editingValues, closingDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
                         </div>
                         <div>
-                            <label htmlFor="dueDay" className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
-                            <input type="number" id="dueDay" value={dueDay} onChange={(e) => setDueDay(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" min="1" max="31" />
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
+                            <input type="number" value={editingValues.dueDay} onChange={(e) => setEditingValues({...editingValues, dueDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
                         </div>
                     </div>
                      <div>
-                        <label htmlFor="cardColor" className="block text-sm font-medium text-gray-300 mb-1">Cor do Cartão</label>
-                        <input type="color" id="cardColor" value={cardColor} onChange={(e) => setCardColor(e.target.value)} className="w-full h-10 p-1 bg-gray-700 border-2 border-gray-600 rounded-md cursor-pointer" />
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Cor do Cartão</label>
+                        <input type="color" value={editingValues.color} onChange={(e) => setEditingValues({...editingValues, color: e.target.value})} className="w-full h-10 p-1 bg-gray-700 border-2 border-gray-600 rounded-md" />
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleSaveCard} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                    <button onClick={handleCloseEditModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
+                    <button onClick={handleUpdateCard} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
                 </div>
             </GenericModal>
 
-            {/* Modal para confirmação de exclusão */}
             <GenericModal
                 isOpen={isConfirmationModalOpen}
                 onClose={() => setIsConfirmationModalOpen(false)}
