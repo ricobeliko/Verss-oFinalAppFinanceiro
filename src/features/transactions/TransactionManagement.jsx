@@ -19,7 +19,7 @@ function UnifiedTransactionManagement() {
     // Os botões agora refletem os nomes que você pediu, e o estilo foi
     // ajustado para parecer um "segmented control" moderno.
     return (
-        <div className="space-y-8">
+        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-8">
             <div>
                 <h1 className="text-2xl font-bold text-white">Adicionar Movimentações</h1>
                 <p className="text-sm text-gray-400 mt-1">Registre suas compras no cartão, receitas e despesas avulsas.</p>
