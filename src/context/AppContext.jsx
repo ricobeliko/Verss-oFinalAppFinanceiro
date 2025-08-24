@@ -1,97 +1,46 @@
 // src/context/AppContext.jsx
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore'; // ✅ 1. onSnapshot importado
-import { auth, db, functions } from '../utils/firebase'; 
-import Toast from '../components/Toast';
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db, functions } from '../utils/firebase'; // Removido getUserCollectionPathSegments daqui se não estiver em firebase.js
+import Toast from '../components/Toast'; // Adicionado para o componente Toast
 
-const useInactivityLogout = (logoutCallback, timeout = 900000) => {
-    const [lastActivity, setLastActivity] = useState(Date.now());
-    useEffect(() => {
-        const events = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
-        const resetTimer = () => setLastActivity(Date.now());
-        events.forEach(event => window.addEventListener(event, resetTimer));
-        const interval = setInterval(() => {
-            if (auth.currentUser && (Date.now() - lastActivity > timeout)) {
-                logoutCallback('Sua sessão expirou por inatividade.');
-            }
-        }, 10000);
-        return () => {
-            clearInterval(interval);
-            events.forEach(event => window.removeEventListener(event, resetTimer));
-        };
-    }, [lastActivity, logoutCallback, timeout]);
-};
+// Função auxiliar movida para dentro ou importada se estiver em firebase.js
+const getUserCollectionPathSegments = () => ['users_fallback'];
 
 export const AppContext = createContext();
-export const useAppContext = () => useContext(AppContext);
 
-export const AppProvider = ({ children }) => {
+export const useAppContext = () => {
+    return useContext(AppContext);
+};
+
+export function AppProvider({ children }) {
+    const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
-    const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [isPro, setIsPro] = useState(false);
-    const [isTrialActive, setIsTrialActive] = useState(false);
-    const [theme, setTheme] = useState('dark'); 
-    const [toast, setToast] = useState({ message: '', type: 'info', visible: false });
+    const [toast, setToast] = useState({ message: '', type: 'info', visible: false }); // Estado de toast unificado
 
-    const getUserCollectionPathSegments = () => ['users_fallback'];
-
-    const handleLogout = useCallback((message) => {
-        signOut(auth).then(() => {
-            if (message) {
-                localStorage.setItem('logoutMessage', message);
-            }
-        });
-    }, []);
-
-    useInactivityLogout(handleLogout, 900000);
-
-    // ✅ 2. LÓGICA DE ATUALIZAÇÃO EM TEMPO REAL
     useEffect(() => {
-        const logoutMessage = localStorage.getItem('logoutMessage');
-        if (logoutMessage) {
-            showToast(logoutMessage, 'info');
-            localStorage.removeItem('logoutMessage');
-        }
-
-        let unsubscribeUserDoc = () => {};
-
-        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-            // Limpa o listener do usuário anterior ao trocar de conta ou deslogar
-            unsubscribeUserDoc();
-
-            if (currentUser) {
-                const userCollectionPath = getUserCollectionPathSegments();
-                const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
-                
-                // onSnapshot "escuta" por mudanças no documento do usuário em tempo real
-                unsubscribeUserDoc = onSnapshot(userDocRef, (doc) => {
-                    if (doc.exists()) {
-                        const userData = doc.data();
-                        setUserProfile({ ...currentUser, ...userData });
-                        setIsPro(userData.plan === 'pro');
-                        const trialExpiresAt = userData.trialExpiresAt?.toDate();
-                        setIsTrialActive(!!(trialExpiresAt && trialExpiresAt > new Date()));
-                    }
-                    // (O caso de doc não existir é tratado no registro)
-                });
-
-                setUserId(currentUser.uid);
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            setCurrentUser(user);
+            if (user && user.uid) {
+                try {
+                    const userCollectionPath = getUserCollectionPathSegments();
+                    const userDocRef = doc(db, ...userCollectionPath, user.uid);
+                    const docSnap = await getDoc(userDocRef);
+                    const userData = docSnap.exists() ? docSnap.data() : null;
+                    setUserProfile(userData);
+                } catch (error) {
+                    console.error("Erro ao buscar perfil do usuário:", error);
+                    setUserProfile(null);
+                }
             } else {
                 setUserProfile(null);
-                setUserId(null);
-                setIsPro(false);
-                setIsTrialActive(false);
             }
             setIsAuthReady(true);
         });
-
-        return () => {
-            unsubscribeAuth();
-            unsubscribeUserDoc();
-        };
+        return () => unsubscribe();
     }, []);
 
     const showToast = (message, type = 'info') => {
@@ -103,34 +52,18 @@ export const AppProvider = ({ children }) => {
         setToast(prev => ({...prev, visible: false}));
     };
 
-    // ✅ 3. FUNÇÃO DE ATIVAÇÃO SIMPLIFICADA
-    const activateFreeTrial = async () => {
-        if (!userId) {
-            return showToast('Você precisa estar logado para ativar o teste.', 'error');
-        }
-        if (userProfile?.trialExpiresAt) {
-            return showToast('O teste grátis já foi ativado para esta conta.', 'warning');
-        }
-        
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, userId);
-            const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-            await updateDoc(userDocRef, { trialExpiresAt: trialEndDate });
-            // Não precisamos mais atualizar o estado manualmente aqui.
-            // O onSnapshot cuidará disso automaticamente!
-            showToast('Mês grátis ativado! Aproveite os recursos PRO.', 'success');
-        } catch(error) {
-            console.error("Erro detalhado ao ativar o mês grátis:", error);
-            showToast(`Falha ao ativar: ${error.code || error.message}`, 'error');
-        }
-    };
-    
     const value = {
-        currentUser: userProfile, userProfile, userId, isAuthReady, isPro, isTrialActive,
-        activateFreeTrial, db, auth, theme, setTheme, showToast, getUserCollectionPathSegments,
+        currentUser,
+        userId: currentUser?.uid,
+        userProfile,
+        isPro: userProfile?.plan === 'pro',
+        isTrialActive: userProfile?.trialExpiresAt?.toDate() > new Date(), // Lógica de trial pode ser adicionada aqui se necessário
+        isAuthReady,
+        showToast,
+        db,
+        auth,
+        functions,
+        getUserCollectionPathSegments,
     };
 
     return (
@@ -144,4 +77,4 @@ export const AppProvider = ({ children }) => {
             />
         </AppContext.Provider>
     );
-};
+}

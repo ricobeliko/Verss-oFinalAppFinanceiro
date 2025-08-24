@@ -1,7 +1,7 @@
 // src/features/income/IncomeManagement.jsx
 
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore'; // Removido 'query' e 'where' que não são mais necessários aqui
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
@@ -33,9 +33,11 @@ function IncomeManagement() {
         const clientsRef = collection(db, ...userCollectionPath, userId, 'clients');
         const unsubClients = onSnapshot(clientsRef, (snapshot) => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
         
+        // ✅ CORREÇÃO APLICADA AQUI
+        // A busca agora é feita diretamente na referência da coleção de receitas do usuário,
+        // sem a cláusula 'where' desnecessária.
         const incomesRef = collection(db, ...userCollectionPath, userId, 'incomes');
-        const q = query(incomesRef, where("userId", "==", userId));
-        const unsubIncomes = onSnapshot(q, (snapshot) => {
+        const unsubIncomes = onSnapshot(incomesRef, (snapshot) => {
             setIncomes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
@@ -54,7 +56,9 @@ function IncomeManagement() {
         setEditingIncome(income);
         setDescription(income.description);
         setValueInput(formatCurrencyForInput(income.value));
-        setDate(income.date);
+        // Garante que a data está no formato YYYY-MM-DD
+        const incomeDate = income.date?.toDate ? income.date.toDate().toISOString().split('T')[0] : income.date;
+        setDate(incomeDate);
         setClientId(income.clientId);
         window.scrollTo(0, 0);
     };
@@ -68,7 +72,8 @@ function IncomeManagement() {
         }
 
         const userCollectionPath = getUserCollectionPathSegments();
-        const incomeData = { description, value, date, clientId, userId };
+        // O campo 'userId' não é necessário nos documentos da subcoleção
+        const incomeData = { description, value, date, clientId };
 
         try {
             if (editingIncome) {

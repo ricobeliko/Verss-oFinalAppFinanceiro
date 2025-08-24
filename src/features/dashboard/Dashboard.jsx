@@ -1,17 +1,17 @@
 // src/features/dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'; 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
-import ProSummary from './ProSummary'; 
+import ProSummary from './ProSummary';
 import Spinner from '../../components/Spinner';
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext(); 
-    
+    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext();
+
     const [dashboardData, setDashboardData] = useState({
         loans: [],
         clients: [],
@@ -24,8 +24,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
-    
-    const fetchData = async () => {
+
+    // ✅ CORREÇÃO: A função fetchData foi envolvida com 'useCallback'.
+    // Isso garante que a função não seja recriada a cada renderização,
+    // evitando que o useEffect seja acionado desnecessariamente e prevenindo o loop de recarregamento.
+    const fetchData = useCallback(async () => {
         if (!isAuthReady || !db || !userId) {
             setIsLoading(false);
             return;
@@ -43,7 +46,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             };
 
             const [
-                loansSnapshot, clientsSnapshot, cardsSnapshot, 
+                loansSnapshot, clientsSnapshot, cardsSnapshot,
                 subscriptionsSnapshot, expensesSnapshot, incomesSnapshot
             ] = await Promise.all([
                 getDocs(collections.loans),
@@ -53,7 +56,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 getDocs(collections.expenses),
                 getDocs(collections.incomes)
             ]);
-            
+
             const safeDataMapper = (doc) => {
                 const data = doc.data();
                 const dateValue = data.date?.toDate ? data.date.toDate().toISOString() : data.date;
@@ -61,7 +64,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 const value = data.value !== undefined ? data.value : (data.amount !== undefined ? data.amount : 0);
                 return { id: doc.id, ...data, date: convertedDate, value };
             };
-            
+
             const allData = {
                 loans: loansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
                 clients: clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
@@ -79,16 +82,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast]); // As dependências foram movidas para cá
 
     useEffect(() => {
         fetchData();
-        
+
         const handleReload = () => fetchData();
         window.addEventListener('reloadData', handleReload);
         return () => window.removeEventListener('reloadData', handleReload);
-        
-    }, [db, userId, isAuthReady]);
+
+    }, [fetchData]); // Agora o useEffect depende da função memoizada 'fetchData'
 
     const handleMarkInstallmentAsPaidDashboard = async (originalLoanId, personKeyOrNull, installmentNumber) => {
         const loanToUpdate = loans.find(loan => loan.id === originalLoanId);
@@ -96,7 +99,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast("Erro: Compra não encontrada.", "error");
             return;
         }
-        
+
         const userCollectionPath = getUserCollectionPathSegments();
         const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', originalLoanId);
         let updatedFields = {};
@@ -135,12 +138,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         }
     };
 
-    const { 
-        displayableItems, 
-        filteredLoansForChart, 
-        filteredExpensesForChart, 
+    const {
+        displayableItems,
+        filteredLoansForChart,
+        filteredExpensesForChart,
         filteredSubscriptionsForChart,
-        summary 
+        summary
     } = useMemo(() => {
         if (isLoading || clients.length === 0) {
             return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
@@ -166,9 +169,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             };
 
-            // ✅ LÓGICA DE COMPRA COMPARTILHADA MAIS ROBUSTA
-            // Agora, se a compra for 'isShared' mas não tiver 'sharedDetails',
-            // ela é tratada como uma compra normal e não é mais ignorada.
             if (loan.isShared && loan.sharedDetails) {
                 let processed = false;
                 if (loan.sharedDetails.person1?.installments) {
@@ -179,12 +179,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
                     processed = true;
                 }
-                // Fallback: se foi marcada como compartilhada mas não teve partes processadas, trate como normal.
                 if (!processed) {
                     processInstallments(loan.installments, { key: null, clientId: loan.clientId });
                 }
             } else {
-                // Trata compras não compartilhadas e as compartilhadas com dados faltando.
                 processInstallments(loan.installments, { key: null, clientId: loan.clientId });
             }
         });
@@ -195,14 +193,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 allItems.push({ ...sub, type: 'Assinatura', description: sub.name, dueDate: `${selectedMonth}-${day}`, currentStatus: 'Recorrente', value: sub.amount });
             }
         });
-        
+
         expenses.forEach(expense => {
-            const expenseDate = expense.date; 
+            const expenseDate = expense.date;
             if (expenseDate instanceof Date && !isNaN(expenseDate)) {
                 let faturaMonth = expenseDate.getUTCMonth() + 1;
                 let faturaYear = expenseDate.getUTCFullYear();
-                
-                if (expense.cardId && cards.length > 0) { 
+
+                if (expense.cardId && cards.length > 0) {
                     const card = cards.find(c => c.id === expense.cardId);
                     if (card && typeof card.closingDay === 'number' && expenseDate.getUTCDate() >= card.closingDay) {
                         faturaMonth += 1;
@@ -212,7 +210,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         }
                     }
                 }
-                
+
                 if (faturaYear === filterYear && faturaMonth === filterMonth &&
                     (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
                     (!selectedClientFilter || !expense.clientId)) {
@@ -224,10 +222,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         allItems.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
         const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
-        
-        return { 
-            displayableItems: allItems, 
-            filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'), 
+
+        return {
+            displayableItems: allItems,
+            filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'),
             filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
             filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
             summary: {
@@ -236,8 +234,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 totalPendente: newTotalFatura - newTotalRecebido,
             }
         };
-    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter]);
-    
+    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, clients, cards]);
+
     const getCardDisplayInfo = (cardId) => {
         const card = cards.find(c => c.id === cardId);
         return card ? { name: card.name, color: card.color || '#374151' } : { name: 'N/A', color: '#374151' };
@@ -252,12 +250,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             </div>
         );
     }
-    
+
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-6">
             <div className="space-y-8">
                 <h2 className="text-2xl font-bold text-white">Resumo Financeiro</h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
                     <select value={selectedCardFilter} onChange={(e) => setSelectedCardFilter(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
@@ -289,12 +287,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
                     </div>
                     <div className="lg:col-span-2">
-                        <ProAnalyticsCharts 
-                            loans={filteredLoansForChart} 
-                            clients={clients} 
+                        <ProAnalyticsCharts
+                            loans={filteredLoansForChart}
+                            clients={clients}
                             expenses={filteredExpensesForChart}
                             subscriptions={filteredSubscriptionsForChart}
-                            theme={theme} 
+                            theme={theme}
                         />
                     </div>
                 </div>
