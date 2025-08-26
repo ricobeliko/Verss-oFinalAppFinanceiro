@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
@@ -24,8 +24,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         subscriptions: [],
         expenses: [],
         incomes: [],
+        paidSubscriptions: [],
     });
-    const { loans, clients, cards, subscriptions, expenses, incomes } = dashboardData;
+    const { loans, clients, cards, subscriptions, expenses, incomes, paidSubscriptions } = dashboardData;
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
@@ -46,18 +47,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 subscriptions: collection(db, ...userCollectionPath, userId, 'subscriptions'),
                 expenses: collection(db, ...userCollectionPath, userId, 'expenses'),
                 incomes: collection(db, ...userCollectionPath, userId, 'incomes'),
+                paidSubscriptions: collection(db, ...userCollectionPath, userId, 'paidSubscriptions'),
             };
 
             const [
                 loansSnapshot, clientsSnapshot, cardsSnapshot,
-                subscriptionsSnapshot, expensesSnapshot, incomesSnapshot
+                subscriptionsSnapshot, expensesSnapshot, incomesSnapshot, paidSubscriptionsSnapshot
             ] = await Promise.all([
                 getDocs(collections.loans),
                 getDocs(collections.clients),
                 getDocs(collections.cards),
                 getDocs(collections.subscriptions),
                 getDocs(collections.expenses),
-                getDocs(collections.incomes)
+                getDocs(collections.incomes),
+                getDocs(query(collections.paidSubscriptions, where("month", "==", selectedMonth)))
             ]);
 
             const safeDataMapper = (doc) => {
@@ -75,6 +78,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 subscriptions: subscriptionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
                 expenses: expensesSnapshot.docs.map(safeDataMapper),
                 incomes: incomesSnapshot.docs.map(safeDataMapper),
+                paidSubscriptions: paidSubscriptionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
             };
 
             setDashboardData(allData);
@@ -85,7 +89,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         } finally {
             setIsLoading(false);
         }
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast]);
+    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast, selectedMonth]);
 
     useEffect(() => {
         fetchData();
@@ -94,7 +98,44 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         return () => window.removeEventListener('reloadData', handleReload);
     }, [fetchData]);
 
-    // ✅ 1. FUNÇÃO ATUALIZADA para marcar e desmarcar
+    const updateItemStatus = async (item, newStatus) => {
+        const userCollectionPath = getUserCollectionPathSegments();
+        try {
+            switch (item.type) {
+                case 'Parcela':
+                    await updateInstallmentStatus(item.loanId, item.personKey, item.number, newStatus);
+                    break;
+                case 'Despesa':
+                    const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
+                    await updateDoc(expenseDocRef, { status: newStatus });
+                    break;
+                case 'Assinatura':
+                    const paidSubscriptionsRef = collection(db, ...userCollectionPath, userId, 'paidSubscriptions');
+                    if (newStatus === 'Paga') {
+                        await addDoc(paidSubscriptionsRef, {
+                            subscriptionId: item.originalId,
+                            month: selectedMonth,
+                            paidDate: new Date().toISOString().split('T')[0],
+                        });
+                    } else {
+                        const q = query(paidSubscriptionsRef, where("subscriptionId", "==", item.originalId), where("month", "==", selectedMonth));
+                        const querySnapshot = await getDocs(q);
+                        querySnapshot.forEach(async (docSnapshot) => {
+                            await deleteDoc(doc(paidSubscriptionsRef, docSnapshot.id));
+                        });
+                    }
+                    break;
+                default:
+                    throw new Error("Tipo de item desconhecido.");
+            }
+            showToast(`${item.type} atualizada para ${newStatus}!`, "success");
+            await fetchData();
+        } catch (error) {
+            console.error(`Erro ao atualizar ${item.type}:`, error);
+            showToast(`Erro ao atualizar: ${error.message}`, "error");
+        }
+    };
+    
     const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
         const loanToUpdate = loans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
@@ -128,8 +169,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             }
 
             await updateDoc(loanDocRef, updatedFields);
-            showToast(`Parcela atualizada para ${newStatus}!`, "success");
-            await fetchData(); // Recarrega os dados para refletir a mudança
         } catch (error) {
             console.error("Erro ao atualizar parcela:", error);
             showToast(`Erro: ${error.message}`, "error");
@@ -182,11 +221,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
                                 let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
                                 
-                                // ✅ 2. CORREÇÃO NO VALOR DA PARCELA
                                 const itemData = {
                                     ...loan,
                                     ...inst,
-                                    value: inst.value, // Força o valor a ser o da parcela, corrigindo o bug
+                                    value: inst.value,
                                     id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`,
                                     type: 'Parcela',
                                     loanId: loan.id,
@@ -222,8 +260,18 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
                             const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
                             if (!addedSubKeys.has(uniqueKey)) {
-                                 allItems.push({ ...sub, type: 'Assinatura', id: uniqueKey, description: sub.name, dueDate: chargeDate.toISOString().split('T')[0], currentStatus: 'Recorrente', value: sub.amount });
-                                 addedSubKeys.add(uniqueKey);
+                                const isPaid = paidSubscriptions.some(ps => ps.subscriptionId === sub.id && ps.month === selectedMonth);
+                                allItems.push({ 
+                                    ...sub, 
+                                    type: 'Assinatura', 
+                                    id: uniqueKey,
+                                    originalId: sub.id,
+                                    description: sub.name, 
+                                    dueDate: chargeDate.toISOString().split('T')[0], 
+                                    currentStatus: isPaid ? 'Paga' : 'Pendente',
+                                    value: sub.amount 
+                                });
+                                addedSubKeys.add(uniqueKey);
                             }
                         }
                     });
@@ -236,7 +284,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                      const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
                      const invoiceDueDate = getInvoiceDueDate(expenseDate, card);
                     if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
-                        allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date.toISOString().split('T')[0], currentStatus: 'Avulsa', value: expense.value });
+                        allItems.push({ 
+                            ...expense, 
+                            type: 'Despesa', 
+                            dueDate: expense.date.toISOString().split('T')[0], 
+                            currentStatus: expense.status || 'Pendente',
+                            value: expense.value 
+                        });
                     }
                 }
             });
@@ -264,7 +318,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             });
 
             const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
-            const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
+            const newTotalRecebido = allItems.filter(item => item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
 
             return {
                 displayableItems: allItems,
@@ -297,7 +351,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         const userCollectionPath = getUserCollectionPathSegments();
         let updatesMade = 0;
 
-        const itemsToUpdate = displayableItems.filter(item => item.type === 'Parcela' && item.currentStatus !== 'Paga');
+        const itemsToUpdate = displayableItems.filter(item => item.currentStatus !== 'Paga');
 
         if (itemsToUpdate.length === 0) {
             showToast('Nenhum item pendente para marcar como pago.', 'info');
@@ -305,27 +359,43 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         }
 
         itemsToUpdate.forEach(item => {
-            const loanToUpdate = loans.find(l => l.id === item.loanId);
-            if (!loanToUpdate) return;
-            
-            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', item.loanId);
-            
-            if (loanToUpdate.isShared && item.personKey) {
-                const installments = [...loanToUpdate.sharedDetails[item.personKey].installments];
-                const installmentIndex = installments.findIndex(inst => inst.number === item.number);
-                if (installmentIndex > -1) {
-                    installments[installmentIndex].status = 'Paga';
-                    installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                    batch.update(loanDocRef, { [`sharedDetails.${item.personKey}.installments`]: installments });
-                    updatesMade++;
+            if (item.type === 'Parcela') {
+                 const loanToUpdate = loans.find(l => l.id === item.loanId);
+                 if (!loanToUpdate) return;
+                 const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', item.loanId);
+                 if (loanToUpdate.isShared && item.personKey) {
+                    const installments = [...loanToUpdate.sharedDetails[item.personKey].installments];
+                    const installmentIndex = installments.findIndex(inst => inst.number === item.number);
+                    if (installmentIndex > -1) {
+                        installments[installmentIndex].status = 'Paga';
+                        installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
+                        batch.update(loanDocRef, { [`sharedDetails.${item.personKey}.installments`]: installments });
+                        updatesMade++;
+                    }
+                } else if (!loanToUpdate.isShared) {
+                    const installments = [...loanToUpdate.installments];
+                    const installmentIndex = installments.findIndex(inst => inst.number === item.number);
+                    if (installmentIndex > -1) {
+                        installments[installmentIndex].status = 'Paga';
+                        installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
+                        batch.update(loanDocRef, { installments: installments });
+                        updatesMade++;
+                    }
                 }
-            } else if (!loanToUpdate.isShared) {
-                const installments = [...loanToUpdate.installments];
-                const installmentIndex = installments.findIndex(inst => inst.number === item.number);
-                if (installmentIndex > -1) {
-                    installments[installmentIndex].status = 'Paga';
-                    installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                    batch.update(loanDocRef, { installments: installments });
+            } else if (item.type === 'Despesa') {
+                const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
+                batch.update(expenseDocRef, { status: 'Paga' });
+                updatesMade++;
+            } else if (item.type === 'Assinatura') {
+                const isPaid = paidSubscriptions.some(ps => ps.subscriptionId === item.originalId && ps.month === selectedMonth);
+                if (!isPaid) {
+                    const paidSubscriptionsRef = collection(db, ...userCollectionPath, userId, 'paidSubscriptions');
+                    const newPaidSub = {
+                        subscriptionId: item.originalId,
+                        month: selectedMonth,
+                        paidDate: new Date().toISOString().split('T')[0],
+                    };
+                    batch.set(doc(paidSubscriptionsRef), newPaidSub);
                     updatesMade++;
                 }
             }
@@ -446,7 +516,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-300">{formatCurrencyDisplay(item.value)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                                {item.type === 'Parcela' ? `${item.number}/${item.totalInstallments}` : '1/1'}
+                                                {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -459,13 +529,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {item.type === 'Parcela' && item.currentStatus !== 'Paga' && (
-                                                    <button onClick={() => updateInstallmentStatus(item.loanId, item.personKey, item.number, 'Paga')} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
+                                                {item.currentStatus !== 'Paga' && (
+                                                    <button onClick={() => updateItemStatus(item, 'Paga')} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
                                                         Marcar Paga
                                                     </button>
                                                 )}
-                                                {item.type === 'Parcela' && item.currentStatus === 'Paga' && (
-                                                     <button onClick={() => updateInstallmentStatus(item.loanId, item.personKey, item.number, 'Pendente')} className="bg-red-500/20 text-red-400 px-3 py-1 rounded-md hover:bg-red-500/30 text-xs font-semibold">
+                                                {item.currentStatus === 'Paga' && (
+                                                     <button onClick={() => updateItemStatus(item, 'Pendente')} className="bg-red-500/20 text-red-400 px-3 py-1 rounded-md hover:bg-red-500/30 text-xs font-semibold">
                                                         Desmarcar
                                                     </button>
                                                 )}
@@ -488,7 +558,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
                     onConfirm={handleMarkAllAsPaid}
                     title="Confirmar Ação" 
-                    message="Tem certeza de que deseja marcar TODAS as parcelas pendentes ou atrasadas deste mês como PAGAS? Esta ação não pode ser desfeita."
+                    message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
                     isConfirmation={true} 
                     theme={theme} 
                 />
