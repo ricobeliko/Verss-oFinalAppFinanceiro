@@ -1,13 +1,18 @@
-// src/features/dashboard/Dashboard.jsx
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
 import ProSummary from './ProSummary';
 import Spinner from '../../components/Spinner';
+
+// Ícone para a ordenação da tabela
+const SortIcon = ({ direction }) => (
+    <svg className="w-4 h-4 inline-block ml-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        {direction === 'ascending' ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
+    </svg>
+);
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
     const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext();
@@ -24,6 +29,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
 
     const fetchData = useCallback(async () => {
         if (!isAuthReady || !db || !userId) {
@@ -88,45 +94,44 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         return () => window.removeEventListener('reloadData', handleReload);
     }, [fetchData]);
 
-    const handleMarkInstallmentAsPaidDashboard = async (originalLoanId, personKeyOrNull, installmentNumber) => {
-        const loanToUpdate = loans.find(loan => loan.id === originalLoanId);
+    // ✅ 1. FUNÇÃO ATUALIZADA para marcar e desmarcar
+    const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
+        const loanToUpdate = loans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
             showToast("Erro: Compra não encontrada.", "error");
             return;
         }
         const userCollectionPath = getUserCollectionPathSegments();
-        const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', originalLoanId);
+        const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
         let updatedFields = {};
+
         try {
-            if (loanToUpdate.isShared && personKeyOrNull) {
-                const currentSharedDetails = JSON.parse(JSON.stringify(loanToUpdate.sharedDetails));
-                const personData = currentSharedDetails[personKeyOrNull];
-                const personInstallments = Array.isArray(personData.installments) ? [...personData.installments] : [];
-                const installmentIndex = personInstallments.findIndex(inst => inst.number === installmentNumber);
+            if (loanToUpdate.isShared && personKey) {
+                const installments = [...loanToUpdate.sharedDetails[personKey].installments];
+                const installmentIndex = installments.findIndex(inst => inst.number === installmentNumber);
                 if (installmentIndex === -1) throw new Error("Parcela compartilhada não encontrada.");
-                personInstallments[installmentIndex].status = 'Paga';
-                personInstallments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                const newValuePaidPerson = personInstallments.filter(inst => inst.status === 'Paga').reduce((sum, inst) => sum + inst.value, 0);
-                const newBalanceDuePerson = parseFloat((personData.shareAmount - newValuePaidPerson).toFixed(2));
-                let newPersonStatus = newBalanceDuePerson <= 0.005 ? 'Pago Total' : (newValuePaidPerson > 0 ? 'Pago Parcial' : 'Pendente');
-                currentSharedDetails[personKeyOrNull] = { ...personData, installments: personInstallments, valuePaid: newValuePaidPerson, balanceDue: newBalanceDuePerson, statusPayment: newPersonStatus };
-                updatedFields.sharedDetails = currentSharedDetails;
+                
+                installments[installmentIndex].status = newStatus;
+                installments[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
+                
+                updatedFields[`sharedDetails.${personKey}.installments`] = installments;
+
             } else if (!loanToUpdate.isShared) {
-                const normalInstallmentsParsed = Array.isArray(loanToUpdate.installments) ? [...loanToUpdate.installments] : [];
-                const installmentIndex = normalInstallmentsParsed.findIndex(inst => inst.number === installmentNumber);
+                const installments = [...loanToUpdate.installments];
+                const installmentIndex = installments.findIndex(inst => inst.number === installmentNumber);
                 if (installmentIndex === -1) throw new Error("Parcela não encontrada.");
-                normalInstallmentsParsed[installmentIndex].status = 'Paga';
-                normalInstallmentsParsed[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                const newValuePaid = normalInstallmentsParsed.filter(i => i.status === 'Paga').reduce((sum, i) => sum + i.value, 0);
-                const newBalanceDue = parseFloat((loanToUpdate.totalValue - newValuePaid).toFixed(2));
-                let newOverallStatus = newBalanceDue <= 0.005 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
-                updatedFields = { installments: normalInstallmentsParsed, valuePaidClient: newValuePaid, balanceDueClient: newBalanceDue, statusPaymentClient: newOverallStatus };
+
+                installments[installmentIndex].status = newStatus;
+                installments[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
+
+                updatedFields.installments = installments;
             }
+
             await updateDoc(loanDocRef, updatedFields);
-            showToast("Parcela marcada como paga com sucesso!", "success");
-            fetchData();
+            showToast(`Parcela atualizada para ${newStatus}!`, "success");
+            await fetchData(); // Recarrega os dados para refletir a mudança
         } catch (error) {
-            console.error("Erro ao marcar parcela:", error);
+            console.error("Erro ao atualizar parcela:", error);
             showToast(`Erro: ${error.message}`, "error");
         }
     };
@@ -138,120 +143,203 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         filteredSubscriptionsForChart,
         summary
     } = useMemo(() => {
-        if (isLoading || clients.length === 0) {
-            return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
-        }
-
-        const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
-        const todayAtMidnight = new Date();
-        todayAtMidnight.setHours(0, 0, 0, 0);
-        const allItems = [];
-
-        // ✅ CORREÇÃO: Função centralizada para calcular a data de vencimento da fatura
-        const getInvoiceDueDate = (transactionDate, card) => {
-            if (!card || !card.closingDay || !card.dueDay) {
-                // Se não houver cartão ou datas, retorna a data da transação como fallback
-                return transactionDate;
+        try {
+            if (isLoading || clients.length === 0) {
+                return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
             }
-            
-            let dueMonth = transactionDate.getUTCMonth();
-            let dueYear = transactionDate.getUTCFullYear();
 
-            if (card.closingDay < card.dueDay) { // Fechamento e vencimento no mesmo mês
-                if (transactionDate.getUTCDate() >= card.closingDay) {
-                    dueMonth += 1;
-                }
-            } else { // Fechamento num mês, vencimento no seguinte
-                const closingDate = new Date(Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), card.closingDay));
-                if (transactionDate >= closingDate) {
-                    dueMonth += 2;
+            const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
+            const todayAtMidnight = new Date();
+            todayAtMidnight.setHours(0, 0, 0, 0);
+            let allItems = [];
+
+            const getInvoiceDueDate = (transactionDate, card) => {
+                if (!card || !card.closingDay || !card.dueDay) return transactionDate;
+                let dueMonth = transactionDate.getUTCMonth();
+                let dueYear = transactionDate.getUTCFullYear();
+                if (card.closingDay < card.dueDay) {
+                    if (transactionDate.getUTCDate() >= card.closingDay) dueMonth += 1;
                 } else {
-                    dueMonth += 1;
+                    const closingDate = new Date(Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), card.closingDay));
+                    if (transactionDate >= closingDate) dueMonth += 2;
+                    else dueMonth += 1;
                 }
-            }
-            if (dueMonth > 11) {
-                dueYear += Math.floor(dueMonth / 12);
-                dueMonth %= 12;
-            }
-            return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
-        };
+                if (dueMonth > 11) {
+                    dueYear += Math.floor(dueMonth / 12);
+                    dueMonth %= 12;
+                }
+                return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
+            };
 
-        // --- Processamento de Compras (Loans) ---
-        loans.forEach(loan => {
-            if (!loan || typeof loan.totalValue !== 'number') return;
-            const processInstallments = (installments, personDetails) => {
-                if (Array.isArray(installments)) {
-                    installments.forEach(inst => {
-                        const instDate = new Date(inst.dueDate + "T00:00:00Z");
-                        if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
-                            (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
-                            (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
-                            let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
-                            allItems.push({ ...loan, ...inst, id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`, type: 'Parcela', loanId: loan.id, personKey: personDetails.key, clientId: personDetails.clientId, description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'), currentStatus: status, dueDate: inst.dueDate, value: inst.value });
+            loans.forEach(loan => {
+                if (!loan || typeof loan.totalValue !== 'number') return;
+                const processInstallments = (installments, personDetails) => {
+                    if (Array.isArray(installments)) {
+                        installments.forEach(inst => {
+                            const instDate = new Date(inst.dueDate + "T00:00:00Z");
+                            if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
+                                (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
+                                (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
+                                let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
+                                
+                                // ✅ 2. CORREÇÃO NO VALOR DA PARCELA
+                                const itemData = {
+                                    ...loan,
+                                    ...inst,
+                                    value: inst.value, // Força o valor a ser o da parcela, corrigindo o bug
+                                    id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`,
+                                    type: 'Parcela',
+                                    loanId: loan.id,
+                                    personKey: personDetails.key,
+                                    clientId: personDetails.clientId,
+                                    description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'),
+                                    currentStatus: status
+                                };
+                                delete itemData.installments;
+                                allItems.push(itemData);
+                            }
+                        });
+                    }
+                };
+                if (loan.isShared && loan.sharedDetails) {
+                    if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
+                    if (loan.sharedDetails.person2 && loan.sharedDetails.person2?.shareAmount > 0) processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
+                } else {
+                    processInstallments(loan.installments, { key: null, clientId: loan.clientId });
+                }
+            });
+
+            const addedSubKeys = new Set();
+            subscriptions.forEach(sub => {
+                if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
+                    const card = cards.find(c => c.id === sub.cardId);
+                    if (!card) return;
+
+                    [-1, 0].forEach(monthOffset => {
+                        const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
+                        const invoiceDueDate = getInvoiceDueDate(chargeDate, card);
+                        
+                        if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                            const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
+                            if (!addedSubKeys.has(uniqueKey)) {
+                                 allItems.push({ ...sub, type: 'Assinatura', id: uniqueKey, description: sub.name, dueDate: chargeDate.toISOString().split('T')[0], currentStatus: 'Recorrente', value: sub.amount });
+                                 addedSubKeys.add(uniqueKey);
+                            }
                         }
                     });
                 }
-            };
-            if (loan.isShared && loan.sharedDetails) {
-                if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
-                if (loan.sharedDetails.person2 && loan.sharedDetails.person2?.shareAmount > 0) processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
-            } else {
-                processInstallments(loan.installments, { key: null, clientId: loan.clientId });
-            }
-        });
-
-        // --- Processamento de Assinaturas ---
-        const addedSubKeys = new Set();
-        subscriptions.forEach(sub => {
-            if (!sub.isActive || (!selectedCardFilter || sub.cardId === selectedCardFilter) || (!selectedClientFilter || sub.clientId === selectedClientFilter)) return;
-            const card = cards.find(c => c.id === sub.cardId);
-            if (!card) return;
-
-            // Testa a data de cobrança no mês anterior e no mês atual para pegar faturas que "viram" o mês
-            [-1, 0].forEach(monthOffset => {
-                const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
-                const invoiceDueDate = getInvoiceDueDate(chargeDate, card);
-                
-                if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
-                    const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
-                    if (!addedSubKeys.has(uniqueKey)) {
-                         allItems.push({ ...sub, type: 'Assinatura', id: uniqueKey, description: sub.name, dueDate: chargeDate.toISOString().split('T')[0], currentStatus: 'Recorrente', value: sub.amount });
-                         addedSubKeys.add(uniqueKey);
+            });
+            
+            expenses.forEach(expense => {
+                const expenseDate = expense.date;
+                if (expenseDate instanceof Date && !isNaN(expenseDate) && (!selectedCardFilter || expense.cardId === selectedCardFilter) && (!selectedClientFilter || !expense.clientId)) {
+                     const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
+                     const invoiceDueDate = getInvoiceDueDate(expenseDate, card);
+                    if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                        allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date.toISOString().split('T')[0], currentStatus: 'Avulsa', value: expense.value });
                     }
                 }
             });
-        });
-        
-        // --- Processamento de Despesas Avulsas ---
-        expenses.forEach(expense => {
-            const expenseDate = expense.date;
-            if (expenseDate instanceof Date && !isNaN(expenseDate) && (!selectedCardFilter || expense.cardId === selectedCardFilter) && (!selectedClientFilter || !expense.clientId)) {
-                 const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
-                 const invoiceDueDate = getInvoiceDueDate(expenseDate, card);
 
-                if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
-                    allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date.toISOString().split('T')[0], currentStatus: 'Avulsa', value: expense.value });
+            allItems.sort((a, b) => {
+                let aValue = a[sortConfig.key] || '';
+                let bValue = b[sortConfig.key] || '';
+
+                if (sortConfig.key === 'clientId') {
+                    aValue = clients.find(c => c.id === a.clientId)?.name || '';
+                    bValue = clients.find(c => c.id === b.clientId)?.name || '';
+                }
+                if (sortConfig.key === 'cardId') {
+                    aValue = cards.find(c => c.id === a.cardId)?.name || '';
+                    bValue = cards.find(c => c.id === b.cardId)?.name || '';
+                }
+
+                if (sortConfig.key === 'dueDate') {
+                    return sortConfig.direction === 'ascending' ? new Date(aValue) - new Date(bValue) : new Date(bValue) - new Date(aValue);
+                }
+
+                return sortConfig.direction === 'ascending' 
+                    ? String(aValue).localeCompare(String(bValue))
+                    : String(bValue).localeCompare(String(aValue));
+            });
+
+            const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
+            const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
+
+            return {
+                displayableItems: allItems,
+                filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'),
+                filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
+                filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
+                summary: {
+                    totalFatura: newTotalFatura,
+                    totalRecebido: newTotalRecebido,
+                    totalPendente: newTotalFatura - newTotalRecebido,
+                }
+            };
+        } catch (error) {
+            console.error("ERRO FATAL DURANTE O CÁLCULO DO RESUMO:", error);
+            return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
+        }
+    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, clients, cards, sortConfig]);
+    
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const handleMarkAllAsPaid = async () => {
+        setIsMarkAllPaidConfirmationOpen(false);
+        const batch = writeBatch(db);
+        const userCollectionPath = getUserCollectionPathSegments();
+        let updatesMade = 0;
+
+        const itemsToUpdate = displayableItems.filter(item => item.type === 'Parcela' && item.currentStatus !== 'Paga');
+
+        if (itemsToUpdate.length === 0) {
+            showToast('Nenhum item pendente para marcar como pago.', 'info');
+            return;
+        }
+
+        itemsToUpdate.forEach(item => {
+            const loanToUpdate = loans.find(l => l.id === item.loanId);
+            if (!loanToUpdate) return;
+            
+            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', item.loanId);
+            
+            if (loanToUpdate.isShared && item.personKey) {
+                const installments = [...loanToUpdate.sharedDetails[item.personKey].installments];
+                const installmentIndex = installments.findIndex(inst => inst.number === item.number);
+                if (installmentIndex > -1) {
+                    installments[installmentIndex].status = 'Paga';
+                    installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
+                    batch.update(loanDocRef, { [`sharedDetails.${item.personKey}.installments`]: installments });
+                    updatesMade++;
+                }
+            } else if (!loanToUpdate.isShared) {
+                const installments = [...loanToUpdate.installments];
+                const installmentIndex = installments.findIndex(inst => inst.number === item.number);
+                if (installmentIndex > -1) {
+                    installments[installmentIndex].status = 'Paga';
+                    installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
+                    batch.update(loanDocRef, { installments: installments });
+                    updatesMade++;
                 }
             }
         });
 
-        // --- Finalização ---
-        allItems.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-        const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
-        const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
-
-        return {
-            displayableItems: allItems,
-            filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'),
-            filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
-            filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
-            summary: {
-                totalFatura: newTotalFatura,
-                totalRecebido: newTotalRecebido,
-                totalPendente: newTotalFatura - newTotalRecebido,
-            }
-        };
-    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, clients, cards]);
+        try {
+            await batch.commit();
+            showToast(`${updatesMade} iten(s) marcados como pagos com sucesso!`, 'success');
+            fetchData();
+        } catch (error) {
+            console.error("Erro ao marcar todos como pagos:", error);
+            showToast('Falha ao atualizar os itens.', 'error');
+        }
+    };
 
     const paidPercentage = summary.totalFatura > 0 ? (summary.totalRecebido / summary.totalFatura) * 100 : 0;
 
@@ -310,41 +398,83 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
 
                 <div className="bg-gray-900/50 border border-gray-800 rounded-lg">
-                    <div className="p-4 border-b border-gray-800">
-                        <h3 className="text-lg font-semibold text-white">Itens da Fatura (Mês Selecionado)</h3>
+                    <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-white">Itens da Fatura</h3>
+                        <button 
+                            onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
+                            className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold transition"
+                        >
+                            Marcar Tudo Como Pago
+                        </button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full">
                             <thead>
                                 <tr className="border-b border-gray-800">
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('type')}>
+                                        Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Descrição</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pessoa</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('clientId')}>
+                                        Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('cardId')}>
+                                        Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor da Parcela</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Nº Parcelas</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
                                 {displayableItems.length > 0 ? displayableItems.map((item) => {
-                                    const clientName = clients.find(c => c.id === item.clientId)?.name || '---';
+                                    const client = clients.find(c => c.id === item.clientId);
+                                    const card = cards.find(c => c.id === item.cardId);
                                     return (
                                         <tr key={item.id} className="hover:bg-gray-800/60">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{new Date(item.dueDate + "T00:00:00Z").toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{item.type}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{item.description}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{clientName}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{client?.name || '---'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 flex items-center gap-2">
+                                                {card ? (
+                                                    <>
+                                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: card.color || '#888' }}></div>
+                                                        {card.name}
+                                                    </>
+                                                ) : '---'}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-300">{formatCurrencyDisplay(item.value)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                                {item.type === 'Parcela' ? `${item.number}/${item.totalInstallments}` : '1/1'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                                    item.currentStatus === 'Paga' ? 'bg-green-500/20 text-green-400' :
+                                                    item.currentStatus === 'Pendente' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                    item.currentStatus === 'Atrasado' ? 'bg-red-500/20 text-red-400' :
+                                                    'bg-gray-500/20 text-gray-400'
+                                                }`}>
+                                                    {item.currentStatus}
+                                                </span>
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {item.type === 'Parcela' && item.currentStatus !== 'Paga' ? (
-                                                    <button onClick={() => handleMarkInstallmentAsPaidDashboard(item.loanId, item.personKey, item.number)} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">Marcar Paga</button>
-                                                ) : (
-                                                    <span className={`text-xs font-semibold ${item.currentStatus === 'Paga' ? 'text-green-400' : 'text-gray-500'}`}>{item.currentStatus || '---'}</span>
+                                                {item.type === 'Parcela' && item.currentStatus !== 'Paga' && (
+                                                    <button onClick={() => updateInstallmentStatus(item.loanId, item.personKey, item.number, 'Paga')} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
+                                                        Marcar Paga
+                                                    </button>
+                                                )}
+                                                {item.type === 'Parcela' && item.currentStatus === 'Paga' && (
+                                                     <button onClick={() => updateInstallmentStatus(item.loanId, item.personKey, item.number, 'Pendente')} className="bg-red-500/20 text-red-400 px-3 py-1 rounded-md hover:bg-red-500/30 text-xs font-semibold">
+                                                        Desmarcar
+                                                    </button>
                                                 )}
                                             </td>
                                         </tr>
                                     );
                                 }) : (
                                     <tr>
-                                        <td colSpan="5" className="text-center py-10 text-gray-500">
+                                        <td colSpan="8" className="text-center py-10 text-gray-500">
                                             Nenhum item na fatura para os filtros selecionados.
                                         </td>
                                     </tr>
@@ -353,7 +483,15 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         </table>
                     </div>
                 </div>
-                <GenericModal isOpen={isMarkAllPaidConfirmationOpen} onClose={() => setIsMarkAllPaidConfirmationOpen(false)} onConfirm={() => {}} title="Confirmar Ação" message="Tem a certeza de que deseja marcar TODAS as parcelas pendentes ou atrasadas como PAGAS?" isConfirmation={true} theme={theme} />
+                <GenericModal 
+                    isOpen={isMarkAllPaidConfirmationOpen} 
+                    onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
+                    onConfirm={handleMarkAllAsPaid}
+                    title="Confirmar Ação" 
+                    message="Tem certeza de que deseja marcar TODAS as parcelas pendentes ou atrasadas deste mês como PAGAS? Esta ação não pode ser desfeita."
+                    isConfirmation={true} 
+                    theme={theme} 
+                />
             </div>
         </div>
     );

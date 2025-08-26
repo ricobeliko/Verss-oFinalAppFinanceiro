@@ -1,4 +1,4 @@
-// src/features/subscriptions/SubscriptionManagement.jsx
+// src/features/subscriptions/SubscriptionManagement.jsx (CORREÇÃO FINAL)
 
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -21,15 +21,13 @@ export default function SubscriptionManagement() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentSubscription, setCurrentSubscription] = useState(null);
 
-    // Estados do formulário
     const [name, setName] = useState('');
     const [amountInput, setAmountInput] = useState('');
-    const [firstChargeDate, setFirstChargeDate] = useState(new Date().toISOString().split('T')[0]); // ✅ Alterado de dueDate para data completa
+    const [firstChargeDate, setFirstChargeDate] = useState(new Date().toISOString().split('T')[0]);
     const [cardId, setCardId] = useState('');
     const [clientId, setClientId] = useState('');
     const [isActive, setIsActive] = useState(true);
-    const [invoiceDueDate, setInvoiceDueDate] = useState(''); // ✅ Novo estado para a data de vencimento
-
+    const [invoiceDueDate, setInvoiceDueDate] = useState('');
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [subscriptionToDelete, setSubscriptionToDelete] = useState(null);
 
@@ -46,8 +44,7 @@ export default function SubscriptionManagement() {
 
         return () => { unsubSubs(); unsubCards(); unsubClients(); };
     }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
-
-    // ✅ NOVO: Efeito para calcular a data de vencimento da fatura da assinatura
+    
     useEffect(() => {
         if (firstChargeDate && cardId && cards.length > 0) {
             const card = cards.find(c => c.id === cardId);
@@ -81,13 +78,18 @@ export default function SubscriptionManagement() {
     }, [firstChargeDate, cardId, cards]);
     
     const handleOpenModal = (sub = null) => {
+        const today = new Date().toISOString().split('T')[0];
         setCurrentSubscription(sub);
-        setName(sub ? sub.name : '');
+
+        // ✅ CORREÇÃO APLICADA AQUI:
+        // Usamos `|| ''` e outros valores padrão para garantir que nenhum estado comece como `undefined`.
+        setName(sub?.name || '');
         setAmountInput(sub ? formatCurrencyForInput(sub.amount) : '');
-        setFirstChargeDate(sub ? sub.firstChargeDate : new Date().toISOString().split('T')[0]); // ✅ Usa a nova data
-        setCardId(sub ? sub.cardId : '');
-        setClientId(sub ? sub.clientId : '');
-        setIsActive(sub ? sub.isActive : true);
+        setFirstChargeDate(sub?.firstChargeDate || today);
+        setCardId(sub?.cardId || '');
+        setClientId(sub?.clientId || '');
+        setIsActive(sub?.isActive ?? true); // `?? true` lida com `false`, `undefined` e `null`
+        
         setIsModalOpen(true);
     };
 
@@ -96,15 +98,15 @@ export default function SubscriptionManagement() {
         setCurrentSubscription(null);
         setName('');
         setAmountInput('');
-        setFirstChargeDate(new Date().toISOString().split('T')[0]); // ✅ Reseta a nova data
+        setFirstChargeDate(new Date().toISOString().split('T')[0]);
         setCardId('');
         setClientId('');
         setIsActive(true);
-        setInvoiceDueDate(''); // ✅ Limpa a data de vencimento
+        setInvoiceDueDate('');
     };
 
     const handleSaveSubscription = async () => {
-        if (!name.trim() || !amountInput || !firstChargeDate || !cardId || !clientId) { // ✅ Verifica a nova data
+        if (!name.trim() || !amountInput || !firstChargeDate || !cardId || !clientId) {
             showToast('Todos os campos são obrigatórios.', 'warning');
             return;
         }
@@ -115,13 +117,18 @@ export default function SubscriptionManagement() {
             return;
         }
 
+        const chargeDay = new Date(firstChargeDate + "T12:00:00Z").getUTCDate();
+        if (isNaN(chargeDay)) {
+            showToast('A data da primeira cobrança é inválida. Verifique o campo.', 'error');
+            return;
+        }
+
         const userCollectionPath = getUserCollectionPathSegments();
-        // ✅ Salva a data completa da cobrança
         const subscriptionData = {
             name,
             amount,
             firstChargeDate,
-            dueDate: new Date(firstChargeDate + "T12:00:00Z").getUTCDate(), // Mantém o dia para referência, se necessário
+            dueDate: chargeDay,
             cardId,
             clientId,
             isActive,
@@ -200,7 +207,7 @@ export default function SubscriptionManagement() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{sub.name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-300">{formatCurrencyDisplay(sub.amount)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getClientName(sub.clientId)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{`Todo dia ${sub.dueDate}`}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{sub.dueDate ? `Todo dia ${sub.dueDate}` : 'Data Inválida'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getCardName(sub.cardId)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${sub.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -225,7 +232,6 @@ export default function SubscriptionManagement() {
                 </table>
             </div>
             
-            {/* Modal de Adicionar/Editar Assinatura */}
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={currentSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} theme="dark">
                 <div className="space-y-4">
                      <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (Ex: Netflix, Spotify)" className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
