@@ -11,6 +11,8 @@ const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const ChevronUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>;
+const WarningIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="text-red-400 flex-shrink-0" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+
 
 function LoanManagement() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
@@ -53,22 +55,50 @@ function LoanManagement() {
         
         return () => { unsubClients(); unsubCards(); unsubLoans(); };
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
-
+    
+    // ✅ CORREÇÃO: Lógica de vencimento da fatura totalmente refeita.
     useEffect(() => {
         if (loanDate && selectedCard && cards.length > 0) {
             const card = cards.find(c => c.id === selectedCard);
             if (card && card.closingDay && card.dueDay) {
+                // Usar T12:00:00Z para evitar problemas de fuso horário
                 const purchaseDate = new Date(loanDate + "T12:00:00Z");
-                let dueDate = new Date(purchaseDate);
-                if (purchaseDate.getUTCDate() >= card.closingDay) {
-                    dueDate.setUTCMonth(dueDate.getUTCMonth() + 2, card.dueDay);
-                } else {
-                    dueDate.setUTCMonth(dueDate.getUTCMonth() + 1, card.dueDay);
+                let dueMonth = purchaseDate.getUTCMonth();
+                let dueYear = purchaseDate.getUTCFullYear();
+
+                // Cenário 1: Fechamento e vencimento no mesmo mês (Ex: fecha 20, vence 28)
+                if (card.closingDay < card.dueDay) {
+                     if (purchaseDate.getUTCDate() >= card.closingDay) {
+                        // Compra após o fechamento, joga para o próximo mês.
+                        dueMonth += 1;
+                    }
+                } 
+                // Cenário 2: Fechamento em um mês, vencimento no seguinte (Ex: fecha 28, vence 06)
+                else {
+                    // Define a data de fechamento da fatura do mês da compra
+                    const closingDate = new Date(Date.UTC(purchaseDate.getUTCFullYear(), purchaseDate.getUTCMonth(), card.closingDay));
+
+                    if (purchaseDate >= closingDate) {
+                        // Se a compra foi no dia do fechamento ou depois, a fatura é a do mês seguinte.
+                        dueMonth += 2;
+                    } else {
+                        // Se foi antes, a fatura é a do mês atual.
+                        dueMonth += 1;
+                    }
                 }
-                setFirstDueDate(dueDate.toISOString().split('T')[0]);
+
+                // Ajusta o ano caso o mês passe de Dezembro
+                if (dueMonth > 11) {
+                    dueYear += Math.floor(dueMonth / 12);
+                    dueMonth %= 12;
+                }
+                
+                const finalDueDate = new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
+                setFirstDueDate(finalDueDate.toISOString().split('T')[0]);
             }
         }
     }, [loanDate, selectedCard, cards]);
+
 
     useEffect(() => {
         if (purchaseType === 'shared') {
@@ -85,6 +115,25 @@ function LoanManagement() {
         }
     }, [totalValueInput, person1ShareInput, purchaseType]);
 
+    const isLoanDataInvalid = (loan) => {
+        if (typeof loan.totalValue !== 'number' || isNaN(loan.totalValue)) {
+            return true;
+        }
+        if (loan.isShared) {
+            if (!loan.sharedDetails || !loan.sharedDetails.person1 || !Array.isArray(loan.sharedDetails.person1.installments)) {
+                return true;
+            }
+            if (loan.sharedDetails.person2 && loan.sharedDetails.person2.shareAmount > 0 && !Array.isArray(loan.sharedDetails.person2.installments)) {
+                return true;
+            }
+        } else {
+            if (!Array.isArray(loan.installments)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    
     const resetForm = () => {
         setEditingLoan(null);
         setPurchaseType('normal');
@@ -113,11 +162,8 @@ function LoanManagement() {
             setIsLoading(false);
             return;
         }
-
-        // ✅ CORREÇÃO APLICADA AQUI
-        // A função de cálculo agora garante que o valor seja numérico antes de dividir.
+        
         const calculateInstallments = (value, count, startDate) => {
-            // Garante que o valor a ser dividido é um número.
             const numericValue = Number(value) || 0;
             if (numericValue <= 0 || count < 1) return [];
 
@@ -135,10 +181,10 @@ function LoanManagement() {
                     paidDate: null
                 });
             }
-            // Ajuste para o valor total bater com a soma das parcelas
             const totalCalculated = installments.reduce((acc, inst) => acc + inst.value, 0);
-            if (totalCalculated !== numericValue) {
-                installments[count - 1].value = parseFloat((installments[count - 1].value + (numericValue - totalCalculated)).toFixed(2));
+            const remaining = numericValue - totalCalculated;
+            if (Math.abs(remaining) > 0.001) {
+                installments[count - 1].value = parseFloat((installments[count - 1].value + remaining).toFixed(2));
             }
             return installments;
         };
@@ -170,6 +216,7 @@ function LoanManagement() {
             }
             
             loanData.isShared = true;
+            loanData.installments = calculateInstallments(totalValue, installmentsNum, firstDueDate);
             loanData.sharedDetails = {
                 person1: { clientId: selectedClient1, shareAmount: person1Share, installments: calculateInstallments(person1Share, installmentsNum, firstDueDate), valuePaid: 0, balanceDue: person1Share, statusPayment: 'Pendente' },
                 person2: { clientId: selectedClient2, shareAmount: person2Share, installments: person2Share > 0 ? calculateInstallments(person2Share, installmentsNum, firstDueDate) : [], valuePaid: 0, balanceDue: person2Share, statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' }
@@ -249,9 +296,12 @@ function LoanManagement() {
         } else {
             installmentsList = updatedLoan.installments;
         }
-
-        const instIndex = installmentsList.findIndex(i => i.number === instNum);
-        if (instIndex === -1) return;
+        
+        const instIndex = Array.isArray(installmentsList) ? installmentsList.findIndex(i => i.number === instNum) : -1;
+        if (instIndex === -1) {
+            showToast('Erro: Parcela não encontrada para atualização.', 'error');
+            return;
+        };
 
         installmentsList[instIndex].status = 'Paga';
         installmentsList[instIndex].paidDate = new Date().toISOString().split('T')[0];
@@ -284,31 +334,40 @@ function LoanManagement() {
     const getClientName = (clientId) => clients.find(c => c.id === clientId)?.name || 'N/A';
     
     const filteredLoans = useMemo(() => 
-        loans.filter(loan => showPaidLoans || (loan.isShared ? (loan.sharedDetails.person1.statusPayment !== 'Pago Total' || loan.sharedDetails.person2.statusPayment !== 'Pago Total') : loan.statusPaymentClient !== 'Pago Total')),
+        loans.filter(loan => showPaidLoans || (loan.isShared ? (loan.sharedDetails?.person1?.statusPayment !== 'Pago Total' || loan.sharedDetails?.person2?.statusPayment !== 'Pago Total') : loan.statusPaymentClient !== 'Pago Total')),
     [loans, showPaidLoans]);
 
-    const renderInstallments = (installments, loanId, personKey = null) => (
-        <div className="p-4 bg-gray-900/50">
-            <h4 className="font-bold text-sm mb-2 text-gray-300">Parcelas:</h4>
-            <ul className="space-y-2">
-                {installments && installments.map(inst => (
-                    <li key={inst.number} className="flex justify-between items-center text-sm">
-                        <div>
-                            <span>{inst.number}ª - {new Date(inst.dueDate + "T00:00:00").toLocaleDateString('pt-BR')} - </span>
-                            <span className="font-semibold">{formatCurrencyDisplay(inst.value)} - </span>
-                            <span className={inst.status === 'Paga' ? 'text-green-400' : inst.status === 'Atrasado' ? 'text-red-400' : 'text-yellow-400'}>{inst.status}</span>
-                            {inst.status === 'Paga' && inst.paidDate && <span className="text-xs text-gray-500"> (pago em {new Date(inst.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
-                        </div>
-                        {inst.status === 'Pendente' && (
-                            <button onClick={() => handleMarkInstallmentAsPaid(loanId, personKey, inst.number)} className="bg-green-500/20 text-green-300 px-2 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
-                                Marcar Paga
-                            </button>
-                        )}
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
+    const renderInstallments = (installments, loanId, personKey = null) => {
+        if (!Array.isArray(installments)) {
+             return (
+                <div className="p-4 bg-gray-900/50 text-center text-sm text-yellow-400">
+                    Não foi possível carregar as parcelas. Recadastre esta compra.
+                </div>
+            );
+        }
+        return (
+            <div className="p-4 bg-gray-900/50">
+                <h4 className="font-bold text-sm mb-2 text-gray-300">Parcelas:</h4>
+                <ul className="space-y-2">
+                    {installments.map(inst => (
+                        <li key={inst.number} className="flex justify-between items-center text-sm">
+                            <div>
+                                <span>{inst.number}ª - {new Date(inst.dueDate + "T00:00:00").toLocaleDateString('pt-BR')} - </span>
+                                <span className="font-semibold">{formatCurrencyDisplay(inst.value)} - </span>
+                                <span className={inst.status === 'Paga' ? 'text-green-400' : inst.status === 'Atrasado' ? 'text-red-400' : 'text-yellow-400'}>{inst.status}</span>
+                                {inst.status === 'Paga' && inst.paidDate && <span className="text-xs text-gray-500"> (pago em {new Date(inst.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
+                            </div>
+                            {inst.status === 'Pendente' && (
+                                <button onClick={() => handleMarkInstallmentAsPaid(loanId, personKey, inst.number)} className="bg-green-500/20 text-green-300 px-2 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
+                                    Marcar Paga
+                                </button>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        );
+    };
     
     return (
         <div className="space-y-6">
@@ -329,6 +388,13 @@ function LoanManagement() {
                         </select>
                         <input type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
                     </div>
+                    
+                    {firstDueDate && (
+                        <div className="p-2 bg-gray-800 rounded-md text-sm text-gray-400 text-center">
+                            Primeira parcela na fatura com vencimento em: <span className="font-semibold text-white">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
+                        </div>
+                    )}
+
                     {purchaseType === 'normal' && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                            <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
@@ -386,45 +452,75 @@ function LoanManagement() {
 
             <div className="space-y-4">
                 {filteredLoans.map(loan => {
+                    const isInvalid = isLoanDataInvalid(loan);
+
+                    if (isInvalid) {
+                        return (
+                            <div key={loan.id} className="bg-red-900/30 rounded-lg border-2 border-dashed border-red-500/50">
+                                <div className="grid grid-cols-2 md:grid-cols-7 gap-4 p-4 items-center">
+                                    <div className="col-span-2 md:col-span-5">
+                                        <div className="flex items-center gap-3">
+                                            <WarningIcon />
+                                            <div>
+                                                <div className="text-sm font-semibold text-white">{loan.description || "Compra com dados inválidos"}</div>
+                                                <div className="text-xs text-red-300">Esta compra tem um formato antigo e precisa ser recadastrada. Por favor, anote os detalhes, apague-a e crie uma nova.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="hidden md:flex items-center text-sm">
+                                        <span className="text-red-400 font-bold">Inválido</span>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-4">
+                                        <button disabled className="text-purple-400/30 cursor-not-allowed" title="Editar desabilitado"><EditIcon /></button>
+                                        <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
+                                        <button disabled className="text-gray-400/30 cursor-not-allowed">
+                                           <ChevronDown />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+
                     const card = cards.find(c => c.id === loan.cardId);
                     return (
                         <div key={loan.id} className="bg-gray-800/50 rounded-lg border border-gray-700">
-                            <div className="grid grid-cols-3 md:grid-cols-7 gap-4 p-4 items-center">
-                                <div className="col-span-1">
-                                    <div className="text-sm font-semibold text-white">{loan.description}</div>
-                                    <div className="text-xs text-gray-400">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-400">
-                                    <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card ? card.color : '#5E60CE' }}></span>
-                                    <span>{card ? card.name : 'N/A'}</span>
-                                </div>
-                                <div className="hidden md:block text-sm text-gray-300">
-                                    {formatCurrencyDisplay(loan.isShared 
-                                        ? (loan.sharedDetails.person1.installments[0]?.value || 0) + (loan.sharedDetails.person2.installments[0]?.value || 0) 
-                                        : loan.installments?.[0]?.value
-                                    )}
-                                </div>
-                                <div className="hidden md:block text-sm text-gray-300">{`${loan.installmentsCount}x`}</div>
-                                <div className="hidden md:block font-bold text-white">{formatCurrencyDisplay(loan.totalValue)}</div>
-                                <div className="hidden md:block text-sm">
-                                    {loan.isShared ? (
-                                        <>
-                                            <span className={loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P1: {loan.sharedDetails.person1.statusPayment}</span><br/>
-                                            <span className={loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P2: {loan.sharedDetails.person2.statusPayment}</span>
-                                        </>
-                                    ) : (
-                                        <span className={loan.statusPaymentClient === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>{loan.statusPaymentClient}</span>
-                                    )}
-                                </div>
-                                <div className="flex items-center justify-end gap-4">
-                                    <button onClick={() => handleEdit(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                    <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
-                                    <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
-                                        {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
-                                    </button>
-                                </div>
-                            </div>
-                            {showInstallments[loan.id] && (
+                             <div className="grid grid-cols-3 md:grid-cols-7 gap-4 p-4 items-center">
+                                 <div className="col-span-1">
+                                     <div className="text-sm font-semibold text-white">{loan.description}</div>
+                                     <div className="text-xs text-gray-400">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
+                                 </div>
+                                 <div className="flex items-center text-sm text-gray-400">
+                                     <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card ? card.color : '#5E60CE' }}></span>
+                                     <span>{card ? card.name : 'N/A'}</span>
+                                 </div>
+                                 <div className="hidden md:block text-sm text-gray-300">
+                                     {formatCurrencyDisplay(loan.isShared 
+                                         ? (loan.sharedDetails.person1.installments?.[0]?.value || 0) + (loan.sharedDetails.person2.installments?.[0]?.value || 0) 
+                                         : loan.installments?.[0]?.value
+                                     )}
+                                 </div>
+                                 <div className="hidden md:block text-sm text-gray-300">{`${loan.installmentsCount}x`}</div>
+                                 <div className="hidden md:block font-bold text-white">{formatCurrencyDisplay(loan.totalValue)}</div>
+                                 <div className="hidden md:block text-sm">
+                                     {loan.isShared ? (
+                                         <>
+                                             <span className={loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P1: {loan.sharedDetails.person1.statusPayment}</span><br/>
+                                             <span className={loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P2: {loan.sharedDetails.person2.statusPayment}</span>
+                                         </>
+                                     ) : (
+                                         <span className={loan.statusPaymentClient === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>{loan.statusPaymentClient}</span>
+                                     )}
+                                 </div>
+                                 <div className="flex items-center justify-end gap-4">
+                                     <button onClick={() => handleEdit(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                     <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
+                                     <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
+                                         {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
+                                     </button>
+                                 </div>
+                             </div>
+                             {showInstallments[loan.id] && (
                                 <div className="border-t border-gray-700">
                                     {loan.isShared ? (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-700">

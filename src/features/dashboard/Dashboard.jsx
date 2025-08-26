@@ -25,9 +25,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
 
-    // ✅ CORREÇÃO: A função fetchData foi envolvida com 'useCallback'.
-    // Isso garante que a função não seja recriada a cada renderização,
-    // evitando que o useEffect seja acionado desnecessariamente e prevenindo o loop de recarregamento.
     const fetchData = useCallback(async () => {
         if (!isAuthReady || !db || !userId) {
             setIsLoading(false);
@@ -82,16 +79,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         } finally {
             setIsLoading(false);
         }
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast]); // As dependências foram movidas para cá
+    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast]);
 
     useEffect(() => {
         fetchData();
-
         const handleReload = () => fetchData();
         window.addEventListener('reloadData', handleReload);
         return () => window.removeEventListener('reloadData', handleReload);
-
-    }, [fetchData]); // Agora o useEffect depende da função memoizada 'fetchData'
+    }, [fetchData]);
 
     const handleMarkInstallmentAsPaidDashboard = async (originalLoanId, personKeyOrNull, installmentNumber) => {
         const loanToUpdate = loans.find(loan => loan.id === originalLoanId);
@@ -99,13 +94,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast("Erro: Compra não encontrada.", "error");
             return;
         }
-
         const userCollectionPath = getUserCollectionPathSegments();
         const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', originalLoanId);
         let updatedFields = {};
-
         try {
-             if (loanToUpdate.isShared && personKeyOrNull) {
+            if (loanToUpdate.isShared && personKeyOrNull) {
                 const currentSharedDetails = JSON.parse(JSON.stringify(loanToUpdate.sharedDetails));
                 const personData = currentSharedDetails[personKeyOrNull];
                 const personInstallments = Array.isArray(personData.installments) ? [...personData.installments] : [];
@@ -154,7 +147,38 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         todayAtMidnight.setHours(0, 0, 0, 0);
         const allItems = [];
 
+        // ✅ CORREÇÃO: Função centralizada para calcular a data de vencimento da fatura
+        const getInvoiceDueDate = (transactionDate, card) => {
+            if (!card || !card.closingDay || !card.dueDay) {
+                // Se não houver cartão ou datas, retorna a data da transação como fallback
+                return transactionDate;
+            }
+            
+            let dueMonth = transactionDate.getUTCMonth();
+            let dueYear = transactionDate.getUTCFullYear();
+
+            if (card.closingDay < card.dueDay) { // Fechamento e vencimento no mesmo mês
+                if (transactionDate.getUTCDate() >= card.closingDay) {
+                    dueMonth += 1;
+                }
+            } else { // Fechamento num mês, vencimento no seguinte
+                const closingDate = new Date(Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), card.closingDay));
+                if (transactionDate >= closingDate) {
+                    dueMonth += 2;
+                } else {
+                    dueMonth += 1;
+                }
+            }
+            if (dueMonth > 11) {
+                dueYear += Math.floor(dueMonth / 12);
+                dueMonth %= 12;
+            }
+            return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
+        };
+
+        // --- Processamento de Compras (Loans) ---
         loans.forEach(loan => {
+            if (!loan || typeof loan.totalValue !== 'number') return;
             const processInstallments = (installments, personDetails) => {
                 if (Array.isArray(installments)) {
                     installments.forEach(inst => {
@@ -168,57 +192,50 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     });
                 }
             };
-
             if (loan.isShared && loan.sharedDetails) {
-                let processed = false;
-                if (loan.sharedDetails.person1?.installments) {
-                    processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
-                    processed = true;
-                }
-                if (loan.sharedDetails.person2?.installments && loan.sharedDetails.person2?.shareAmount > 0) {
-                    processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
-                    processed = true;
-                }
-                if (!processed) {
-                    processInstallments(loan.installments, { key: null, clientId: loan.clientId });
-                }
+                if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
+                if (loan.sharedDetails.person2 && loan.sharedDetails.person2?.shareAmount > 0) processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
             } else {
                 processInstallments(loan.installments, { key: null, clientId: loan.clientId });
             }
         });
 
+        // --- Processamento de Assinaturas ---
+        const addedSubKeys = new Set();
         subscriptions.forEach(sub => {
-            if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
-                const day = String(sub.dueDate).padStart(2, '0');
-                allItems.push({ ...sub, type: 'Assinatura', description: sub.name, dueDate: `${selectedMonth}-${day}`, currentStatus: 'Recorrente', value: sub.amount });
-            }
-        });
+            if (!sub.isActive || (!selectedCardFilter || sub.cardId === selectedCardFilter) || (!selectedClientFilter || sub.clientId === selectedClientFilter)) return;
+            const card = cards.find(c => c.id === sub.cardId);
+            if (!card) return;
 
-        expenses.forEach(expense => {
-            const expenseDate = expense.date;
-            if (expenseDate instanceof Date && !isNaN(expenseDate)) {
-                let faturaMonth = expenseDate.getUTCMonth() + 1;
-                let faturaYear = expenseDate.getUTCFullYear();
-
-                if (expense.cardId && cards.length > 0) {
-                    const card = cards.find(c => c.id === expense.cardId);
-                    if (card && typeof card.closingDay === 'number' && expenseDate.getUTCDate() >= card.closingDay) {
-                        faturaMonth += 1;
-                        if (faturaMonth > 12) {
-                            faturaMonth = 1;
-                            faturaYear += 1;
-                        }
+            // Testa a data de cobrança no mês anterior e no mês atual para pegar faturas que "viram" o mês
+            [-1, 0].forEach(monthOffset => {
+                const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
+                const invoiceDueDate = getInvoiceDueDate(chargeDate, card);
+                
+                if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                    const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
+                    if (!addedSubKeys.has(uniqueKey)) {
+                         allItems.push({ ...sub, type: 'Assinatura', id: uniqueKey, description: sub.name, dueDate: chargeDate.toISOString().split('T')[0], currentStatus: 'Recorrente', value: sub.amount });
+                         addedSubKeys.add(uniqueKey);
                     }
                 }
+            });
+        });
+        
+        // --- Processamento de Despesas Avulsas ---
+        expenses.forEach(expense => {
+            const expenseDate = expense.date;
+            if (expenseDate instanceof Date && !isNaN(expenseDate) && (!selectedCardFilter || expense.cardId === selectedCardFilter) && (!selectedClientFilter || !expense.clientId)) {
+                 const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
+                 const invoiceDueDate = getInvoiceDueDate(expenseDate, card);
 
-                if (faturaYear === filterYear && faturaMonth === filterMonth &&
-                    (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
-                    (!selectedClientFilter || !expense.clientId)) {
+                if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
                     allItems.push({ ...expense, type: 'Despesa', dueDate: expense.date.toISOString().split('T')[0], currentStatus: 'Avulsa', value: expense.value });
                 }
             }
         });
 
+        // --- Finalização ---
         allItems.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
         const newTotalRecebido = allItems.filter(item => item.type === 'Parcela' && item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
@@ -235,11 +252,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             }
         };
     }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, clients, cards]);
-
-    const getCardDisplayInfo = (cardId) => {
-        const card = cards.find(c => c.id === cardId);
-        return card ? { name: card.name, color: card.color || '#374151' } : { name: 'N/A', color: '#374151' };
-    };
 
     const paidPercentage = summary.totalFatura > 0 ? (summary.totalRecebido / summary.totalFatura) * 100 : 0;
 

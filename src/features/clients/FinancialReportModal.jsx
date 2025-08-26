@@ -31,6 +31,9 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
 
         const userCollectionPath = getUserCollectionPathSegments();
         
+        // ✅ NOTA: A sua query original busca apenas compras onde o 'clientId' principal é o do cliente.
+        // Isso significa que compras compartilhadas onde o cliente é a "pessoa 2" não apareceriam.
+        // A lógica abaixo continua a mesma para não alterar seu comportamento atual, mas é um ponto de atenção.
         const loansQuery = query(collection(db, ...userCollectionPath, userId, 'loans'), where("clientId", "==", client.id));
         const unsubLoans = onSnapshot(loansQuery, snapshot => {
             setLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -68,11 +71,11 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                 const dueDate = new Date(inst.dueDate + 'T00:00:00');
                 return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
             })
-            : [] // Se não for um array, retorna um array vazio para flatMap.
+            : [] // Se não for um array, retorna um array vazio para o flatMap.
         ).reduce((sum, inst) => sum + inst.value, 0);
         
         const monthlyExpenses = expenses.filter(exp => {
-            const expDate = new Date(exp.date + 'T00:00:00');
+            const expDate = exp.date?.toDate ? exp.date.toDate() : new Date(exp.date + 'T00:00:00');
             return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
         }).reduce((sum, exp) => sum + exp.value, 0);
 
@@ -81,7 +84,7 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
         // 2. Próximas Parcelas a Vencer
         const futureInstallments = {};
         loans.forEach(loan => {
-            // ✅ CORREÇÃO: Adicionada verificação 'Array.isArray()' aqui também por segurança.
+             // ✅ CORREÇÃO: Adicionada verificação de segurança antes de iterar sobre as parcelas.
             if (Array.isArray(loan.installments)) {
                 loan.installments.forEach(inst => {
                     if (inst.status === 'Pendente' || inst.status === 'Atrasado') {
@@ -133,11 +136,11 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
 
         text += `--- COMPRAS EM ABERTO ---\n`;
         openLoans.forEach(loan => {
-            // ✅ CORREÇÃO: Garantindo que 'installments' é um array antes de usar '.find()'.
+             // ✅ CORREÇÃO: Garante que 'installments' é um array antes de usar '.find()'.
             const installments = Array.isArray(loan.installments) ? loan.installments : [];
             const nextInstallment = installments.find(inst => inst.status === 'Pendente' || inst.status === 'Atrasado');
             
-            text += `> ${loan.description.toUpperCase()}\n`;
+            text += `> ${loan.description ? loan.description.toUpperCase() : 'COMPRA SEM DESCRIÇÃO'}\n`;
             if (nextInstallment) {
                  text += `  - Próxima Parcela: ${nextInstallment.number}/${installments.length} no valor de ${formatCurrencyDisplay(nextInstallment.value)}\n`;
             }
@@ -240,7 +243,7 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                                         const nextInst = installments.find(i => i.status === 'Pendente' || i.status === 'Atrasado');
                                         return (
                                             <div key={loan.id} className="p-2 bg-gray-800/50 rounded">
-                                                <p className="font-bold text-white">{loan.description}</p>
+                                                <p className="font-bold text-white">{loan.description || "Compra sem descrição"}</p>
                                                 {nextInst && <p className="text-xs text-gray-400">Próxima Parcela: {nextInst.number}/{installments.length} de {formatCurrencyDisplay(nextInst.value)}</p>}
                                                 <p className="text-xs text-gray-400">Saldo Devedor: {formatCurrencyDisplay(loan.balanceDueClient)}</p>
                                             </div>
