@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
@@ -32,71 +32,56 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
 
-    const fetchData = useCallback(async () => {
+    useEffect(() => {
         if (!isAuthReady || !db || !userId) {
             setIsLoading(false);
             return;
         }
         setIsLoading(true);
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const collections = {
-                loans: collection(db, ...userCollectionPath, userId, 'loans'),
-                clients: collection(db, ...userCollectionPath, userId, 'clients'),
-                cards: collection(db, ...userCollectionPath, userId, 'cards'),
-                subscriptions: collection(db, ...userCollectionPath, userId, 'subscriptions'),
-                expenses: collection(db, ...userCollectionPath, userId, 'expenses'),
-                incomes: collection(db, ...userCollectionPath, userId, 'incomes'),
-                paidSubscriptions: collection(db, ...userCollectionPath, userId, 'paidSubscriptions'),
-            };
 
-            const [
-                loansSnapshot, clientsSnapshot, cardsSnapshot,
-                subscriptionsSnapshot, expensesSnapshot, incomesSnapshot, paidSubscriptionsSnapshot
-            ] = await Promise.all([
-                getDocs(collections.loans),
-                getDocs(collections.clients),
-                getDocs(collections.cards),
-                getDocs(collections.subscriptions),
-                getDocs(collections.expenses),
-                getDocs(collections.incomes),
-                getDocs(query(collections.paidSubscriptions, where("month", "==", selectedMonth)))
-            ]);
+        const userCollectionPath = getUserCollectionPathSegments();
 
-            const safeDataMapper = (doc) => {
-                const data = doc.data();
-                const dateValue = data.date?.toDate ? data.date.toDate().toISOString() : data.date;
-                const convertedDate = dateValue ? new Date(String(dateValue).substring(0, 10) + 'T00:00:00Z') : null;
-                const value = data.value !== undefined ? data.value : (data.amount !== undefined ? data.amount : 0);
-                return { id: doc.id, ...data, date: convertedDate, value };
-            };
+        const safeDataMapper = (doc) => {
+            const data = doc.data();
+            const dateValue = data.date?.toDate ? data.date.toDate().toISOString() : data.date;
+            const convertedDate = dateValue ? new Date(String(dateValue).substring(0, 10) + 'T00:00:00Z') : null;
+            const value = data.value !== undefined ? data.value : (data.amount !== undefined ? data.amount : 0);
+            return { id: doc.id, ...data, date: convertedDate, value };
+        };
 
-            const allData = {
-                loans: loansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                clients: clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                cards: cardsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                subscriptions: subscriptionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                expenses: expensesSnapshot.docs.map(safeDataMapper),
-                incomes: incomesSnapshot.docs.map(safeDataMapper),
-                paidSubscriptions: paidSubscriptionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-            };
+        const collections = {
+            loans: collection(db, ...userCollectionPath, userId, 'loans'),
+            clients: collection(db, ...userCollectionPath, userId, 'clients'),
+            cards: collection(db, ...userCollectionPath, userId, 'cards'),
+            subscriptions: collection(db, ...userCollectionPath, userId, 'subscriptions'),
+            expenses: collection(db, ...userCollectionPath, userId, 'expenses'),
+            incomes: collection(db, ...userCollectionPath, userId, 'incomes'),
+        };
 
-            setDashboardData(allData);
+        const unsubs = [
+            onSnapshot(collections.loans, snapshot => setDashboardData(prev => ({ ...prev, loans: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
+            onSnapshot(collections.clients, snapshot => setDashboardData(prev => ({ ...prev, clients: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
+            onSnapshot(collections.cards, snapshot => setDashboardData(prev => ({ ...prev, cards: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
+            onSnapshot(collections.subscriptions, snapshot => setDashboardData(prev => ({ ...prev, subscriptions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
+            onSnapshot(collections.expenses, snapshot => setDashboardData(prev => ({ ...prev, expenses: snapshot.docs.map(safeDataMapper) }))),
+            onSnapshot(collections.incomes, snapshot => setDashboardData(prev => ({ ...prev, incomes: snapshot.docs.map(safeDataMapper) }))),
+        ];
 
-        } catch (error) {
-            console.error("Erro ao buscar dados do painel:", error);
-            showToast('Falha ao carregar os dados do painel.', 'error');
-        } finally {
+        const paidSubscriptionsQuery = query(collection(db, ...userCollectionPath, userId, 'paidSubscriptions'), where("month", "==", selectedMonth));
+        const unsubPaid = onSnapshot(paidSubscriptionsQuery, snapshot => {
+            setDashboardData(prev => ({ ...prev, paidSubscriptions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
+            // CORREÇÃO: Removida a condição 'if (isLoading)' para garantir que o loading sempre termine.
             setIsLoading(false);
-        }
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments, showToast, selectedMonth]);
+        }, error => {
+            console.error("Erro ao buscar assinaturas pagas:", error);
+            setIsLoading(false);
+        });
+        
+        unsubs.push(unsubPaid);
 
-    useEffect(() => {
-        fetchData();
-        const handleReload = () => fetchData();
-        window.addEventListener('reloadData', handleReload);
-        return () => window.removeEventListener('reloadData', handleReload);
-    }, [fetchData]);
+        return () => unsubs.forEach(unsub => unsub());
+
+    }, [db, userId, isAuthReady, getUserCollectionPathSegments, selectedMonth]);
 
     const updateItemStatus = async (item, newStatus) => {
         const userCollectionPath = getUserCollectionPathSegments();
@@ -129,7 +114,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     throw new Error("Tipo de item desconhecido.");
             }
             showToast(`${item.type} atualizada para ${newStatus}!`, "success");
-            await fetchData();
         } catch (error) {
             console.error(`Erro ao atualizar ${item.type}:`, error);
             showToast(`Erro ao atualizar: ${error.message}`, "error");
@@ -335,7 +319,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             console.error("ERRO FATAL DURANTE O CÁLCULO DO RESUMO:", error);
             return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
         }
-    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, clients, cards, sortConfig]);
+    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
     
     const requestSort = (key) => {
         let direction = 'ascending';
@@ -404,7 +388,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         try {
             await batch.commit();
             showToast(`${updatesMade} iten(s) marcados como pagos com sucesso!`, 'success');
-            fetchData();
         } catch (error) {
             console.error("Erro ao marcar todos como pagos:", error);
             showToast('Falha ao atualizar os itens.', 'error');
@@ -420,7 +403,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             </div>
         );
     }
-
+    
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-6">
             <div className="space-y-8">
