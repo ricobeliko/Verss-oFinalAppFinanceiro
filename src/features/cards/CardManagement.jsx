@@ -1,5 +1,3 @@
-// src/features/cards/CardManagement.jsx
-
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
@@ -9,51 +7,46 @@ import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, f
 // --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 export default function CardManagement() {
     const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
     
+    // --- State de Dados ---
     const [cards, setCards] = useState([]);
     const [allLoans, setAllLoans] = useState([]);
     const [allSubscriptions, setAllSubscriptions] = useState([]);
     const [allExpenses, setAllExpenses] = useState([]);
     
-    const [cardName, setCardName] = useState('');
-    const [cardLimitInput, setCardLimitInput] = useState('');
-    const [closingDay, setClosingDay] = useState('');
-    const [dueDay, setDueDay] = useState('');
-    const [cardColor, setCardColor] = useState('#5E60CE');
-
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    // --- State de UI e Modais ---
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState(null);
-    const [editingValues, setEditingValues] = useState({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '' });
-    
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [cardToDelete, setCardToDelete] = useState(null);
+
+    // --- State Unificado do Formulário ---
+    const [formValues, setFormValues] = useState({
+        name: '',
+        limitInput: '',
+        closingDay: '',
+        dueDay: '',
+        color: '#5E60CE'
+    });
 
     useEffect(() => {
         if (!isAuthReady || !userId) return;
         const userCollectionPath = getUserCollectionPathSegments();
-        const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-        const loansColRef = collection(db, ...userCollectionPath, userId, 'loans');
-        const subsColRef = collection(db, ...userCollectionPath, userId, 'subscriptions');
-        const expensesColRef = collection(db, ...userCollectionPath, userId, 'expenses');
-
-        const unsubCards = onSnapshot(cardsRef, (snapshot) => {
-            // ✅ NOVO LOG DE DEBUG AQUI
-            console.log("DATABASE SYNC: 'onSnapshot' para cartões foi acionado!");
-            const updatedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("DATABASE SYNC: Novos dados dos cartões recebidos:", updatedCards);
-            setCards(updatedCards);
-        });
-
-        const unsubLoans = onSnapshot(loansColRef, (snapshot) => setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubSubs = onSnapshot(subsColRef, (snapshot) => setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubExpenses = onSnapshot(expensesColRef, (snapshot) => setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const basePath = [...userCollectionPath, userId];
+        
+        const unsubCards = onSnapshot(collection(db, ...basePath, 'cards'), (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubLoans = onSnapshot(collection(db, ...basePath, 'loans'), (snapshot) => setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubSubs = onSnapshot(collection(db, ...basePath, 'subscriptions'), (snapshot) => setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubExpenses = onSnapshot(collection(db, ...basePath, 'expenses'), (snapshot) => setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
         return () => { unsubCards(); unsubLoans(); unsubSubs(); unsubExpenses(); };
     }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
-
+    
+    // Suas funções de cálculo permanecem as mesmas
     const calculateCurrentMonthInvoiceForCard = (card) => {
         if (!card || !card.closingDay) return 0;
         const today = new Date();
@@ -111,109 +104,70 @@ export default function CardManagement() {
         });
         return totalInvoice;
     };
-
     const calculateTotalDebtForCard = (cardId) => {
         return allLoans
             .filter(loan => loan.cardId === cardId)
             .reduce((sum, loan) => sum + (loan.balanceDueClient || 0), 0);
     };
-
-    const handleOpenEditModal = (card) => {
+    
+    // Função unificada para abrir o modal
+    const handleOpenModal = (card = null) => {
         setEditingCard(card);
-        setEditingValues({
-            name: card.name,
-            limitInput: formatCurrencyForInput(card.limit),
-            closingDay: card.closingDay,
-            dueDay: card.dueDay,
-            color: card.color || '#5E60CE'
-        });
-        setIsEditModalOpen(true);
+        if (card) {
+            setFormValues({
+                name: card.name,
+                limitInput: formatCurrencyForInput(card.limit),
+                closingDay: card.closingDay,
+                dueDay: card.dueDay,
+                color: card.color || '#5E60CE'
+            });
+        } else {
+            setFormValues({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '#5E60CE' });
+        }
+        setIsModalOpen(true);
     };
 
-    const handleCloseEditModal = () => {
-        setIsEditModalOpen(false);
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
         setEditingCard(null);
     };
     
-    const handleAddCard = async (e) => {
-        e.preventDefault();
-        if (!cardName.trim() || !cardLimitInput || !closingDay || !dueDay) {
+    // Função unificada para salvar (adicionar ou editar)
+    const handleSaveCard = async () => {
+        if (!formValues.name.trim() || !formValues.limitInput || !formValues.closingDay || !formValues.dueDay) {
             showToast('Todos os campos são obrigatórios.', 'warning');
             return;
         }
-        const cardLimit = parseCurrencyInput(cardLimitInput);
+        const cardLimit = parseCurrencyInput(formValues.limitInput);
         if (isNaN(cardLimit) || cardLimit <= 0) {
-            showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
+            showToast('O limite do cartão é inválido.', 'error');
             return;
         }
         const userCollectionPath = getUserCollectionPathSegments();
         const cardData = { 
-            name: cardName, 
+            name: formValues.name, 
             limit: cardLimit,
-            closingDay: parseInt(closingDay),
-            dueDay: parseInt(dueDay),
-            color: cardColor,
-            userId
+            closingDay: parseInt(formValues.closingDay),
+            dueDay: parseInt(formValues.dueDay),
+            color: formValues.color,
         };
+
         try {
-            const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-            await addDoc(cardsRef, cardData);
-            showToast('Cartão adicionado com sucesso!', 'success');
-            setCardName('');
-            setCardLimitInput('');
-            setClosingDay('');
-            setDueDay('');
-            setCardColor('#5E60CE');
+            if (editingCard) {
+                const cardDocRef = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
+                await updateDoc(cardDocRef, cardData);
+                showToast('Cartão atualizado com sucesso!', 'success');
+            } else {
+                const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
+                await addDoc(cardsRef, { ...cardData, userId });
+                showToast('Cartão adicionado com sucesso!', 'success');
+            }
+            handleCloseModal();
         } catch (error) {
-            console.error("Erro ao adicionar cartão:", error);
-            showToast('Erro ao adicionar cartão. Tente novamente.', 'error');
+            showToast(`Erro ao salvar cartão: ${error.message}`, 'error');
         }
     };
     
-    const handleUpdateCard = async () => {
-        console.log("1. 'handleUpdateCard' foi chamada.");
-        console.log("2. Cartão sendo editado:", editingCard);
-        console.log("3. Valores do formulário para salvar:", editingValues);
-
-        if (!editingCard || !editingValues.name.trim() || !editingValues.limitInput || !editingValues.closingDay || !editingValues.dueDay) {
-            showToast('Todos os campos são obrigatórios.', 'warning');
-            console.error("Falha na validação: um campo obrigatório está vazio.");
-            return;
-        }
-
-        const cardLimit = parseCurrencyInput(editingValues.limitInput);
-        if (isNaN(cardLimit) || cardLimit <= 0) {
-            showToast('O limite do cartão deve ser um número válido e maior que zero.', 'error');
-            console.error("Falha na validação: limite do cartão é inválido.", editingValues.limitInput);
-            return;
-        }
-        
-        const userCollectionPath = getUserCollectionPathSegments();
-        const cardData = {
-            name: editingValues.name,
-            limit: cardLimit,
-            closingDay: parseInt(editingValues.closingDay),
-            dueDay: parseInt(editingValues.dueDay),
-            color: editingValues.color
-        };
-        
-        console.log("4. Objeto de dados que será enviado para o Firestore:", cardData);
-
-        try {
-            const cardDocRef = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
-            console.log("5. Caminho do documento no Firestore:", cardDocRef.path);
-
-            await updateDoc(cardDocRef, cardData);
-            
-            console.log("6. Atualização no Firestore bem-sucedida!");
-            showToast('Cartão atualizado com sucesso!', 'success');
-            handleCloseEditModal();
-        } catch (error) {
-            console.error("7. OCORREU UM ERRO na atualização do Firestore:", error);
-            showToast('Erro ao atualizar o cartão. Tente novamente.', 'error');
-        }
-    };
-
     const confirmDeleteCard = (cardId) => {
         setCardToDelete(cardId);
         setIsConfirmationModalOpen(true);
@@ -223,12 +177,10 @@ export default function CardManagement() {
         if (!cardToDelete) return;
         const userCollectionPath = getUserCollectionPathSegments();
         try {
-            const cardDoc = doc(db, ...userCollectionPath, userId, 'cards', cardToDelete);
-            await deleteDoc(cardDoc);
+            await deleteDoc(doc(db, ...userCollectionPath, userId, 'cards', cardToDelete));
             showToast('Cartão excluído com sucesso!', 'success');
         } catch (error) {
-            console.error("Erro ao excluir cartão:", error);
-            showToast('Erro ao excluir cartão. Tente novamente.', 'error');
+            showToast(`Erro ao excluir cartão: ${error.message}`, 'error');
         } finally {
             setIsConfirmationModalOpen(false);
             setCardToDelete(null);
@@ -237,22 +189,16 @@ export default function CardManagement() {
     
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
-            <h1 className="text-2xl font-bold text-white mb-6">Gerenciar Cartões de Crédito</h1>
-
-            <form onSubmit={handleAddCard} className="space-y-4 mb-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <input type="text" placeholder="Nome do Cartão" value={cardName} onChange={(e) => setCardName(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" />
-                    <input type="text" placeholder="Limite Total" value={cardLimitInput} onChange={handleCurrencyInputChange(setCardLimitInput)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" inputMode="decimal" />
-                    <input type="number" placeholder="Dia Fechamento" value={closingDay} onChange={(e) => setClosingDay(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" min="1" max="31" />
-                    <input type="number" placeholder="Dia Vencimento" value={dueDay} onChange={(e) => setDueDay(e.target.value)} className="w-full p-3 bg-gray-700 border-2 border-gray-600 rounded-lg" min="1" max="31" />
-                    <input type="color" value={cardColor} onChange={(e) => setCardColor(e.target.value)} className="w-full h-full p-1 bg-gray-700 border-2 border-gray-600 rounded-lg cursor-pointer" title="Escolha uma cor para o cartão" />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">Gerenciar Cartões de Crédito</h1>
+                    <p className="text-sm text-gray-400 mt-1">Adicione e edite seus cartões de crédito.</p>
                 </div>
-                <div className="flex justify-end">
-                    <button type="submit" className="bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-purple-700 transition">
-                        Adicionar Cartão
-                    </button>
-                </div>
-            </form>
+                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
+                    <PlusIcon />
+                    Adicionar Cartão
+                </button>
+            </div>
 
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-gray-800/50 rounded-lg">
@@ -280,67 +226,58 @@ export default function CardManagement() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                                         <div>{formatCurrencyDisplay(limit)}</div>
                                         <div className="w-full bg-gray-700 rounded-full h-2 my-1">
-                                            <div 
-                                                className="bg-purple-600 h-2 rounded-full" 
-                                                style={{ width: `${usedPercentage > 100 ? 100 : usedPercentage}%` }}
-                                            ></div>
+                                            <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${usedPercentage > 100 ? 100 : usedPercentage}%` }}></div>
                                         </div>
-                                        <div className="text-xs text-gray-400">
-                                            Usado: {formatCurrencyDisplay(totalDebt)}
-                                        </div>
+                                        <div className="text-xs text-gray-400">Usado: {formatCurrencyDisplay(totalDebt)}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-bold">{formatCurrencyDisplay(calculateCurrentMonthInvoiceForCard(card))}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{`Dia ${card.closingDay} / Dia ${card.dueDay}`}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <div className="flex items-center gap-4">
-                                            <button onClick={() => handleOpenEditModal(card)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                            <button onClick={() => handleOpenModal(card)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
                                             <button onClick={() => confirmDeleteCard(card.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
                                         </div>
                                     </td>
                                 </tr>
                             )
                         }) : (
-                            <tr>
-                                <td colSpan="5" className="text-center py-10 text-gray-500">
-                                    Nenhum cartão cadastrado ainda.
-                                </td>
-                            </tr>
+                            <tr><td colSpan="5" className="text-center py-10 text-gray-500">Nenhum cartão cadastrado ainda.</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
             
-            <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title={'Editar Cartão'} theme="dark">
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingCard ? 'Editar Cartão' : 'Adicionar Cartão'} theme="dark" size="lg">
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
-                        <input type="text" value={editingValues.name} onChange={(e) => setEditingValues({...editingValues, name: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" />
+                        <input type="text" value={formValues.name} onChange={(e) => setFormValues({...formValues, name: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
-                            <input type="text" value={editingValues.limitInput} onChange={handleCurrencyInputChange(val => setEditingValues({...editingValues, limitInput: val}))} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md" inputMode="decimal" />
+                            <input type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md" inputMode="decimal" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
-                            <input type="number" value={editingValues.closingDay} onChange={(e) => setEditingValues({...editingValues, closingDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
+                            <input type="number" value={formValues.closingDay} onChange={(e) => setFormValues({...formValues, closingDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
-                            <input type="number" value={editingValues.dueDay} onChange={(e) => setEditingValues({...editingValues, dueDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
+                            <input type="number" value={formValues.dueDay} onChange={(e) => setFormValues({...formValues, dueDay: e.target.value})} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md" min="1" max="31" />
                         </div>
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Cor do Cartão</label>
-                        <input type="color" value={editingValues.color} onChange={(e) => setEditingValues({...editingValues, color: e.target.value})} className="w-full h-10 p-1 bg-gray-700 border-2 border-gray-600 rounded-md" />
+                        <input type="color" value={formValues.color} onChange={(e) => setFormValues({...formValues, color: e.target.value})} className="w-full h-10 p-1 bg-gray-700 border-2 border-gray-600 rounded-md" />
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseEditModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleUpdateCard} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
+                    <button onClick={handleSaveCard} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
                 </div>
             </GenericModal>
 

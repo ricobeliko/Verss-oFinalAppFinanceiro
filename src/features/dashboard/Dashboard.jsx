@@ -1,3 +1,5 @@
+// src/features/dashboard/Dashboard.jsx
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
@@ -10,7 +12,7 @@ import Spinner from '../../components/Spinner';
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
     <svg className="w-4 h-4 inline-block ml-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        {direction === 'ascending' ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
+        {direction === 'ascending' ? <path strokeLinecap="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
     </svg>
 );
 
@@ -262,12 +264,27 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             });
             
+            // ✅ INÍCIO DA CORREÇÃO
+            // A lógica para adicionar despesas avulsas à fatura foi ajustada.
             expenses.forEach(expense => {
+                // Garante que a data da despesa é um objeto Date válido.
                 const expenseDate = expense.date;
-                if (expenseDate instanceof Date && !isNaN(expenseDate) && (!selectedCardFilter || expense.cardId === selectedCardFilter) && (!selectedClientFilter || !expense.clientId)) {
-                     const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
-                     const invoiceDueDate = getInvoiceDueDate(expenseDate, card);
-                    if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                if (!(expenseDate instanceof Date) || isNaN(expenseDate)) return;
+
+                // Aplica os filtros de cartão e cliente.
+                // Uma despesa sem `clientId` é considerada para 'Todas as Pessoas'.
+                if (
+                    (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
+                    (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
+                ) {
+                    const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
+                    
+                    // Se a despesa não tem cartão (é avulsa como Pix/dinheiro),
+                    // consideramos a data da própria despesa para o mês.
+                    // Se tem cartão, calculamos a data de vencimento da fatura.
+                    const relevantDate = card ? getInvoiceDueDate(expenseDate, card) : expenseDate;
+                    
+                    if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
                         allItems.push({ 
                             ...expense, 
                             type: 'Despesa', 
@@ -278,6 +295,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     }
                 }
             });
+            // ✅ FIM DA CORREÇÃO
 
             allItems.sort((a, b) => {
                 let aValue = a[sortConfig.key] || '';

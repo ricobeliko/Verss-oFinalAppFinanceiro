@@ -1,80 +1,106 @@
-// src/features/expenses/ExpenseManagement.jsx
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, query, orderBy, where, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
-import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import GenericModal from '../../components/GenericModal';
+import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 
 // --- Ícones ---
-const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 function ExpenseManagement() {
-    const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
+    const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
 
     const [expenses, setExpenses] = useState([]);
     const [cards, setCards] = useState([]);
-    const [description, setDescription] = useState('');
-    const [valueInput, setValueInput] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [category, setCategory] = useState('');
-    const [selectedCard, setSelectedCard] = useState('');
+    const [clients, setClients] = useState([]);
+    
+    // --- State de Controle dos Modais ---
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [expenseToDelete, setExpenseToDelete] = useState(null);
 
+    // --- State do Formulário (dentro do modal) ---
+    const [description, setDescription] = useState('');
+    const [valueInput, setValueInput] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [category, setCategory] = useState('');
+    const [cardId, setCardId] = useState('');
+    const [clientId, setClientId] = useState('');
+
     const expenseCategories = [
-        "Alimentação", "Transporte", "Moradia", "Saúde", "Educação", 
+        "Alimentação", "Transporte", "Moradia", "Saúde", "Educação",
         "Lazer", "Vestuário", "Cuidados Pessoais", "Dívidas", "Investimentos", "Outros"
     ];
 
     useEffect(() => {
-        if (!isAuthReady || !db || !userId) return;
+        if (!isAuthReady || !userId) return;
         const userCollectionPath = getUserCollectionPathSegments();
-        
-        const expensesColRef = collection(db, ...userCollectionPath, userId, 'expenses');
-        const q = query(expensesColRef, orderBy("createdAt", "desc"));
-        const unsubscribeExpenses = onSnapshot(q, (snapshot) => {
-            setExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
+        const basePath = [...userCollectionPath, userId];
 
-        const cardsColRef = collection(db, ...userCollectionPath, userId, 'cards');
-        const unsubscribeCards = onSnapshot(cardsColRef, (snapshot) => {
-            setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
+        // ✅ INÍCIO DA CORREÇÃO: Buscando os dados sem ordenação no servidor
+        const expensesRef = collection(db, ...basePath, 'expenses');
+        const unsubExpenses = onSnapshot(expensesRef, (snapshot) => {
+            const expensesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        return () => { unsubscribeExpenses(); unsubscribeCards(); };
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
+            // ✅ Ordenamos os dados aqui no cliente
+            expensesData.sort((a, b) => {
+                // Usa a data de criação se existir, senão usa a data da despesa
+                const dateA = a.createdAt?.toDate() || new Date(a.date) || 0;
+                const dateB = b.createdAt?.toDate() || new Date(b.date) || 0;
+                return dateB - dateA; // Ordem decrescente (mais novo primeiro)
+            });
+            
+            setExpenses(expensesData);
+        });
+        // ✅ FIM DA CORREÇÃO
+
+        const unsubCards = onSnapshot(collection(db, ...basePath, 'cards'), (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubClients = onSnapshot(collection(db, ...basePath, 'clients'), (snapshot) => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+
+        return () => { unsubExpenses(); unsubCards(); unsubClients(); };
+    }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
 
     const resetForm = () => {
         setDescription('');
         setValueInput('');
         setDate(new Date().toISOString().split('T')[0]);
         setCategory('');
-        setSelectedCard('');
-        setEditingExpense(null);
+        setCardId('');
+        setClientId('');
     };
 
-    const handleEdit = (expense) => {
+    const handleOpenModal = (expense = null) => {
         setEditingExpense(expense);
-        setDescription(expense.description);
-        setValueInput(formatCurrencyForInput(expense.value));
-        setDate(expense.date);
-        setCategory(expense.category);
-        setSelectedCard(expense.cardId || '');
-        window.scrollTo(0, 0);
+        if (expense) {
+            setDescription(expense.description);
+            setValueInput(formatCurrencyForInput(expense.value));
+            setDate(expense.date);
+            setCategory(expense.category || '');
+            setCardId(expense.cardId || '');
+            setClientId(expense.clientId || '');
+        } else {
+            resetForm();
+        }
+        setIsModalOpen(true);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setEditingExpense(null);
+        resetForm();
+    };
+
+    const handleSaveExpense = async () => {
         const value = parseCurrencyInput(valueInput);
         if (!description.trim() || !value || !date || !category) {
             showToast('Por favor, preencha todos os campos obrigatórios.', 'warning');
             return;
         }
         const userCollectionPath = getUserCollectionPathSegments();
-        const expenseData = { description, value, date, category, cardId: selectedCard || null, userId };
+        const expenseData = { description, value, date, category, cardId: cardId || null, clientId: clientId || null, status: 'Pendente' };
         try {
             if (editingExpense) {
                 const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', editingExpense.id);
@@ -82,12 +108,11 @@ function ExpenseManagement() {
                 showToast("Despesa atualizada com sucesso!", "success");
             } else {
                 const expensesRef = collection(db, ...userCollectionPath, userId, 'expenses');
-                await addDoc(expensesRef, { ...expenseData, createdAt: serverTimestamp() });
+                await addDoc(expensesRef, { ...expenseData, createdAt: serverTimestamp(), userId });
                 showToast("Despesa adicionada com sucesso!", "success");
             }
-            resetForm();
+            handleCloseModal();
         } catch (error) {
-            console.error("Erro ao salvar despesa:", error);
             showToast(`Erro ao salvar despesa: ${error.message}`, "error");
         }
     };
@@ -104,7 +129,6 @@ function ExpenseManagement() {
             await deleteDoc(doc(db, ...userCollectionPath, userId, 'expenses', expenseToDelete));
             showToast("Despesa deletada com sucesso!", "success");
         } catch (error) {
-            console.error("Erro ao deletar despesa:", error);
             showToast(`Erro ao deletar despesa: ${error.message}`, "error");
         } finally {
             setIsConfirmationModalOpen(false);
@@ -112,32 +136,21 @@ function ExpenseManagement() {
         }
     };
 
+    const getCardName = (cId) => cards.find(c => c.id === cId)?.name || 'Dinheiro/Pix';
+    
     return (
-        <div className="space-y-6">
-            <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
-                <h2 className="text-xl font-bold text-white mb-4">{editingExpense ? 'Editando Despesa Avulsa' : 'Gerenciar Despesas Avulsas'}</h2>
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                    <input type="text" placeholder="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
-                    <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
-                        <input type="text" placeholder="Valor" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required inputMode="decimal" />
-                    </div>
-                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required>
-                        <option value="">Selecione a Categoria</option>
-                        {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                    <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
-                        <option value="">Pagamento Avulso (Dinheiro/PIX)</option>
-                        {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                    </select>
-                    <div className="lg:col-span-3 flex justify-end gap-4 mt-2">
-                         {editingExpense && (<button type="button" onClick={resetForm} className="py-2 px-6 bg-gray-600 hover:bg-gray-500 rounded-md text-white transition font-semibold">Cancelar</button>)}
-                        <button type="submit" className="py-2 px-6 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition font-semibold">{editingExpense ? 'Atualizar Despesa' : 'Adicionar Despesa'}</button>
-                    </div>
-                </form>
+        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">Gerenciamento de Despesas</h1>
+                    <p className="text-sm text-gray-400 mt-1">Adicione seus gastos avulsos do dia a dia.</p>
+                </div>
+                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
+                    <PlusIcon />
+                    Adicionar Despesa
+                </button>
             </div>
-            
+
             <div className="overflow-x-auto">
                 <table className="min-w-full bg-gray-800/50 rounded-lg">
                     <thead className="border-b border-gray-700">
@@ -151,31 +164,82 @@ function ExpenseManagement() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700">
-                        {expenses.map((expense) => (
+                        {expenses.length > 0 ? expenses.map((expense) => (
                             <tr key={expense.id} className="hover:bg-gray-800">
                                 <td className="px-6 py-4 whitespace-nowrap font-medium text-white">{expense.description}</td>
-                                <td className="px-6 py-4 whitespace-nowrap font-bold text-red-400">{formatCurrencyDisplay(expense.value)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-400">{formatCurrencyDisplay(expense.value)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{expense.category}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{cards.find(c => c.id === expense.cardId)?.name || 'Avulso'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getCardName(expense.cardId)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div className="flex items-center gap-4">
-                                        <button onClick={() => handleEdit(expense)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                        <button onClick={() => handleOpenModal(expense)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
                                         <button onClick={() => confirmDelete(expense.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
                                     </div>
                                 </td>
                             </tr>
-                        ))}
+                        )) : (
+                           <tr>
+                                <td colSpan="6" className="text-center py-10 text-gray-500">
+                                    Nenhuma despesa cadastrada.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
+
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingExpense ? 'Editar Despesa' : 'Adicionar Despesa'} theme="dark">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
+                            <input type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500" required inputMode="decimal" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Data</label>
+                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
+                        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500" required>
+                            <option value="">Selecione uma categoria</option>
+                            {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Forma de Pagamento</label>
+                        <select value={cardId} onChange={(e) => setCardId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500">
+                            <option value="">Dinheiro/Pix</option>
+                            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Pessoa (Opcional)</label>
+                        <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white focus:ring-purple-500 focus:border-purple-500">
+                            <option value="">Nenhuma</option>
+                            {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                        </select>
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-4">
+                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
+                    <button onClick={handleSaveExpense} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                </div>
+            </GenericModal>
 
             <GenericModal 
                 isOpen={isConfirmationModalOpen} 
                 onClose={() => setIsConfirmationModalOpen(false)} 
                 onConfirm={handleDeleteConfirmed} 
                 title="Confirmar Exclusão" 
-                message="Tem certeza que deseja deletar esta despesa?" 
+                message={`Tem certeza que deseja deletar a despesa "${expenses.find(e => e.id === expenseToDelete)?.description}"?`}
                 isConfirmation={true} 
                 theme={theme} 
             />
@@ -183,5 +247,4 @@ function ExpenseManagement() {
     );
 }
 
-// ✅ CORREÇÃO: ADICIONANDO A EXPORTAÇÃO PADRÃO
 export default ExpenseManagement;

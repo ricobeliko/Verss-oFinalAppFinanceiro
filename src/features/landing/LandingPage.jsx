@@ -1,5 +1,3 @@
-// src/features/landing/LandingPage.jsx
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,7 +40,7 @@ export default function LandingPage() {
     const navigate = useNavigate();
     const handleLoginClick = () => navigate('/login');
     const handleRegisterClick = () => navigate('/login');
-    const handleUpgrade = () => navigate('/login');
+    const handleUpgrade = () => navigate('/login'); // Perfeito, leva para o login antes.
 
 
     return (
@@ -53,7 +51,6 @@ export default function LandingPage() {
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex-shrink-0">
-                            {/* AJUSTE: Fonte trocada para "Roboto" */}
                             <a href="#" className="flex items-center gap-2 text-white hover:text-purple-400 transition-colors">
                                 <FinControlLogo className="text-purple-500" />
                                 <span className="text-2xl font-roboto font-bold tracking-wider">FinControl</span>
@@ -169,12 +166,16 @@ export default function LandingPage() {
                                 </div>
                                 <h3 className="text-2xl font-semibold text-white">Pro</h3>
                                 <p className="mt-4 text-gray-400">Desbloqueie todo o potencial com relatórios e recursos avançados.</p>
+                                
+                                {/* ✅ INÍCIO DA ALTERAÇÃO */}
                                 <div className="mt-6">
-                                    <span className="text-4xl font-bold text-white">R$9,90</span>
-                                    <span className="text-lg font-medium text-gray-400">/mês</span>
+                                    <span className="text-4xl font-bold text-white">R$29,99</span>
+                                    <span className="text-lg font-medium text-gray-400"> (Pagamento Único)</span>
                                 </div>
                                 <ul className="mt-8 space-y-4 text-gray-300">
-                                    <li className="flex items-start"><span className="text-green-500 mt-1 mr-3 flex-shrink-0"><CheckIcon /></span><span className="font-semibold">Tudo do plano Free, e mais:</span></li>
+                                    <li className="flex items-start"><span className="text-green-500 mt-1 mr-3 flex-shrink-0"><CheckIcon /></span><span className="font-semibold">Acesso Vitalício a tudo do plano Free, e mais:</span></li>
+                                    {/* ✅ FIM DA ALTERAÇÃO */}
+
                                     <li className="flex items-start"><span className="text-green-500 mt-1 mr-3 flex-shrink-0"><CheckIcon /></span><span>Registro de Receitas e Despesas</span></li>
                                     <li className="flex items-start"><span className="text-green-500 mt-1 mr-3 flex-shrink-0"><CheckIcon /></span><span>Relatórios e Gráficos Avançados</span></li>
                                     <li className="flex items-start"><span className="text-green-500 mt-1 mr-3 flex-shrink-0"><CheckIcon /></span><span>Balanço Mensal (Receitas vs. Despesas)</span></li>

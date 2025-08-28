@@ -1,6 +1,4 @@
-// src/features/loans/LoanManagement.jsx
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
@@ -12,17 +10,26 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" heig
 const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
 const ChevronUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>;
 const WarningIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="text-red-400 flex-shrink-0" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
-
+const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 function LoanManagement() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
     
+    // --- State de Dados ---
     const [loans, setLoans] = useState([]);
     const [clients, setClients] = useState([]);
     const [cards, setCards] = useState([]);
+    
+    // --- State de UI ---
     const [isLoading, setIsLoading] = useState(false);
-
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLoan, setEditingLoan] = useState(null);
+    const [showInstallments, setShowInstallments] = useState({});
+    const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+    const [loanToDelete, setLoanToDelete] = useState(null);
+    const [showPaidLoans, setShowPaidLoans] = useState(false);
+
+    // --- State do Formulário (dentro do modal) ---
     const [purchaseType, setPurchaseType] = useState('normal');
     const [description, setDescription] = useState('');
     const [totalValueInput, setTotalValueInput] = useState('');
@@ -31,16 +38,10 @@ function LoanManagement() {
     const [firstDueDate, setFirstDueDate] = useState('');
     const [selectedCard, setSelectedCard] = useState('');
     const [selectedClient, setSelectedClient] = useState('');
-    
     const [selectedClient1, setSelectedClient1] = useState('');
     const [selectedClient2, setSelectedClient2] = useState('');
     const [person1ShareInput, setPerson1ShareInput] = useState('');
     const [person2ShareDisplay, setPerson2ShareDisplay] = useState('R$ 0,00');
-
-    const [showInstallments, setShowInstallments] = useState({});
-    const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
-    const [loanToDelete, setLoanToDelete] = useState(null);
-    const [showPaidLoans, setShowPaidLoans] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) return;
@@ -56,38 +57,28 @@ function LoanManagement() {
         return () => { unsubClients(); unsubCards(); unsubLoans(); };
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
     
-    // ✅ CORREÇÃO: Lógica de vencimento da fatura totalmente refeita.
     useEffect(() => {
         if (loanDate && selectedCard && cards.length > 0) {
             const card = cards.find(c => c.id === selectedCard);
             if (card && card.closingDay && card.dueDay) {
-                // Usar T12:00:00Z para evitar problemas de fuso horário
                 const purchaseDate = new Date(loanDate + "T12:00:00Z");
                 let dueMonth = purchaseDate.getUTCMonth();
                 let dueYear = purchaseDate.getUTCFullYear();
 
-                // Cenário 1: Fechamento e vencimento no mesmo mês (Ex: fecha 20, vence 28)
                 if (card.closingDay < card.dueDay) {
                      if (purchaseDate.getUTCDate() >= card.closingDay) {
-                        // Compra após o fechamento, joga para o próximo mês.
                         dueMonth += 1;
                     }
                 } 
-                // Cenário 2: Fechamento em um mês, vencimento no seguinte (Ex: fecha 28, vence 06)
                 else {
-                    // Define a data de fechamento da fatura do mês da compra
                     const closingDate = new Date(Date.UTC(purchaseDate.getUTCFullYear(), purchaseDate.getUTCMonth(), card.closingDay));
-
                     if (purchaseDate >= closingDate) {
-                        // Se a compra foi no dia do fechamento ou depois, a fatura é a do mês seguinte.
                         dueMonth += 2;
                     } else {
-                        // Se foi antes, a fatura é a do mês atual.
                         dueMonth += 1;
                     }
                 }
 
-                // Ajusta o ano caso o mês passe de Dezembro
                 if (dueMonth > 11) {
                     dueYear += Math.floor(dueMonth / 12);
                     dueMonth %= 12;
@@ -98,7 +89,6 @@ function LoanManagement() {
             }
         }
     }, [loanDate, selectedCard, cards]);
-
 
     useEffect(() => {
         if (purchaseType === 'shared') {
@@ -116,26 +106,17 @@ function LoanManagement() {
     }, [totalValueInput, person1ShareInput, purchaseType]);
 
     const isLoanDataInvalid = (loan) => {
-        if (typeof loan.totalValue !== 'number' || isNaN(loan.totalValue)) {
-            return true;
-        }
+        if (typeof loan.totalValue !== 'number' || isNaN(loan.totalValue)) return true;
         if (loan.isShared) {
-            if (!loan.sharedDetails || !loan.sharedDetails.person1 || !Array.isArray(loan.sharedDetails.person1.installments)) {
-                return true;
-            }
-            if (loan.sharedDetails.person2 && loan.sharedDetails.person2.shareAmount > 0 && !Array.isArray(loan.sharedDetails.person2.installments)) {
-                return true;
-            }
+            if (!loan.sharedDetails || !loan.sharedDetails.person1 || !Array.isArray(loan.sharedDetails.person1.installments)) return true;
+            if (loan.sharedDetails.person2 && loan.sharedDetails.person2.shareAmount > 0 && !Array.isArray(loan.sharedDetails.person2.installments)) return true;
         } else {
-            if (!Array.isArray(loan.installments)) {
-                return true;
-            }
+            if (!Array.isArray(loan.installments)) return true;
         }
         return false;
     };
     
     const resetForm = () => {
-        setEditingLoan(null);
         setPurchaseType('normal');
         setDescription('');
         setTotalValueInput('');
@@ -150,10 +131,37 @@ function LoanManagement() {
         setPerson2ShareDisplay('R$ 0,00');
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setIsLoading(true);
+    const handleOpenModal = (loan = null) => {
+        setEditingLoan(loan);
+        if (loan) {
+            setDescription(loan.description);
+            setTotalValueInput(formatCurrencyForInput(loan.totalValue));
+            setInstallmentsCount(loan.installmentsCount.toString());
+            setLoanDate(loan.purchaseDate);
+            setSelectedCard(loan.cardId);
+            if (loan.isShared) {
+                setPurchaseType('shared');
+                setSelectedClient1(loan.sharedDetails.person1.clientId);
+                setPerson1ShareInput(formatCurrencyForInput(loan.sharedDetails.person1.shareAmount));
+                setSelectedClient2(loan.sharedDetails.person2.clientId);
+            } else {
+                setPurchaseType('normal');
+                setSelectedClient(loan.clientId);
+            }
+        } else {
+            resetForm();
+        }
+        setIsModalOpen(true);
+    };
+    
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setEditingLoan(null);
+        resetForm();
+    };
 
+    const handleSaveLoan = async () => {
+        setIsLoading(true);
         const totalValue = parseCurrencyInput(totalValueInput);
         const installmentsNum = parseInt(installmentsCount, 10);
 
@@ -200,7 +208,7 @@ function LoanManagement() {
             loanData.clientId = selectedClient;
             loanData.isShared = false;
             loanData.installments = calculateInstallments(totalValue, installmentsNum, firstDueDate);
-        } else {
+        } else { // Shared
             const person1Share = parseCurrencyInput(person1ShareInput);
             const person2Share = totalValue - person1Share;
 
@@ -234,35 +242,14 @@ function LoanManagement() {
                 await addDoc(loansRef, { ...loanData, createdAt: serverTimestamp() });
                 showToast('Compra adicionada com sucesso!', 'success');
             }
-            resetForm();
+            handleCloseModal();
         } catch (error) {
-            console.error("Erro ao salvar compra:", error);
             showToast(`Erro ao salvar: ${error.message}`, 'error');
         } finally {
             setIsLoading(false);
         }
     };
     
-    const handleEdit = (loan) => {
-        window.scrollTo(0, 0);
-        setEditingLoan(loan);
-        setDescription(loan.description);
-        setTotalValueInput(formatCurrencyForInput(loan.totalValue));
-        setInstallmentsCount(loan.installmentsCount.toString());
-        setLoanDate(loan.purchaseDate);
-        setSelectedCard(loan.cardId);
-        
-        if (loan.isShared) {
-            setPurchaseType('shared');
-            setSelectedClient1(loan.sharedDetails.person1.clientId);
-            setPerson1ShareInput(formatCurrencyForInput(loan.sharedDetails.person1.shareAmount));
-            setSelectedClient2(loan.sharedDetails.person2.clientId);
-        } else {
-            setPurchaseType('normal');
-            setSelectedClient(loan.clientId);
-        }
-    };
-
     const confirmDeleteLoan = (loanId) => {
         setLoanToDelete(loanId);
         setIsConfirmationModalOpen(true);
@@ -370,70 +357,19 @@ function LoanManagement() {
     };
     
     return (
-        <div className="space-y-6">
-            <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
-                <h2 className="text-xl font-bold text-white mb-4">{editingLoan ? 'Editando Compra' : 'Adicionar Compra no Cartão'}</h2>
-                
-                <div className="flex justify-center p-1 bg-gray-700 rounded-lg max-w-sm mx-auto mb-6">
-                    <button onClick={() => setPurchaseType('normal')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'normal' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Normal</button>
-                    <button onClick={() => setPurchaseType('shared')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'shared' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Compartilhada</button>
+        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-6">
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">Gerenciamento de Compras</h1>
+                    <p className="text-sm text-gray-400 mt-1">Adicione suas compras parceladas ou compartilhadas.</p>
                 </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="date" value={loanDate} onChange={(e) => setLoanDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
-                        <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                            <option value="">Selecione o Cartão</option>
-                            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                        </select>
-                        <input type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
-                    </div>
-                    
-                    {firstDueDate && (
-                        <div className="p-2 bg-gray-800 rounded-md text-sm text-gray-400 text-center">
-                            Primeira parcela na fatura com vencimento em: <span className="font-semibold text-white">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
-                        </div>
-                    )}
-
-                    {purchaseType === 'normal' && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                           <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Selecione a Pessoa</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
-                            <input type="text" placeholder="Valor Total da Compra" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
-                        </div>
-                    )}
-                    {purchaseType === 'shared' && (
-                         <div className="pt-4 border-t border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <input type="text" placeholder="Valor Total da Compra" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
-                            <div/>
-                             <select value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Pessoa 1</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
-                            <input type="text" placeholder="Valor da Pessoa 1" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-full flex items-center justify-center font-bold">{person2ShareDisplay}</div>
-
-                            <select value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Pessoa 2</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
-                        </div>
-                    )}
-                    
-                    <div className="flex justify-end gap-4 pt-4 border-t border-gray-700">
-                        {editingLoan && <button type="button" onClick={resetForm} className="py-2 px-6 bg-gray-600 hover:bg-gray-500 rounded-md text-white font-semibold transition">Cancelar Edição</button>}
-                        <button type="submit" disabled={isLoading} className="py-2 px-6 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-semibold transition disabled:bg-purple-800 disabled:cursor-not-allowed">
-                            {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar Compra' : 'Adicionar Compra'}
-                        </button>
-                    </div>
-                </form>
+                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
+                    <PlusIcon />
+                    Adicionar Compra
+                </button>
             </div>
             
-            <div className="flex justify-end items-center mb-4">
+            <div className="flex justify-end items-center">
                 <label className="flex items-center text-sm text-gray-400 cursor-pointer">
                     <input type="checkbox" checked={showPaidLoans} onChange={() => setShowPaidLoans(!showPaidLoans)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded mr-2" />
                     Mostrar compras pagas
@@ -441,11 +377,11 @@ function LoanManagement() {
             </div>
 
             <div className="hidden md:grid grid-cols-7 gap-4 p-4 items-center border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                <span>Pessoa</span>
+                <span>Descrição</span>
                 <span>Cartão</span>
                 <span>Valor da Parcela</span>
                 <span>Nº de Parcelas</span>
-                <span>Valor (Parte/Total)</span>
+                <span>Valor Total</span>
                 <span>Status</span>
                 <span className="text-right">Ações</span>
             </div>
@@ -453,7 +389,6 @@ function LoanManagement() {
             <div className="space-y-4">
                 {filteredLoans.map(loan => {
                     const isInvalid = isLoanDataInvalid(loan);
-
                     if (isInvalid) {
                         return (
                             <div key={loan.id} className="bg-red-900/30 rounded-lg border-2 border-dashed border-red-500/50">
@@ -463,7 +398,7 @@ function LoanManagement() {
                                             <WarningIcon />
                                             <div>
                                                 <div className="text-sm font-semibold text-white">{loan.description || "Compra com dados inválidos"}</div>
-                                                <div className="text-xs text-red-300">Esta compra tem um formato antigo e precisa ser recadastrada. Por favor, anote os detalhes, apague-a e crie uma nova.</div>
+                                                <div className="text-xs text-red-300">Esta compra tem um formato antigo. Por favor, anote os detalhes, apague-a e crie uma nova.</div>
                                             </div>
                                         </div>
                                     </div>
@@ -473,9 +408,7 @@ function LoanManagement() {
                                     <div className="flex items-center justify-end gap-4">
                                         <button disabled className="text-purple-400/30 cursor-not-allowed" title="Editar desabilitado"><EditIcon /></button>
                                         <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
-                                        <button disabled className="text-gray-400/30 cursor-not-allowed">
-                                           <ChevronDown />
-                                        </button>
+                                        <button disabled className="text-gray-400/30 cursor-not-allowed"><ChevronDown /></button>
                                     </div>
                                 </div>
                             </div>
@@ -486,62 +419,111 @@ function LoanManagement() {
                     return (
                         <div key={loan.id} className="bg-gray-800/50 rounded-lg border border-gray-700">
                              <div className="grid grid-cols-3 md:grid-cols-7 gap-4 p-4 items-center">
-                                 <div className="col-span-1">
-                                     <div className="text-sm font-semibold text-white">{loan.description}</div>
-                                     <div className="text-xs text-gray-400">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
-                                 </div>
-                                 <div className="flex items-center text-sm text-gray-400">
-                                     <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card ? card.color : '#5E60CE' }}></span>
-                                     <span>{card ? card.name : 'N/A'}</span>
-                                 </div>
-                                 <div className="hidden md:block text-sm text-gray-300">
-                                     {formatCurrencyDisplay(loan.isShared 
-                                         ? (loan.sharedDetails.person1.installments?.[0]?.value || 0) + (loan.sharedDetails.person2.installments?.[0]?.value || 0) 
-                                         : loan.installments?.[0]?.value
-                                     )}
-                                 </div>
-                                 <div className="hidden md:block text-sm text-gray-300">{`${loan.installmentsCount}x`}</div>
-                                 <div className="hidden md:block font-bold text-white">{formatCurrencyDisplay(loan.totalValue)}</div>
-                                 <div className="hidden md:block text-sm">
-                                     {loan.isShared ? (
-                                         <>
-                                             <span className={loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P1: {loan.sharedDetails.person1.statusPayment}</span><br/>
-                                             <span className={loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P2: {loan.sharedDetails.person2.statusPayment}</span>
-                                         </>
-                                     ) : (
-                                         <span className={loan.statusPaymentClient === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>{loan.statusPaymentClient}</span>
-                                     )}
-                                 </div>
-                                 <div className="flex items-center justify-end gap-4">
-                                     <button onClick={() => handleEdit(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                     <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
-                                     <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
-                                         {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
-                                     </button>
-                                 </div>
+                                  <div className="col-span-2 md:col-span-1">
+                                      <div className="text-sm font-semibold text-white">{loan.description}</div>
+                                      <div className="text-xs text-gray-400">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
+                                  </div>
+                                  <div className="hidden md:flex items-center text-sm text-gray-400">
+                                      <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card ? card.color : '#5E60CE' }}></span>
+                                      <span>{card ? card.name : 'N/A'}</span>
+                                  </div>
+                                  <div className="hidden md:block text-sm text-gray-300">{formatCurrencyDisplay(loan.installments?.[0]?.value || 0)}</div>
+                                  <div className="hidden md:block text-sm text-gray-300">{`${loan.installmentsCount}x`}</div>
+                                  <div className="hidden md:block font-bold text-white">{formatCurrencyDisplay(loan.totalValue)}</div>
+                                  <div className="hidden md:block text-sm">
+                                      {loan.isShared ? (
+                                          <>
+                                              <span className={loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P1: {loan.sharedDetails.person1.statusPayment}</span><br/>
+                                              <span className={loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>P2: {loan.sharedDetails.person2.statusPayment}</span>
+                                          </>
+                                      ) : (
+                                          <span className={loan.statusPaymentClient === 'Pago Total' ? 'text-green-400' : 'text-yellow-400'}>{loan.statusPaymentClient}</span>
+                                      )}
+                                  </div>
+                                  <div className="flex items-center justify-end gap-4">
+                                      <button onClick={() => handleOpenModal(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                      <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
+                                      <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
+                                          {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
+                                      </button>
+                                  </div>
                              </div>
                              {showInstallments[loan.id] && (
-                                <div className="border-t border-gray-700">
-                                    {loan.isShared ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-700">
-                                            <div className="bg-gray-800 p-2">
-                                                <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person1.clientId)}</h5>
-                                                {renderInstallments(loan.sharedDetails.person1.installments, loan.id, 'person1')}
-                                            </div>
-                                            <div className="bg-gray-800 p-2">
-                                                <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person2.clientId)}</h5>
-                                                {renderInstallments(loan.sharedDetails.person2.installments, loan.id, 'person2')}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        renderInstallments(loan.installments, loan.id)
-                                    )}
-                                </div>
-                            )}
+                                 <div className="border-t border-gray-700">
+                                     {loan.isShared ? (
+                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-700">
+                                             <div className="bg-gray-800 p-2">
+                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person1.clientId)}</h5>
+                                                 {renderInstallments(loan.sharedDetails.person1.installments, loan.id, 'person1')}
+                                             </div>
+                                             <div className="bg-gray-800 p-2">
+                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person2.clientId)}</h5>
+                                                 {renderInstallments(loan.sharedDetails.person2.installments, loan.id, 'person2')}
+                                             </div>
+                                         </div>
+                                     ) : (
+                                         renderInstallments(loan.installments, loan.id)
+                                     )}
+                                 </div>
+                             )}
                         </div>
                     )
                 })}
             </div>
+            
+            {/* ✅ CORREÇÃO FINAL: Aumentando ainda mais o modal para 'max-w-4xl' */}
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingLoan ? 'Editar Compra' : 'Adicionar Nova Compra'} theme="dark" maxWidth="max-w-4xl">
+                <div className="space-y-4">
+                    <div className="flex justify-center p-1 bg-gray-700 rounded-lg max-w-sm mx-auto">
+                        <button onClick={() => setPurchaseType('normal')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'normal' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Normal</button>
+                        <button onClick={() => setPurchaseType('shared')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'shared' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Compartilhada</button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input type="date" value={loanDate} onChange={(e) => setLoanDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                        <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                            <option value="">Selecione o Cartão</option>
+                            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                        </select>
+                        <input type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                    </div>
+                    
+                    {firstDueDate && <div className="p-2 bg-gray-800 rounded-md text-sm text-gray-400 text-center">Primeira parcela em: <span className="font-semibold text-white">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span></div>}
+
+                    {purchaseType === 'normal' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Selecione a Pessoa</option>
+                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                            </select>
+                            <input type="text" placeholder="Valor Total" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                        </div>
+                    ) : (
+                         <div className="pt-4 border-t border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <input type="text" placeholder="Valor Total" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                            <div/>
+                            <select value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Pessoa 1</option>
+                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                            </select>
+                            <input type="text" placeholder="Valor da Pessoa 1" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-full flex items-center justify-center font-bold">{person2ShareDisplay}</div>
+                            <select value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Pessoa 2</option>
+                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+                </div>
+                <div className="mt-6 flex justify-end gap-4">
+                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
+                    <button onClick={handleSaveLoan} disabled={isLoading} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition disabled:opacity-50">
+                        {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar' : 'Salvar'}
+                    </button>
+                </div>
+            </GenericModal>
 
             <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" message="Tem certeza que deseja deletar esta compra e todas as suas parcelas?" isConfirmation={true} theme={theme} />
         </div>
