@@ -10,23 +10,21 @@ import Spinner from './components/Spinner';
 
 // Componente para proteger rotas que exigem autenticação
 function ProtectedRoute({ children }) {
-  // ✅ 1. CORREÇÃO: Usando 'currentUser' do nosso novo AppContext
   const { currentUser, isAuthReady } = useAppContext();
 
   if (!isAuthReady) {
     // Enquanto o estado de autenticação está sendo verificado, mostramos um spinner
-    // O fundo foi ajustado para combinar com o novo layout escuro.
     return <div className="flex justify-center items-center h-screen bg-gray-900"><Spinner /></div>;
   }
 
-  // Se o usuário não estiver logado, redireciona para a tela de login
+  // Se o usuário não estiver logado, redireciona para a Landing Page
   if (!currentUser) {
-    return <Navigate to="/login" replace />;
+    // ✅ CORREÇÃO AQUI: Redireciona para a página inicial ("/") em vez de "/login"
+    return <Navigate to="/" replace />;
   }
   
-  // ✅ 2. VERIFICAÇÃO DE E-MAIL
   // Se o usuário estiver logado, mas o e-mail não foi verificado,
-  // ele é enviado de volta para a tela de login, que agora contém a lógica para lidar com isso.
+  // ele é enviado para a tela de login, que contém a lógica para lidar com isso.
   if (!currentUser.emailVerified) {
     return <Navigate to="/login" replace />;
   }
@@ -58,7 +56,7 @@ function App() {
     <AppProvider>
       <Router>
         <Routes>
-          {/* ✅ 3. ROTAS PÚBLICAS ATUALIZADAS */}
+          {/* Rotas Públicas */}
           {/* Usamos o PublicRoute para garantir que usuários logados não vejam a landing page ou a tela de login */}
           <Route 
             path="/" 
@@ -77,7 +75,7 @@ function App() {
             } 
           />
 
-          {/* ✅ ROTA PROTEGIDA PARA O DASHBOARD */}
+          {/* Rota Protegida para o Dashboard */}
           <Route 
             path="/dashboard/*" 
             element={
@@ -87,7 +85,7 @@ function App() {
             } 
           />
           
-          {/* ✅ REDIRECIONAMENTO PADRÃO */}
+          {/* Redirecionamento Padrão */}
           {/* Qualquer outra rota inválida redireciona para a página inicial */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

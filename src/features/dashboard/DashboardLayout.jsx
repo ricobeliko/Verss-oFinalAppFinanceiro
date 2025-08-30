@@ -1,11 +1,10 @@
 // src/features/dashboard/DashboardLayout.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { useAppContext } from '../../context/AppContext';
-import { auth, functions } from '../../utils/firebase';
-import { useNavigate } from 'react-router-dom';
+import { functions } from '../../utils/firebase';
+import WelcomeModal from '../../components/WelcomeModal'; 
 
 // Páginas do painel
 import Dashboard from './Dashboard';
@@ -23,7 +22,8 @@ const StarIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="16" heig
 
 // --- Componente de Status do Usuário ---
 function UserStatusBadge() {
-    const { isPro, isTrialActive, userProfile, showToast, activateFreeTrial } = useAppContext();
+    // ✅ Pegando o 'currentUser' para obter o ID e o e-mail
+    const { isPro, isTrialActive, userProfile, showToast, activateFreeTrial, currentUser } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState('');
 
@@ -45,15 +45,29 @@ function UserStatusBadge() {
         }
     }, [isTrialActive, userProfile]);
 
+    // ✅ FUNÇÃO DE UPGRADE ATUALIZADA PARA O MERCADO PAGO
     const handleUpgrade = async () => {
+        if (!currentUser) {
+            showToast("Você precisa estar logado para fazer o upgrade.", "error");
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const createStripeCheckout = httpsCallable(functions, 'createStripeCheckout');
-            const { url } = (await createStripeCheckout()).data;
-            window.location.href = url;
+            // Chamando a nova função 'onCall' que já sabe quem é o usuário
+            const createMercadoPagoPreference = httpsCallable(functions, 'createMercadoPagoPreference');
+            const result = await createMercadoPagoPreference();
+
+            const { url } = result.data;
+            if (url) {
+                window.location.href = url; // Redireciona para o checkout do Mercado Pago
+            } else {
+                throw new Error("Link de pagamento não recebido.");
+            }
+
         } catch (error) {
-            console.error("Erro ao chamar a Cloud Function:", error);
-            showToast(error.message || "Ocorreu um erro.", "error");
+            console.error("Erro ao chamar a Cloud Function do MP:", error);
+            showToast(error.message || "Ocorreu um erro ao iniciar o pagamento.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -80,22 +94,18 @@ function UserStatusBadge() {
 
 // --- Componente Principal do Layout ---
 export default function DashboardLayout() {
-    const { currentUser } = useAppContext();
+    const { currentUser, userProfile, isPro, activateFreeTrial, logout } = useAppContext();
     const [activePage, setActivePage] = useState('resumo');
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const profileRef = useRef(null);
-    const navigate = useNavigate();
+    const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
 
     const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
     const [selectedCardFilter, setSelectedCardFilter] = useState('');
     const [selectedClientFilter, setSelectedClientFilter] = useState('');
 
     const handleLogout = () => {
-        signOut(auth).then(() => {
-            navigate('/');
-        }).catch((error) => {
-            console.error("Erro ao fazer logout:", error);
-        });
+        logout();
     };
 
     useEffect(() => {
@@ -108,6 +118,16 @@ export default function DashboardLayout() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
     
+    useEffect(() => {
+        if (userProfile && !isPro && !userProfile.trialExpiresAt) {
+            const hasSeenModal = sessionStorage.getItem('hasSeenWelcomeModal');
+            if (!hasSeenModal) {
+                setIsWelcomeModalOpen(true);
+                sessionStorage.setItem('hasSeenWelcomeModal', 'true');
+            }
+        }
+    }, [userProfile, isPro]);
+
     const pageProps = {
         selectedMonth, setSelectedMonth,
         selectedCardFilter, setSelectedCardFilter,
@@ -132,9 +152,19 @@ export default function DashboardLayout() {
         { id: 'transactions', label: 'Movimentações' },
         { id: 'subscriptions', label: 'Assinaturas' },
     ];
+    
+    const isTrialAvailable = true;
 
     return (
         <div className="min-h-screen bg-[#1e1e1e] font-sans text-gray-300 flex flex-col">
+            
+            <WelcomeModal 
+                isOpen={isWelcomeModalOpen}
+                onClose={() => setIsWelcomeModalOpen(false)}
+                onActivateTrial={activateFreeTrial}
+                isTrialAvailable={isTrialAvailable}
+            />
+
             <header className="bg-gray-900/50 border-b border-gray-800 backdrop-blur-sm sticky top-0 z-40">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
@@ -204,3 +234,4 @@ export default function DashboardLayout() {
         </div>
     );
 }
+

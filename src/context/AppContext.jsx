@@ -1,12 +1,9 @@
-// src/context/AppContext.jsx
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, functions } from '../utils/firebase'; // Removido getUserCollectionPathSegments daqui se não estiver em firebase.js
-import Toast from '../components/Toast'; // Adicionado para o componente Toast
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, functions } from '../utils/firebase';
+import Toast from '../components/Toast';
 
-// Função auxiliar movida para dentro ou importada se estiver em firebase.js
 const getUserCollectionPathSegments = () => ['users_fallback'];
 
 export const AppContext = createContext();
@@ -19,57 +16,120 @@ export function AppProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [toast, setToast] = useState({ message: '', type: 'info', visible: false }); // Estado de toast unificado
+    const [toast, setToast] = useState({ message: '', type: 'info', visible: false });
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        let unsubscribeFromUserProfile = () => {};
+
+        const unsubscribeFromAuth = onAuthStateChanged(auth, (user) => {
+            unsubscribeFromUserProfile();
+
+            if (!user) {
+                setCurrentUser(null);
+                setUserProfile(null);
+                setIsAuthReady(true);
+                return;
+            }
+
             setCurrentUser(user);
-            if (user && user.uid) {
-                try {
-                    const userCollectionPath = getUserCollectionPathSegments();
-                    const userDocRef = doc(db, ...userCollectionPath, user.uid);
-                    const docSnap = await getDoc(userDocRef);
-                    const userData = docSnap.exists() ? docSnap.data() : null;
-                    setUserProfile(userData);
-                } catch (error) {
-                    console.error("Erro ao buscar perfil do usuário:", error);
+            const userCollectionPath = getUserCollectionPathSegments();
+            const userDocRef = doc(db, ...userCollectionPath, user.uid);
+
+            unsubscribeFromUserProfile = onSnapshot(userDocRef, (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                    setUserProfile(docSnapshot.data());
+                } else {
+                    console.warn("Documento de usuário não encontrado para UID:", user.uid);
                     setUserProfile(null);
                 }
-            } else {
+                setIsAuthReady(true);
+            }, (error) => {
+                console.error("Erro ao escutar o documento do usuário:", error);
                 setUserProfile(null);
-            }
-            setIsAuthReady(true);
+                setIsAuthReady(true);
+            });
         });
-        return () => unsubscribe();
+
+        return () => {
+            unsubscribeFromAuth();
+            unsubscribeFromUserProfile();
+        };
     }, []);
+
+    const activateFreeTrial = async () => {
+        if (!currentUser || !currentUser.uid) {
+            showToast('Você precisa estar logado para ativar o teste.', 'error');
+            return;
+        }
+
+        if (userProfile?.trialExpiresAt || userProfile?.plan === 'pro') {
+            showToast('O período de teste já foi ativado ou você já é Pro.', 'info');
+            return;
+        }
+
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
+
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+            await updateDoc(userDocRef, {
+                trialExpiresAt: trialEndDate,
+                updatedAt: serverTimestamp()
+            });
+
+            showToast('Mês grátis ativado com sucesso!', 'success');
+        } catch (error) {
+            console.error("Erro ao ativar o período de teste:", error);
+            showToast('Não foi possível ativar o período de teste. Tente novamente.', 'error');
+        }
+    };
+
+    const logout = async () => {
+        try {
+            await signOut(auth);
+            sessionStorage.removeItem('hasSeenWelcomeModal');
+            showToast('Você foi desconectado.', 'info');
+        } catch (error) {
+            console.error('Erro ao fazer logout:', error);
+            showToast('Erro ao sair. Tente novamente.', 'error');
+        }
+    };
 
     const showToast = (message, type = 'info') => {
         setToast({ message, type, visible: true });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
-    
+
     const clearToast = () => {
-        setToast(prev => ({...prev, visible: false}));
+        setToast(prev => ({ ...prev, visible: false }));
     };
 
     const value = {
         currentUser,
         userId: currentUser?.uid,
         userProfile,
+        // ✅ A CORREÇÃO DEFINITIVA ESTÁ AQUI ✅
+        // Voltamos a verificar o campo `plan`, que é o que seu backend utiliza.
         isPro: userProfile?.plan === 'pro',
-        isTrialActive: userProfile?.trialExpiresAt?.toDate() > new Date(), // Lógica de trial pode ser adicionada aqui se necessário
+        isTrialActive: userProfile?.trialExpiresAt && typeof userProfile.trialExpiresAt.toDate === 'function'
+            ? userProfile.trialExpiresAt.toDate() > new Date()
+            : false,
         isAuthReady,
         showToast,
         db,
         auth,
         functions,
         getUserCollectionPathSegments,
+        activateFreeTrial,
+        logout,
     };
 
     return (
         <AppContext.Provider value={value}>
             {children}
-            <Toast 
+            <Toast
                 message={toast.message}
                 type={toast.type}
                 visible={toast.visible}
@@ -78,3 +138,4 @@ export function AppProvider({ children }) {
         </AppContext.Provider>
     );
 }
+
