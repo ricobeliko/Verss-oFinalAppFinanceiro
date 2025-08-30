@@ -7,17 +7,20 @@ import ExpenseManagement from '../expenses/ExpenseManagement';
 import { useAppContext } from '../../context/AppContext';
 
 function UnifiedTransactionManagement() {
-    const [transactionType, setTransactionType] = useState('loan'); // 'loan' para compras de cartão
-    const { isPro } = useAppContext();
+    const [transactionType, setTransactionType] = useState('loan');
+    
+    // ✅ CORREÇÃO AQUI:
+    // Agora pegamos tanto 'isPro' quanto 'isTrialActive' do contexto.
+    const { isPro, isTrialActive } = useAppContext();
+
+    // Criamos uma variável única para verificar o acesso.
+    const hasProAccess = isPro || isTrialActive;
 
     // Memoiza os componentes para evitar recriações desnecessárias
     const LoanFormComponent = useMemo(() => <LoanManagement />, []);
     const IncomeFormComponent = useMemo(() => <IncomeManagement />, []);
     const ExpenseFormComponent = useMemo(() => <ExpenseManagement />, []);
 
-    // ✅ 1. TÍTULO ADICIONADO E BOTÕES ATUALIZADOS
-    // Os botões agora refletem os nomes que você pediu, e o estilo foi
-    // ajustado para parecer um "segmented control" moderno.
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-8">
             <div>
@@ -45,15 +48,15 @@ function UnifiedTransactionManagement() {
                 </button>
             </div>
             
-            {/* ✅ 2. TRANSIÇÃO SUAVE ENTRE OS FORMULÁRIOS */}
-            {/* O conteúdo agora é renderizado de forma mais limpa */}
             <div>
                 {transactionType === 'loan' && LoanFormComponent}
-                {transactionType === 'income' && (isPro ? IncomeFormComponent : <div className="text-center p-8 bg-gray-800 rounded-lg"><p className="text-yellow-400">Gerenciar receitas é um recurso PRO.</p></div>)}
-                {transactionType === 'expense' && (isPro ? ExpenseFormComponent : <div className="text-center p-8 bg-gray-800 rounded-lg"><p className="text-yellow-400">Gerenciar despesas é um recurso PRO.</p></div>)}
+                
+                {/* ✅ CORREÇÃO AQUI: Usando 'hasProAccess' para a verificação */}
+                {transactionType === 'income' && (hasProAccess ? IncomeFormComponent : <div className="text-center p-8 bg-gray-800 rounded-lg"><p className="text-yellow-400">Gerenciar receitas é um recurso PRO.</p></div>)}
+                {transactionType === 'expense' && (hasProAccess ? ExpenseFormComponent : <div className="text-center p-8 bg-gray-800 rounded-lg"><p className="text-yellow-400">Gerenciar despesas é um recurso PRO.</p></div>)}
             </div>
         </div>
-    )
+    );
 }
 
 export default UnifiedTransactionManagement;

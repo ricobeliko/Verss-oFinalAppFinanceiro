@@ -1,7 +1,7 @@
-// src/features/subscriptions/SubscriptionManagement.jsx (CORREÇÃO FINAL)
+// src/features/subscriptions/SubscriptionManagement.jsx
 
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
@@ -11,134 +11,100 @@ const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
-
 export default function SubscriptionManagement() {
     const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
 
     const [subscriptions, setSubscriptions] = useState([]);
     const [cards, setCards] = useState([]);
-    const [clients, setClients] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentSubscription, setCurrentSubscription] = useState(null);
-
-    const [name, setName] = useState('');
-    const [amountInput, setAmountInput] = useState('');
-    const [firstChargeDate, setFirstChargeDate] = useState(new Date().toISOString().split('T')[0]);
-    const [cardId, setCardId] = useState('');
-    const [clientId, setClientId] = useState('');
-    const [isActive, setIsActive] = useState(true);
-    const [invoiceDueDate, setInvoiceDueDate] = useState('');
+    const [editingSubscription, setEditingSubscription] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [subscriptionToDelete, setSubscriptionToDelete] = useState(null);
+
+    // --- State do Formulário (Modal) ---
+    const [name, setName] = useState('');
+    const [valueInput, setValueInput] = useState('');
+    const [dueDate, setDueDate] = useState('');
+    const [cardId, setCardId] = useState('');
+    const [status, setStatus] = useState('Ativa'); // Agora o status é 'Ativa' ou 'Inativa'
 
     useEffect(() => {
         if (!isAuthReady || !userId) return;
         const userCollectionPath = getUserCollectionPathSegments();
-        const subsRef = collection(db, ...userCollectionPath, userId, 'subscriptions');
-        const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-        const clientsRef = collection(db, ...userCollectionPath, userId, 'clients');
-
-        const unsubSubs = onSnapshot(subsRef, (snapshot) => setSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const basePath = [...userCollectionPath, userId];
+        
+        const cardsRef = collection(db, ...basePath, 'cards');
         const unsubCards = onSnapshot(cardsRef, (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubClients = onSnapshot(clientsRef, (snapshot) => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        
+        const subscriptionsRef = collection(db, ...basePath, 'subscriptions');
+        const q = query(subscriptionsRef, orderBy("createdAt", "desc"));
+        const unsubSubscriptions = onSnapshot(q, (snapshot) => setSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-        return () => { unsubSubs(); unsubCards(); unsubClients(); };
+        return () => { unsubCards(); unsubSubscriptions(); };
     }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
-    
-    useEffect(() => {
-        if (firstChargeDate && cardId && cards.length > 0) {
-            const card = cards.find(c => c.id === cardId);
-            if (card && card.closingDay && card.dueDay) {
-                const chargeDate = new Date(firstChargeDate + "T12:00:00Z");
-                let dueMonth = chargeDate.getUTCMonth();
-                let dueYear = chargeDate.getUTCFullYear();
 
-                if (card.closingDay < card.dueDay) {
-                    if (chargeDate.getUTCDate() >= card.closingDay) {
-                        dueMonth += 1;
-                    }
-                } else {
-                    const closingDate = new Date(Date.UTC(chargeDate.getUTCFullYear(), chargeDate.getUTCMonth(), card.closingDay));
-                    if (chargeDate >= closingDate) {
-                        dueMonth += 2;
-                    } else {
-                        dueMonth += 1;
-                    }
-                }
+    const getCardName = (cId) => cards.find(card => card.id === cId)?.name || 'N/A';
 
-                if (dueMonth > 11) {
-                    dueYear += Math.floor(dueMonth / 12);
-                    dueMonth %= 12;
-                }
-                
-                const finalDueDate = new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
-                setInvoiceDueDate(finalDueDate.toISOString().split('T')[0]);
-            }
-        }
-    }, [firstChargeDate, cardId, cards]);
+    const resetForm = () => {
+        setName('');
+        setValueInput('');
+        setDueDate('');
+        setCardId('');
+        setStatus('Ativa');
+    };
     
     const handleOpenModal = (sub = null) => {
-        const today = new Date().toISOString().split('T')[0];
-        setCurrentSubscription(sub);
-
-        // ✅ CORREÇÃO APLICADA AQUI:
-        // Usamos `|| ''` e outros valores padrão para garantir que nenhum estado comece como `undefined`.
-        setName(sub?.name || '');
-        setAmountInput(sub ? formatCurrencyForInput(sub.amount) : '');
-        setFirstChargeDate(sub?.firstChargeDate || today);
-        setCardId(sub?.cardId || '');
-        setClientId(sub?.clientId || '');
-        setIsActive(sub?.isActive ?? true); // `?? true` lida com `false`, `undefined` e `null`
-        
+        setEditingSubscription(sub);
+        if (sub) {
+            setName(sub.name || '');
+            // ✅ CORREÇÃO: Usando 'amount' ou 'value' para compatibilidade com dados antigos
+            const amount = sub.amount !== undefined ? sub.amount : sub.value;
+            setValueInput(formatCurrencyForInput(amount));
+            setDueDate(sub.dueDate ? sub.dueDate.toString() : '');
+            setCardId(sub.cardId || '');
+            // ✅ CORREÇÃO: Garante que o status seja sempre um valor válido
+            setStatus(sub.status || (sub.isActive ? 'Ativa' : 'Inativa'));
+        } else {
+            resetForm();
+        }
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
-        setCurrentSubscription(null);
-        setName('');
-        setAmountInput('');
-        setFirstChargeDate(new Date().toISOString().split('T')[0]);
-        setCardId('');
-        setClientId('');
-        setIsActive(true);
-        setInvoiceDueDate('');
+        setEditingSubscription(null);
+        resetForm();
     };
 
     const handleSaveSubscription = async () => {
-        if (!name.trim() || !amountInput || !firstChargeDate || !cardId || !clientId) {
-            showToast('Todos os campos são obrigatórios.', 'warning');
+        const value = parseCurrencyInput(valueInput);
+        const day = parseInt(dueDate, 10);
+
+        if (!name.trim() || !value || !cardId) {
+            showToast('Por favor, preencha nome, valor e cartão.', 'warning');
+            return;
+        }
+
+        if (isNaN(day) || day < 1 || day > 31) {
+            showToast('O dia da cobrança deve ser um número entre 1 e 31.', 'warning');
             return;
         }
         
-        const amount = parseCurrencyInput(amountInput);
-        if (isNaN(amount) || amount <= 0) {
-            showToast('O valor da assinatura é inválido.', 'error');
-            return;
-        }
-
-        const chargeDay = new Date(firstChargeDate + "T12:00:00Z").getUTCDate();
-        if (isNaN(chargeDay)) {
-            showToast('A data da primeira cobrança é inválida. Verifique o campo.', 'error');
-            return;
-        }
-
         const userCollectionPath = getUserCollectionPathSegments();
         const subscriptionData = {
             name,
-            amount,
-            firstChargeDate,
-            dueDate: chargeDay,
-            cardId,
-            clientId,
-            isActive,
-            updatedAt: serverTimestamp()
+            amount: value, // Padronizando para 'amount'
+            value: value, // Mantendo 'value' por compatibilidade, se necessário
+            dueDate: day,
+            cardId: cardId,
+            status: status, // 'Ativa' ou 'Inativa'
+            isActive: status === 'Ativa', // Campo booleano para facilitar filtros
         };
 
         try {
-            if (currentSubscription) {
-                const subDoc = doc(db, ...userCollectionPath, userId, 'subscriptions', currentSubscription.id);
-                await updateDoc(subDoc, subscriptionData);
+            if (editingSubscription) {
+                const subDoc = doc(db, ...userCollectionPath, userId, 'subscriptions', editingSubscription.id);
+                await updateDoc(subDoc, { ...subscriptionData, updatedAt: serverTimestamp() });
                 showToast('Assinatura atualizada com sucesso!', 'success');
             } else {
                 const subsRef = collection(db, ...userCollectionPath, userId, 'subscriptions');
@@ -172,10 +138,7 @@ export default function SubscriptionManagement() {
             setSubscriptionToDelete(null);
         }
     };
-
-    const getCardName = (cId) => cards.find(card => card.id === cId)?.name || 'N/A';
-    const getClientName = (cId) => clients.find(client => client.id === cId)?.name || 'N/A';
-
+    
     return (
         <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -188,95 +151,91 @@ export default function SubscriptionManagement() {
                     Adicionar Assinatura
                 </button>
             </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full bg-gray-800/50 rounded-lg">
-                    <thead className="border-b border-gray-700">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Nome do Serviço</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor Mensal</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pessoa</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Dia da Cobrança</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Cartão Vinculado</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {subscriptions.length > 0 ? subscriptions.map(sub => (
-                             <tr key={sub.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{sub.name}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-300">{formatCurrencyDisplay(sub.amount)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getClientName(sub.clientId)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{sub.dueDate ? `Todo dia ${sub.dueDate}` : 'Data Inválida'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getCardName(sub.cardId)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${sub.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                        {sub.isActive ? 'Ativa' : 'Inativa'}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {subscriptions.length > 0 ? subscriptions.map((sub) => {
+                    const currentStatus = sub.status || (sub.isActive ? 'Ativa' : 'Inativa');
+                    const amount = sub.amount !== undefined ? sub.amount : sub.value;
+                    return (
+                        <div key={sub.id} className={`p-5 rounded-lg shadow-lg flex flex-col justify-between border ${currentStatus === 'Ativa' ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-800/30 border-gray-800'}`}>
+                            <div>
+                                <div className="flex justify-between items-start mb-3">
+                                    <h3 className={`text-xl font-bold ${currentStatus === 'Ativa' ? 'text-white' : 'text-gray-500'}`}>{sub.name}</h3>
+                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${currentStatus === 'Ativa' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-400'}`}>
+                                        {currentStatus}
                                     </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={() => handleOpenModal(sub)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                        <button onClick={() => confirmDeleteSubscription(sub.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan="7" className="text-center py-10 text-gray-500">
-                                    Nenhuma assinatura cadastrada.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                                </div>
+                                <p className={`text-2xl font-extrabold mb-1 ${currentStatus === 'Ativa' ? 'text-purple-400' : 'text-purple-400/50'}`}>
+                                    {formatCurrencyDisplay(amount)}
+                                </p>
+                                <p className={`text-sm mb-4 ${currentStatus === 'Ativa' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    Vence dia: <span className="font-semibold">{sub.dueDate}</span>
+                                </p>
+                                <div className={`flex items-center text-sm pt-4 border-t ${currentStatus === 'Ativa' ? 'text-gray-300 border-gray-700' : 'text-gray-600 border-gray-700/50'}`}>
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                                    {getCardName(sub.cardId)}
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-3 mt-5">
+                                <button onClick={() => handleOpenModal(sub)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
+                                <button onClick={() => confirmDeleteSubscription(sub.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
+                            </div>
+                        </div>
+                    )
+                }) : (
+                    <div className="col-span-full text-center py-10 text-gray-500">
+                        Nenhuma assinatura cadastrada.
+                    </div>
+                )}
             </div>
             
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={currentSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} theme="dark">
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} theme="dark">
                 <div className="space-y-4">
-                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (Ex: Netflix, Spotify)" className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
-                    <div className="relative">
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Valor Mensal</label>
-                        <span className="absolute inset-y-0 left-0 top-6 flex items-center pl-3 text-gray-400">R$</span>
-                        <input type="text" value={amountInput} onChange={handleCurrencyInputChange(setAmountInput)} placeholder="Valor Mensal" className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" inputMode="decimal" />
+                    <div>
+                        <label htmlFor="subscriptionName" className="block text-sm font-medium text-gray-300 mb-1">Nome</label>
+                        <input id="subscriptionName" type="text" placeholder="Ex: Netflix, Spotify" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Data da Primeira Cobrança</label>
-                        <input type="date" value={firstChargeDate} onChange={(e) => setFirstChargeDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
+                    <div>
+                        <label htmlFor="subscriptionValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
+                        <input id="subscriptionValue" type="text" placeholder="R$ 0,00" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
                     </div>
-                    <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
-                        <option value="">Selecione uma Pessoa</option>
-                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                    </select>
-                    <select value={cardId} onChange={(e) => setCardId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
-                        <option value="">Selecione um Cartão para cobrança</option>
-                        {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                    </select>
-                    {invoiceDueDate && (
-                        <div className="p-2 bg-gray-800 rounded-md text-sm text-gray-400 text-center">
-                            Fatura com vencimento em: <span className="font-semibold text-white">{new Date(invoiceDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
-                        </div>
-                    )}
-                     <div className="flex items-center">
-                        <input type="checkbox" id="isActiveSub" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded" />
-                        <label htmlFor="isActiveSub" className="ml-2 text-sm text-gray-300">Assinatura Ativa</label>
+                    <div>
+                        <label htmlFor="subscriptionDueDate" className="block text-sm font-medium text-gray-300 mb-1">Dia da Cobrança</label>
+                        <input id="subscriptionDueDate" type="number" placeholder="Dia do mês" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" max="31" required />
+                    </div>
+                    <div>
+                        <label htmlFor="subscriptionCard" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
+                        <select id="subscriptionCard" value={cardId} onChange={(e) => setCardId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                            <option value="">Selecione o Cartão</option>
+                            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="subscriptionStatus" className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                        <select id="subscriptionStatus" value={status} onChange={(e) => setStatus(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white">
+                            <option value="Ativa">Ativa</option>
+                            <option value="Inativa">Inativa</option>
+                        </select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleSaveSubscription} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                    <button onClick={handleSaveSubscription} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">
+                        {editingSubscription ? 'Atualizar' : 'Salvar'}
+                    </button>
                 </div>
             </GenericModal>
 
-            <GenericModal
-                isOpen={isConfirmationModalOpen}
-                onClose={() => setIsConfirmationModalOpen(false)}
-                onConfirm={handleDeleteSubscriptionConfirmed}
-                title="Confirmar Exclusão"
-                message={`Tem certeza de que deseja excluir a assinatura "${subscriptions.find(s => s.id === subscriptionToDelete)?.name}"?`}
-                isConfirmation={true}
+            <GenericModal 
+                isOpen={isConfirmationModalOpen} 
+                onClose={() => setIsConfirmationModalOpen(false)} 
+                onConfirm={handleDeleteSubscriptionConfirmed} 
+                title="Confirmar Exclusão" 
+                isConfirmation={true} 
                 theme={theme}
-            />
+            >
+                Tem certeza que deseja deletar a assinatura "{subscriptions.find(s => s.id === subscriptionToDelete)?.name}"?
+            </GenericModal>
         </div>
     );
 }

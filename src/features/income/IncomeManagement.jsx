@@ -1,3 +1,4 @@
+// src/features/income/IncomeManagement.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
@@ -167,20 +168,28 @@ function IncomeManagement() {
 
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingIncome ? 'Editar Receita' : 'Adicionar Receita'} theme="dark">
                 <div className="space-y-4">
-                    <input type="text" placeholder="Descrição (Ex: Salário, Venda)" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
-                    <div className="relative">
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
-                        <span className="absolute inset-y-0 left-0 top-6 flex items-center pl-3 text-gray-400">R$</span>
-                        <input type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required inputMode="decimal" />
+                    <div>
+                        <label htmlFor="incomeDescription" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                        <input id="incomeDescription" type="text" placeholder="Ex: Salário, Venda" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Data</label>
-                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                        <label htmlFor="incomeValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
+                            <input id="incomeValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required inputMode="decimal" />
+                        </div>
                     </div>
-                    <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required>
-                        <option value="">Selecione a Pessoa</option>
-                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                    </select>
+                    <div>
+                        <label htmlFor="incomeDate" className="block text-sm font-medium text-gray-300 mb-1">Data</label>
+                        <input id="incomeDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                    </div>
+                    <div>
+                        <label htmlFor="incomeClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
+                        <select id="incomeClient" value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required>
+                            <option value="">Selecione a Pessoa</option>
+                            {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                        </select>
+                    </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
@@ -193,13 +202,13 @@ function IncomeManagement() {
                 onClose={() => setIsConfirmationModalOpen(false)} 
                 onConfirm={handleDeleteConfirmed} 
                 title="Confirmar Exclusão" 
-                message={`Tem certeza que deseja deletar a receita "${incomes.find(i => i.id === incomeToDelete)?.description}"?`}
                 isConfirmation={true} 
-                theme={theme} 
-            />
+                theme={theme}
+            >
+                Tem certeza que deseja deletar a receita "{incomes.find(i => i.id === incomeToDelete)?.description}"?
+            </GenericModal>
         </div>
     );
 }
 
-// ✅ CORREÇÃO: Adicionando a linha de exportação que faltava
 export default IncomeManagement;

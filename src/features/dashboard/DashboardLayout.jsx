@@ -22,7 +22,6 @@ const StarIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="16" heig
 
 // --- Componente de Status do Usuário ---
 function UserStatusBadge() {
-    // ✅ Pegando o 'currentUser' para obter o ID e o e-mail
     const { isPro, isTrialActive, userProfile, showToast, activateFreeTrial, currentUser } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState('');
@@ -45,7 +44,7 @@ function UserStatusBadge() {
         }
     }, [isTrialActive, userProfile]);
 
-    // ✅ FUNÇÃO DE UPGRADE ATUALIZADA PARA O MERCADO PAGO
+    // ✅ FUNÇÃO DE UPGRADE 100% CORRIGIDA
     const handleUpgrade = async () => {
         if (!currentUser) {
             showToast("Você precisa estar logado para fazer o upgrade.", "error");
@@ -54,20 +53,31 @@ function UserStatusBadge() {
 
         setIsLoading(true);
         try {
-            // Chamando a nova função 'onCall' que já sabe quem é o usuário
+            // 1. Chama a Cloud Function 'onCall'.
             const createMercadoPagoPreference = httpsCallable(functions, 'createMercadoPagoPreference');
             const result = await createMercadoPagoPreference();
+            
+            // 2. Acessa o 'init_point' que é a URL de checkout.
+            const checkoutUrl = result.data.init_point; 
 
-            const { url } = result.data;
-            if (url) {
-                window.location.href = url; // Redireciona para o checkout do Mercado Pago
+            if (checkoutUrl) {
+                // 3. Redireciona o usuário para a página de pagamento.
+                window.location.href = checkoutUrl;
             } else {
-                throw new Error("Link de pagamento não recebido.");
+                throw new Error("Link de pagamento não recebido do servidor.");
             }
 
         } catch (error) {
-            console.error("Erro ao chamar a Cloud Function do MP:", error);
-            showToast(error.message || "Ocorreu um erro ao iniciar o pagamento.", "error");
+            console.error("Erro ao obter link de pagamento do Mercado Pago:", error);
+            
+            let errorMessage = "Não foi possível iniciar o pagamento. Tente novamente mais tarde.";
+            if (error.code === 'functions/unauthenticated') {
+                errorMessage = "Sua sessão expirou. Por favor, faça login novamente.";
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            showToast(errorMessage, "error");
         } finally {
             setIsLoading(false);
         }
@@ -83,7 +93,7 @@ function UserStatusBadge() {
         <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 text-gray-400 text-xs font-semibold"><ShieldIcon /><span>FREE</span></div>
             {!userProfile?.trialExpiresAt && (
-              <button onClick={activateFreeTrial} className="bg-purple-600 text-white font-semibold py-1 px-2 rounded-md hover:bg-purple-700 transition text-xs">Ativar Mês Grátis</button>
+                <button onClick={activateFreeTrial} className="bg-purple-600 text-white font-semibold py-1 px-2 rounded-md hover:bg-purple-700 transition text-xs">Ativar Mês Grátis</button>
             )}
             <button onClick={handleUpgrade} disabled={isLoading} className="bg-purple-600 text-white font-semibold py-1 px-2 rounded-md hover:bg-purple-700 transition disabled:opacity-50 text-xs">
                 {isLoading ? 'Aguarde...' : 'Tornar-se PRO'}
@@ -234,4 +244,3 @@ export default function DashboardLayout() {
         </div>
     );
 }
-

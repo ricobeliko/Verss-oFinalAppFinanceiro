@@ -1,6 +1,4 @@
-// src/components/ProAnalyticsCharts.jsx
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react'; // Adicione o useState
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
     PieChart, Pie, Cell,
@@ -8,8 +6,10 @@ import {
 import { useAppContext } from '../context/AppContext';
 import UpgradePrompt from './UpgradePrompt';
 import { formatCurrencyDisplay } from '../utils/currency';
+import { httpsCallable } from 'firebase/functions'; // Importe o httpsCallable
+import { functions } from '../utils/firebase'; // Importe a instância do Firebase
 
-// Funções e componentes auxiliares
+// ... (as funções formatYAxis e CustomTooltip continuam iguais) ...
 const formatYAxis = (tick) => {
     if (tick >= 1000) return `R$ ${(tick / 1000).toLocaleString('pt-BR')}k`;
     return `R$ ${tick}`;
@@ -27,13 +27,39 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
-    // ✅ 1. PUXANDO O 'isTrialActive' DO CONTEXTO
-    const { isPro, isTrialActive } = useAppContext();
 
-    // ✅ 2. CRIANDO A VARIÁVEL DE ACESSO
+const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
+    const { isPro, isTrialActive, currentUser, showToast } = useAppContext();
+    const [isLoading, setIsLoading] = useState(false); // Adiciona estado de loading
+
     const hasProAccess = isPro || isTrialActive;
 
+    // ✅ COPIE A MESMA FUNÇÃO QUE FUNCIONA NO HEADER
+    const handleUpgrade = async () => {
+        if (!currentUser) {
+            showToast("Você precisa estar logado para fazer o upgrade.", "error");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const createMercadoPagoPreference = httpsCallable(functions, 'createMercadoPagoPreference');
+            const result = await createMercadoPagoPreference();
+            
+            const checkoutUrl = result.data.init_point; 
+            if (checkoutUrl) {
+                window.location.href = checkoutUrl;
+            } else {
+                throw new Error("Link de pagamento não recebido do servidor.");
+            }
+        } catch (error) {
+            console.error("Erro ao obter link de pagamento:", error);
+            showToast('Não foi possível iniciar o pagamento. Tente novamente mais tarde.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // ... (os `useMemo` para os gráficos continuam iguais) ...
     const dataForBarChart = useMemo(() => {
         const clientTotals = {};
         loans.forEach(loan => {
@@ -59,20 +85,21 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
         }
         return Object.entries(categories).map(([name, value]) => ({ name, value }));
     }, [expenses, loans, subscriptions]);
-    
+
+
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF1943', '#A45D5D'];
     const textColor = theme === 'dark' ? '#A3A3A3' : '#333';
 
     return (
-        // ✅ 3. USANDO A NOVA VARIÁVEL PARA CONTROLAR O COMPONENTE INTEIRO
-        // O container principal agora é renderizado com base no 'hasProAccess'.
         <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 relative min-h-[380px]">
             {!hasProAccess ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm rounded-lg">
-                    <UpgradePrompt />
+                    {/* ✅ PASSA A FUNÇÃO E O ESTADO PARA O COMPONENTE */}
+                    <UpgradePrompt onUpgradeClick={handleUpgrade} isLoading={isLoading} />
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* ... (o JSX dos gráficos continua o mesmo) ... */}
                     <div>
                         <h3 className="text-xl font-bold text-blue-400 mb-4">Gastos por Pessoa (Fatura)</h3>
                         {dataForBarChart.length > 0 ? (

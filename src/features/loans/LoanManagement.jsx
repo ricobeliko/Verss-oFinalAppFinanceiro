@@ -1,3 +1,4 @@
+// src/features/loans/LoanManagement.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
@@ -471,49 +472,87 @@ function LoanManagement() {
                 })}
             </div>
             
-            {/* ✅ CORREÇÃO FINAL: Aumentando ainda mais o modal para 'max-w-4xl' */}
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingLoan ? 'Editar Compra' : 'Adicionar Nova Compra'} theme="dark" maxWidth="max-w-4xl">
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="flex justify-center p-1 bg-gray-700 rounded-lg max-w-sm mx-auto">
                         <button onClick={() => setPurchaseType('normal')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'normal' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Normal</button>
                         <button onClick={() => setPurchaseType('shared')} disabled={!!editingLoan} className={`w-1/2 px-4 py-2 text-sm font-bold rounded-md transition-colors ${purchaseType === 'shared' ? 'bg-purple-600 text-white shadow' : 'text-gray-400'} disabled:opacity-50`}>Compra Compartilhada</button>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <input type="date" value={loanDate} onChange={(e) => setLoanDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
-                        <select value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                            <option value="">Selecione o Cartão</option>
-                            {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                        </select>
-                        <input type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                        <div>
+                            <label htmlFor="loanDate" className="block text-sm font-medium text-gray-300 mb-1">Data da Compra</label>
+                            <input id="loanDate" type="date" value={loanDate} onChange={(e) => setLoanDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                        </div>
+                        <div>
+                            <label htmlFor="selectedCard" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
+                            <select id="selectedCard" value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <option value="">Selecione o Cartão</option>
+                                {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                            <input id="description" type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                        </div>
                     </div>
                     
                     {firstDueDate && <div className="p-2 bg-gray-800 rounded-md text-sm text-gray-400 text-center">Primeira parcela em: <span className="font-semibold text-white">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span></div>}
 
                     {purchaseType === 'normal' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                           <select value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Selecione a Pessoa</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
-                            <input type="text" placeholder="Valor Total" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-700">
+                           <div>
+                                <label htmlFor="selectedClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
+                                <select id="selectedClient" value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                    <option value="">Selecione a Pessoa</option>
+                                    {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                </select>
+                           </div>
+                            <div>
+                                <label htmlFor="totalValueInput" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
+                                <input id="totalValueInput" type="text" placeholder="R$ 0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                            </div>
+                            <div>
+                                <label htmlFor="installmentsCount" className="block text-sm font-medium text-gray-300 mb-1">Nº de Parcelas</label>
+                                <input id="installmentsCount" type="number" placeholder="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                            </div>
                         </div>
                     ) : (
-                         <div className="pt-4 border-t border-gray-700 grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <input type="text" placeholder="Valor Total" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <input type="number" placeholder="Nº de Parcelas" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
-                            <div/>
-                            <select value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Pessoa 1</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
-                            <input type="text" placeholder="Valor da Pessoa 1" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
-                            <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-full flex items-center justify-center font-bold">{person2ShareDisplay}</div>
-                            <select value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
-                                <option value="">Pessoa 2</option>
-                                {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
+                         <div className="pt-4 border-t border-gray-700 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label htmlFor="totalValueShared" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
+                                    <input id="totalValueShared" type="text" placeholder="R$ 0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                                </div>
+                                <div>
+                                    <label htmlFor="installmentsCountShared" className="block text-sm font-medium text-gray-300 mb-1">Nº de Parcelas</label>
+                                    <input id="installmentsCountShared" type="number" placeholder="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                <div>
+                                    <label htmlFor="selectedClient1" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 1</label>
+                                    <select id="selectedClient1" value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                        <option value="">Selecione a Pessoa 1</option>
+                                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="person1Share" className="block text-sm font-medium text-gray-300 mb-1">Valor da Pessoa 1</label>
+                                    <input id="person1Share" type="text" placeholder="R$ 0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                                </div>
+                                <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-10 flex items-center justify-center">
+                                    <span className="text-sm font-medium text-gray-300 mr-2">Valor Pessoa 2:</span>
+                                    <span className="font-bold">{person2ShareDisplay}</span>
+                                </div>
+                                <div>
+                                     <label htmlFor="selectedClient2" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 2</label>
+                                    <select id="selectedClient2" value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                        <option value="">Selecione a Pessoa 2</option>
+                                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -525,7 +564,9 @@ function LoanManagement() {
                 </div>
             </GenericModal>
 
-            <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" message="Tem certeza que deseja deletar esta compra e todas as suas parcelas?" isConfirmation={true} theme={theme} />
+            <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" isConfirmation={true} theme={theme}>
+                Tem certeza que deseja deletar esta compra e todas as suas parcelas?
+            </GenericModal>
         </div>
     );
 }
