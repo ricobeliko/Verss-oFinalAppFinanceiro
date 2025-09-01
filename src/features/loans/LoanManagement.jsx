@@ -1,11 +1,10 @@
-// src/features/loans/LoanManagement.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import GenericModal from '../../components/GenericModal';
 
-// --- Ícones ---
+// --- Componentes de Ícone ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const ChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>;
@@ -14,66 +13,70 @@ const WarningIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="tex
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 function LoanManagement() {
-    const { db, userId, isAuthReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
-    
-    // --- State de Dados ---
-    const [loans, setLoans] = useState([]);
-    const [clients, setClients] = useState([]);
-    const [cards, setCards] = useState([]);
-    
-    // --- State de UI ---
+    const { db: database, userId, isAuthReady: isAuthenticationReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
+
+    // Estados para armazenar dados do Firestore
+    const [allLoans, setAllLoans] = useState([]);
+    const [allClients, setAllClients] = useState([]);
+    const [allCards, setAllCards] = useState([]);
+
+    // Estados para controle da interface
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingLoan, setEditingLoan] = useState(null);
-    const [showInstallments, setShowInstallments] = useState({});
+    const [visibleInstallments, setVisibleInstallments] = useState({});
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
-    const [loanToDelete, setLoanToDelete] = useState(null);
-    const [showPaidLoans, setShowPaidLoans] = useState(false);
+    const [loanIdToDelete, setLoanIdToDelete] = useState(null);
+    const [shouldShowPaidLoans, setShouldShowPaidLoans] = useState(false);
 
-    // --- State do Formulário (dentro do modal) ---
+    // Estados para o formulário do modal
     const [purchaseType, setPurchaseType] = useState('normal');
     const [description, setDescription] = useState('');
     const [totalValueInput, setTotalValueInput] = useState('');
     const [installmentsCount, setInstallmentsCount] = useState('1');
-    const [loanDate, setLoanDate] = useState(new Date().toISOString().split('T')[0]);
+    const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [firstDueDate, setFirstDueDate] = useState('');
-    const [selectedCard, setSelectedCard] = useState('');
-    const [selectedClient, setSelectedClient] = useState('');
-    const [selectedClient1, setSelectedClient1] = useState('');
-    const [selectedClient2, setSelectedClient2] = useState('');
+    const [selectedCardId, setSelectedCardId] = useState('');
+    const [selectedClientId, setSelectedClientId] = useState('');
+    const [selectedClient1Id, setSelectedClient1Id] = useState('');
+    const [selectedClient2Id, setSelectedClient2Id] = useState('');
     const [person1ShareInput, setPerson1ShareInput] = useState('');
     const [person2ShareDisplay, setPerson2ShareDisplay] = useState('R$ 0,00');
 
     useEffect(() => {
-        if (!isAuthReady || !db || !userId) return;
-        const userCollectionPath = getUserCollectionPathSegments();
-        const clientsRef = collection(db, ...userCollectionPath, userId, 'clients');
-        const cardsRef = collection(db, ...userCollectionPath, userId, 'cards');
-        const loansRef = query(collection(db, ...userCollectionPath, userId, 'loans'), orderBy('createdAt', 'desc'));
+        if (!isAuthenticationReady || !database || !userId) return;
 
-        const unsubClients = onSnapshot(clientsRef, snapshot => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubCards = onSnapshot(cardsRef, snapshot => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubLoans = onSnapshot(loansRef, snapshot => setLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const userCollectionPath = getUserCollectionPathSegments();
+        const clientsReference = collection(database, ...userCollectionPath, userId, 'clients');
+        const cardsReference = collection(database, ...userCollectionPath, userId, 'cards');
+        const loansReference = query(collection(database, ...userCollectionPath, userId, 'loans'), orderBy('createdAt', 'desc'));
+
+        const unsubscribeClients = onSnapshot(clientsReference, snapshot => setAllClients(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
+        const unsubscribeCards = onSnapshot(cardsReference, snapshot => setAllCards(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
+        const unsubscribeLoans = onSnapshot(loansReference, snapshot => setAllLoans(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
         
-        return () => { unsubClients(); unsubCards(); unsubLoans(); };
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
+        return () => {
+            unsubscribeClients();
+            unsubscribeCards();
+            unsubscribeLoans();
+        };
+    }, [database, userId, isAuthenticationReady, getUserCollectionPathSegments]);
     
     useEffect(() => {
-        if (loanDate && selectedCard && cards.length > 0) {
-            const card = cards.find(c => c.id === selectedCard);
-            if (card && card.closingDay && card.dueDay) {
-                const purchaseDate = new Date(loanDate + "T12:00:00Z");
-                let dueMonth = purchaseDate.getUTCMonth();
-                let dueYear = purchaseDate.getUTCFullYear();
+        if (purchaseDate && selectedCardId && allCards.length > 0) {
+            const selectedCard = allCards.find(card => card.id === selectedCardId);
+            if (selectedCard && selectedCard.closingDay && selectedCard.dueDay) {
+                const dateOfPurchase = new Date(purchaseDate + "T12:00:00Z");
+                let dueMonth = dateOfPurchase.getUTCMonth();
+                let dueYear = dateOfPurchase.getUTCFullYear();
 
-                if (card.closingDay < card.dueDay) {
-                     if (purchaseDate.getUTCDate() >= card.closingDay) {
+                if (selectedCard.closingDay < selectedCard.dueDay) {
+                     if (dateOfPurchase.getUTCDate() >= selectedCard.closingDay) {
                         dueMonth += 1;
                     }
-                } 
-                else {
-                    const closingDate = new Date(Date.UTC(purchaseDate.getUTCFullYear(), purchaseDate.getUTCMonth(), card.closingDay));
-                    if (purchaseDate >= closingDate) {
+                } else {
+                    const closingDate = new Date(Date.UTC(dateOfPurchase.getUTCFullYear(), dateOfPurchase.getUTCMonth(), selectedCard.closingDay));
+                    if (dateOfPurchase >= closingDate) {
                         dueMonth += 2;
                     } else {
                         dueMonth += 1;
@@ -85,20 +88,20 @@ function LoanManagement() {
                     dueMonth %= 12;
                 }
                 
-                const finalDueDate = new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
+                const finalDueDate = new Date(Date.UTC(dueYear, dueMonth, selectedCard.dueDay));
                 setFirstDueDate(finalDueDate.toISOString().split('T')[0]);
             }
         }
-    }, [loanDate, selectedCard, cards]);
+    }, [purchaseDate, selectedCardId, allCards]);
 
     useEffect(() => {
         if (purchaseType === 'shared') {
-            const totalVal = parseCurrencyInput(totalValueInput);
-            const person1Val = parseCurrencyInput(person1ShareInput);
-            if (totalVal > 0 && person1Val >= 0 && person1Val <= totalVal) {
-                setPerson2ShareDisplay(formatCurrencyDisplay(totalVal - person1Val));
-            } else if (totalVal > 0 && person1Val > totalVal) {
-                setPerson1ShareInput(formatCurrencyForInput(totalVal));
+            const totalValue = parseCurrencyInput(totalValueInput);
+            const person1Value = parseCurrencyInput(person1ShareInput);
+            if (totalValue > 0 && person1Value >= 0 && person1Value <= totalValue) {
+                setPerson2ShareDisplay(formatCurrencyDisplay(totalValue - person1Value));
+            } else if (totalValue > 0 && person1Value > totalValue) {
+                setPerson1ShareInput(formatCurrencyForInput(totalValue));
                 setPerson2ShareDisplay(formatCurrencyDisplay(0));
             } else {
                 setPerson2ShareDisplay('R$ 0,00');
@@ -116,18 +119,18 @@ function LoanManagement() {
         }
         return false;
     };
-    
-    const resetForm = () => {
+
+    const resetFormFields = () => {
         setPurchaseType('normal');
         setDescription('');
         setTotalValueInput('');
         setInstallmentsCount('1');
-        setLoanDate(new Date().toISOString().split('T')[0]);
+        setPurchaseDate(new Date().toISOString().split('T')[0]);
         setFirstDueDate('');
-        setSelectedCard('');
-        setSelectedClient('');
-        setSelectedClient1('');
-        setSelectedClient2('');
+        setSelectedCardId('');
+        setSelectedClientId('');
+        setSelectedClient1Id('');
+        setSelectedClient2Id('');
         setPerson1ShareInput('');
         setPerson2ShareDisplay('R$ 0,00');
     };
@@ -138,19 +141,19 @@ function LoanManagement() {
             setDescription(loan.description);
             setTotalValueInput(formatCurrencyForInput(loan.totalValue));
             setInstallmentsCount(loan.installmentsCount.toString());
-            setLoanDate(loan.purchaseDate);
-            setSelectedCard(loan.cardId);
+            setPurchaseDate(loan.purchaseDate);
+            setSelectedCardId(loan.cardId);
             if (loan.isShared) {
                 setPurchaseType('shared');
-                setSelectedClient1(loan.sharedDetails.person1.clientId);
+                setSelectedClient1Id(loan.sharedDetails.person1.clientId);
                 setPerson1ShareInput(formatCurrencyForInput(loan.sharedDetails.person1.shareAmount));
-                setSelectedClient2(loan.sharedDetails.person2.clientId);
+                setSelectedClient2Id(loan.sharedDetails.person2.clientId);
             } else {
                 setPurchaseType('normal');
-                setSelectedClient(loan.clientId);
+                setSelectedClientId(loan.clientId);
             }
         } else {
-            resetForm();
+            resetFormFields();
         }
         setIsModalOpen(true);
     };
@@ -158,15 +161,15 @@ function LoanManagement() {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingLoan(null);
-        resetForm();
+        resetFormFields();
     };
 
     const handleSaveLoan = async () => {
         setIsLoading(true);
         const totalValue = parseCurrencyInput(totalValueInput);
-        const installmentsNum = parseInt(installmentsCount, 10);
+        const installmentsNumber = parseInt(installmentsCount, 10);
 
-        if (!description.trim() || !totalValue || installmentsNum < 1 || !loanDate || !selectedCard || !firstDueDate) {
+        if (!description.trim() || !totalValue || installmentsNumber < 1 || !purchaseDate || !selectedCardId || !firstDueDate) {
             showToast('Preencha todos os campos obrigatórios da compra.', 'warning');
             setIsLoading(false);
             return;
@@ -177,70 +180,83 @@ function LoanManagement() {
             if (numericValue <= 0 || count < 1) return [];
 
             const installmentValue = parseFloat((numericValue / count).toFixed(2));
-            const firstInstallmentDate = new Date(startDate + "T12:00:00Z");
+            let totalCalculated = 0;
             const installments = [];
-            for (let i = 0; i < count; i++) {
-                const dueDate = new Date(firstInstallmentDate);
-                dueDate.setUTCMonth(dueDate.getUTCMonth() + i);
+            
+            for (let index = 0; index < count; index++) {
+                const dueDate = new Date(startDate + "T12:00:00Z");
+                dueDate.setUTCMonth(dueDate.getUTCMonth() + index);
+                
+                let currentInstallmentValue = installmentValue;
+                if (index === count - 1) {
+                    currentInstallmentValue = parseFloat((numericValue - totalCalculated).toFixed(2));
+                }
+
                 installments.push({
-                    number: i + 1,
-                    value: installmentValue,
+                    number: index + 1,
+                    value: currentInstallmentValue,
                     dueDate: dueDate.toISOString().split('T')[0],
                     status: 'Pendente',
                     paidDate: null
                 });
-            }
-            const totalCalculated = installments.reduce((acc, inst) => acc + inst.value, 0);
-            const remaining = numericValue - totalCalculated;
-            if (Math.abs(remaining) > 0.001) {
-                installments[count - 1].value = parseFloat((installments[count - 1].value + remaining).toFixed(2));
+                totalCalculated += installmentValue;
             }
             return installments;
         };
 
-        let loanData = { description, totalValue, installmentsCount: installmentsNum, purchaseDate: loanDate, cardId: selectedCard, userId, valuePaidClient: 0, balanceDueClient: totalValue, statusPaymentClient: 'Pendente' };
+        const loanData = { 
+            description, 
+            totalValue, 
+            installmentsCount: installmentsNumber, 
+            purchaseDate, 
+            cardId: selectedCardId, 
+            userId, 
+            valuePaidClient: 0, 
+            balanceDueClient: totalValue, 
+            statusPaymentClient: 'Pendente' 
+        };
 
         if (purchaseType === 'normal') {
-            if (!selectedClient) {
+            if (!selectedClientId) {
                 showToast('Selecione uma pessoa para a compra.', 'warning');
                 setIsLoading(false);
                 return;
             }
-            loanData.clientId = selectedClient;
+            loanData.clientId = selectedClientId;
             loanData.isShared = false;
-            loanData.installments = calculateInstallments(totalValue, installmentsNum, firstDueDate);
-        } else { // Shared
+            loanData.installments = calculateInstallments(totalValue, installmentsNumber, firstDueDate);
+        } else {
             const person1Share = parseCurrencyInput(person1ShareInput);
             const person2Share = totalValue - person1Share;
 
-            if (!selectedClient1 || !selectedClient2 || person1Share <= 0 || person2Share < 0) {
+            if (!selectedClient1Id || !selectedClient2Id || person1Share <= 0 || person2Share < 0) {
                 showToast('Preencha todos os campos da compra compartilhada.', 'warning');
                 setIsLoading(false);
                 return;
             }
-            if (selectedClient1 === selectedClient2) {
+            if (selectedClient1Id === selectedClient2Id) {
                 showToast('As pessoas 1 e 2 devem ser diferentes.', 'warning');
                 setIsLoading(false);
                 return;
             }
             
             loanData.isShared = true;
-            loanData.installments = calculateInstallments(totalValue, installmentsNum, firstDueDate);
+            loanData.installments = calculateInstallments(totalValue, installmentsNumber, firstDueDate);
             loanData.sharedDetails = {
-                person1: { clientId: selectedClient1, shareAmount: person1Share, installments: calculateInstallments(person1Share, installmentsNum, firstDueDate), valuePaid: 0, balanceDue: person1Share, statusPayment: 'Pendente' },
-                person2: { clientId: selectedClient2, shareAmount: person2Share, installments: person2Share > 0 ? calculateInstallments(person2Share, installmentsNum, firstDueDate) : [], valuePaid: 0, balanceDue: person2Share, statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' }
+                person1: { clientId: selectedClient1Id, shareAmount: person1Share, installments: calculateInstallments(person1Share, installmentsNumber, firstDueDate), valuePaid: 0, balanceDue: person1Share, statusPayment: 'Pendente' },
+                person2: { clientId: selectedClient2Id, shareAmount: person2Share, installments: person2Share > 0 ? calculateInstallments(person2Share, installmentsNumber, firstDueDate) : [], valuePaid: 0, balanceDue: person2Share, statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' }
             };
         }
 
         try {
             const userCollectionPath = getUserCollectionPathSegments();
             if (editingLoan) {
-                const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', editingLoan.id);
-                await updateDoc(loanDocRef, { ...loanData, updatedAt: serverTimestamp() });
+                const loanDocumentReference = doc(database, ...userCollectionPath, userId, 'loans', editingLoan.id);
+                await updateDoc(loanDocumentReference, { ...loanData, updatedAt: serverTimestamp() });
                 showToast('Compra atualizada com sucesso!', 'success');
             } else {
-                const loansRef = collection(db, ...userCollectionPath, userId, 'loans');
-                await addDoc(loansRef, { ...loanData, createdAt: serverTimestamp() });
+                const loansReference = collection(database, ...userCollectionPath, userId, 'loans');
+                await addDoc(loansReference, { ...loanData, createdAt: serverTimestamp() });
                 showToast('Compra adicionada com sucesso!', 'success');
             }
             handleCloseModal();
@@ -252,84 +268,108 @@ function LoanManagement() {
     };
     
     const confirmDeleteLoan = (loanId) => {
-        setLoanToDelete(loanId);
+        setLoanIdToDelete(loanId);
         setIsConfirmationModalOpen(true);
     };
 
     const handleDeleteLoanConfirmed = async () => {
-        if (!loanToDelete) return;
+        if (!loanIdToDelete) return;
         try {
             const userCollectionPath = getUserCollectionPathSegments();
-            await deleteDoc(doc(db, ...userCollectionPath, userId, 'loans', loanToDelete));
+            await deleteDoc(doc(database, ...userCollectionPath, userId, 'loans', loanIdToDelete));
             showToast("Compra deletada com sucesso!", "success");
         } catch (error) {
             showToast(`Erro ao deletar: ${error.message}`, "error");
         } finally {
             setIsConfirmationModalOpen(false);
-            setLoanToDelete(null);
+            setLoanIdToDelete(null);
         }
     };
 
-    const handleMarkInstallmentAsPaid = async (loanId, personKey, instNum) => {
-        const loanToUpdate = loans.find(l => l.id === loanId);
-        if (!loanToUpdate) return;
+    const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
+        const loanToUpdate = allLoans.find(loan => loan.id === loanId);
+        if (!loanToUpdate) {
+            showToast('Erro: Compra não encontrada.', 'error');
+            return;
+        }
 
-        const updatedLoan = JSON.parse(JSON.stringify(loanToUpdate));
-        let installmentsList, shareAmount, detailsToUpdate;
+        const updatedLoanData = JSON.parse(JSON.stringify(loanToUpdate));
+        
+        let installmentsList;
+        let originalAmount;
 
         if (personKey) {
-            detailsToUpdate = updatedLoan.sharedDetails[personKey];
-            installmentsList = detailsToUpdate.installments;
-            shareAmount = detailsToUpdate.shareAmount;
+            installmentsList = updatedLoanData.sharedDetails[personKey].installments;
+            originalAmount = updatedLoanData.sharedDetails[personKey].shareAmount;
         } else {
-            installmentsList = updatedLoan.installments;
+            installmentsList = updatedLoanData.installments;
+            originalAmount = updatedLoanData.totalValue;
         }
         
-        const instIndex = Array.isArray(installmentsList) ? installmentsList.findIndex(i => i.number === instNum) : -1;
-        if (instIndex === -1) {
-            showToast('Erro: Parcela não encontrada para atualização.', 'error');
+        const installmentIndex = Array.isArray(installmentsList) 
+            ? installmentsList.findIndex(installment => installment.number === installmentNumber) 
+            : -1;
+
+        if (installmentIndex === -1) {
+            showToast('Erro: Parcela não encontrada.', 'error');
             return;
         };
 
-        installmentsList[instIndex].status = 'Paga';
-        installmentsList[instIndex].paidDate = new Date().toISOString().split('T')[0];
+        installmentsList[installmentIndex].status = newStatus;
+        installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
         
-        const newValuePaid = installmentsList.filter(i => i.status === 'Paga').reduce((sum, i) => sum + i.value, 0);
-        const newBalanceDue = parseFloat(((personKey ? shareAmount : updatedLoan.totalValue) - newValuePaid).toFixed(2));
-        const newStatus = newBalanceDue <= 0.005 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+        const newValuePaid = installmentsList
+            .filter(installment => installment.status === 'Paga')
+            .reduce((sum, installment) => sum + installment.value, 0);
 
+        const newBalanceDue = parseFloat((originalAmount - newValuePaid).toFixed(2));
+        
+        const finalStatus = newBalanceDue <= 0.01 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+
+        const fieldsToUpdate = {};
         if (personKey) {
-            detailsToUpdate.valuePaid = newValuePaid;
-            detailsToUpdate.balanceDue = newBalanceDue;
-            detailsToUpdate.statusPayment = newStatus;
+            fieldsToUpdate[`sharedDetails.${personKey}.installments`] = installmentsList;
+            fieldsToUpdate[`sharedDetails.${personKey}.valuePaid`] = newValuePaid;
+            fieldsToUpdate[`sharedDetails.${personKey}.balanceDue`] = newBalanceDue;
+            fieldsToUpdate[`sharedDetails.${personKey}.statusPayment`] = finalStatus;
         } else {
-            updatedLoan.valuePaidClient = newValuePaid;
-            updatedLoan.balanceDueClient = newBalanceDue;
-            updatedLoan.statusPaymentClient = newStatus;
+            fieldsToUpdate.installments = installmentsList;
+            fieldsToUpdate.valuePaidClient = newValuePaid;
+            fieldsToUpdate.balanceDueClient = newBalanceDue;
+            fieldsToUpdate.statusPaymentClient = finalStatus;
         }
-
+        
         try {
             const userCollectionPath = getUserCollectionPathSegments();
-            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
-            await updateDoc(loanDocRef, updatedLoan);
-            showToast('Parcela marcada como paga!', 'success');
+            const loanDocumentReference = doc(database, ...userCollectionPath, userId, 'loans', loanId);
+            await updateDoc(loanDocumentReference, fieldsToUpdate);
+            showToast(`Parcela marcada como ${newStatus}!`, 'success');
         } catch (error) {
             showToast(`Erro ao atualizar parcela: ${error.message}`, 'error');
+            console.error("Erro detalhado:", error);
         }
     };
 
-    const toggleInstallments = (loanId) => setShowInstallments(prev => ({ ...prev, [loanId]: !prev[loanId] }));
-    const getClientName = (clientId) => clients.find(c => c.id === clientId)?.name || 'N/A';
+    const toggleInstallmentsVisibility = (loanId) => setVisibleInstallments(previousState => ({ ...previousState, [loanId]: !previousState[loanId] }));
+    const getClientNameById = (clientId) => allClients.find(client => client.id === clientId)?.name || 'N/A';
     
     const filteredLoans = useMemo(() => 
-        loans.filter(loan => showPaidLoans || (loan.isShared ? (loan.sharedDetails?.person1?.statusPayment !== 'Pago Total' || loan.sharedDetails?.person2?.statusPayment !== 'Pago Total') : loan.statusPaymentClient !== 'Pago Total')),
-    [loans, showPaidLoans]);
+        allLoans.filter(loan => {
+            if (shouldShowPaidLoans) return true;
+            if (loan.isShared) {
+                const isPerson1Paid = loan.sharedDetails?.person1?.statusPayment === 'Pago Total';
+                const isPerson2Paid = loan.sharedDetails?.person2?.statusPayment === 'Pago Total';
+                return !isPerson1Paid || !isPerson2Paid;
+            }
+            return loan.statusPaymentClient !== 'Pago Total';
+        }),
+    [allLoans, shouldShowPaidLoans]);
 
-    const renderInstallments = (installments, loanId, personKey = null) => {
-        if (!Array.isArray(installments)) {
+    const renderInstallmentsList = (installments, loanId, personKey = null) => {
+        if (!Array.isArray(installments) || installments.length === 0) {
              return (
-                <div className="p-4 bg-gray-900/50 text-center text-sm text-yellow-400">
-                    Não foi possível carregar as parcelas. Recadastre esta compra.
+                <div className="p-4 bg-gray-900/50 text-center text-sm text-gray-500">
+                    Nenhuma parcela para exibir.
                 </div>
             );
         }
@@ -337,19 +377,30 @@ function LoanManagement() {
             <div className="p-4 bg-gray-900/50">
                 <h4 className="font-bold text-sm mb-2 text-gray-300">Parcelas:</h4>
                 <ul className="space-y-2">
-                    {installments.map(inst => (
-                        <li key={inst.number} className="flex justify-between items-center text-sm">
+                    {installments.map(installment => (
+                        <li key={installment.number} className="flex justify-between items-center text-sm">
                             <div>
-                                <span>{inst.number}ª - {new Date(inst.dueDate + "T00:00:00").toLocaleDateString('pt-BR')} - </span>
-                                <span className="font-semibold">{formatCurrencyDisplay(inst.value)} - </span>
-                                <span className={inst.status === 'Paga' ? 'text-green-400' : inst.status === 'Atrasado' ? 'text-red-400' : 'text-yellow-400'}>{inst.status}</span>
-                                {inst.status === 'Paga' && inst.paidDate && <span className="text-xs text-gray-500"> (pago em {new Date(inst.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
+                                <span>{installment.number}ª - {new Date(installment.dueDate + "T00:00:00").toLocaleDateString('pt-BR')} - </span>
+                                <span className="font-semibold">{formatCurrencyDisplay(installment.value)} - </span>
+                                <span className={installment.status === 'Paga' ? 'text-green-400' : 'text-yellow-400'}>{installment.status}</span>
+                                {installment.status === 'Paga' && installment.paidDate && <span className="text-xs text-gray-500"> (pago em {new Date(installment.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
                             </div>
-                            {inst.status === 'Pendente' && (
-                                <button onClick={() => handleMarkInstallmentAsPaid(loanId, personKey, inst.number)} className="bg-green-500/20 text-green-300 px-2 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
-                                    Marcar Paga
-                                </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {installment.status === 'Pendente' && (
+                                    <button 
+                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Paga')} 
+                                        className="bg-green-500/20 text-green-300 px-2 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
+                                        Marcar Paga
+                                    </button>
+                                )}
+                                {installment.status === 'Paga' && (
+                                    <button 
+                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Pendente')} 
+                                        className="bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-md hover:bg-yellow-500/30 text-xs font-semibold">
+                                        Desmarcar
+                                    </button>
+                                )}
+                            </div>
                         </li>
                     ))}
                 </ul>
@@ -372,7 +423,7 @@ function LoanManagement() {
             
             <div className="flex justify-end items-center">
                 <label className="flex items-center text-sm text-gray-400 cursor-pointer">
-                    <input type="checkbox" checked={showPaidLoans} onChange={() => setShowPaidLoans(!showPaidLoans)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded mr-2" />
+                    <input type="checkbox" checked={shouldShowPaidLoans} onChange={() => setShouldShowPaidLoans(!shouldShowPaidLoans)} className="h-4 w-4 bg-gray-700 border-gray-600 text-purple-600 focus:ring-purple-500 rounded mr-2" />
                     Mostrar compras pagas
                 </label>
             </div>
@@ -381,7 +432,7 @@ function LoanManagement() {
                 <span>Descrição</span>
                 <span>Cartão</span>
                 <span>Valor da Parcela</span>
-                <span>Nº de Parcelas</span>
+                <span>Número de Parcelas</span>
                 <span>Valor Total</span>
                 <span>Status</span>
                 <span className="text-right">Ações</span>
@@ -416,13 +467,13 @@ function LoanManagement() {
                         );
                     }
 
-                    const card = cards.find(c => c.id === loan.cardId);
+                    const card = allCards.find(card => card.id === loan.cardId);
                     return (
                         <div key={loan.id} className="bg-gray-800/50 rounded-lg border border-gray-700">
                              <div className="grid grid-cols-3 md:grid-cols-7 gap-4 p-4 items-center">
                                   <div className="col-span-2 md:col-span-1">
                                       <div className="text-sm font-semibold text-white">{loan.description}</div>
-                                      <div className="text-xs text-gray-400">{loan.isShared ? `${getClientName(loan.sharedDetails.person1.clientId)} / ${getClientName(loan.sharedDetails.person2.clientId)}` : getClientName(loan.clientId)}</div>
+                                      <div className="text-xs text-gray-400">{loan.isShared ? `${getClientNameById(loan.sharedDetails.person1.clientId)} / ${getClientNameById(loan.sharedDetails.person2.clientId)}` : getClientNameById(loan.clientId)}</div>
                                   </div>
                                   <div className="hidden md:flex items-center text-sm text-gray-400">
                                       <span className="w-4 h-4 rounded-sm mr-3 border border-white/20" style={{ backgroundColor: card ? card.color : '#5E60CE' }}></span>
@@ -444,26 +495,26 @@ function LoanManagement() {
                                   <div className="flex items-center justify-end gap-4">
                                       <button onClick={() => handleOpenModal(loan)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
                                       <button onClick={() => confirmDeleteLoan(loan.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
-                                      <button onClick={() => toggleInstallments(loan.id)} className="text-gray-400 hover:text-white transition">
-                                          {showInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
+                                      <button onClick={() => toggleInstallmentsVisibility(loan.id)} className="text-gray-400 hover:text-white transition">
+                                          {visibleInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
                                       </button>
                                   </div>
                              </div>
-                             {showInstallments[loan.id] && (
+                             {visibleInstallments[loan.id] && (
                                  <div className="border-t border-gray-700">
                                      {loan.isShared ? (
                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-700">
                                              <div className="bg-gray-800 p-2">
-                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person1.clientId)}</h5>
-                                                 {renderInstallments(loan.sharedDetails.person1.installments, loan.id, 'person1')}
+                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientNameById(loan.sharedDetails.person1.clientId)}</h5>
+                                                 {renderInstallmentsList(loan.sharedDetails.person1.installments, loan.id, 'person1')}
                                              </div>
                                              <div className="bg-gray-800 p-2">
-                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientName(loan.sharedDetails.person2.clientId)}</h5>
-                                                 {renderInstallments(loan.sharedDetails.person2.installments, loan.id, 'person2')}
+                                                 <h5 className="font-semibold text-center text-sm mb-2">{getClientNameById(loan.sharedDetails.person2.clientId)}</h5>
+                                                 {renderInstallmentsList(loan.sharedDetails.person2.installments, loan.id, 'person2')}
                                              </div>
                                          </div>
                                      ) : (
-                                         renderInstallments(loan.installments, loan.id)
+                                         renderInstallmentsList(loan.installments, loan.id)
                                      )}
                                  </div>
                              )}
@@ -481,19 +532,19 @@ function LoanManagement() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label htmlFor="loanDate" className="block text-sm font-medium text-gray-300 mb-1">Data da Compra</label>
-                            <input id="loanDate" type="date" value={loanDate} onChange={(e) => setLoanDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                            <label htmlFor="purchaseDate" className="block text-sm font-medium text-gray-300 mb-1">Data da Compra</label>
+                            <input id="purchaseDate" type="date" value={purchaseDate} onChange={(evento) => setPurchaseDate(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
                         </div>
                         <div>
-                            <label htmlFor="selectedCard" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
-                            <select id="selectedCard" value={selectedCard} onChange={(e) => setSelectedCard(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                            <label htmlFor="selectedCardId" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
+                            <select id="selectedCardId" value={selectedCardId} onChange={(evento) => setSelectedCardId(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                                 <option value="">Selecione o Cartão</option>
-                                {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                                {allCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
-                            <input id="description" type="text" placeholder="Descrição da Compra" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                            <input id="description" type="text" placeholder="Descrição da Compra" value={description} onChange={(evento) => setDescription(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
                         </div>
                     </div>
                     
@@ -502,10 +553,10 @@ function LoanManagement() {
                     {purchaseType === 'normal' ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-700">
                            <div>
-                                <label htmlFor="selectedClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
-                                <select id="selectedClient" value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                <label htmlFor="selectedClientId" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
+                                <select id="selectedClientId" value={selectedClientId} onChange={(evento) => setSelectedClientId(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                                     <option value="">Selecione a Pessoa</option>
-                                    {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                    {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                 </select>
                            </div>
                             <div>
@@ -513,8 +564,8 @@ function LoanManagement() {
                                 <input id="totalValueInput" type="text" placeholder="R$ 0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
                             </div>
                             <div>
-                                <label htmlFor="installmentsCount" className="block text-sm font-medium text-gray-300 mb-1">Nº de Parcelas</label>
-                                <input id="installmentsCount" type="number" placeholder="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                                <label htmlFor="installmentsCount" className="block text-sm font-medium text-gray-300 mb-1">Número de Parcelas</label>
+                                <input id="installmentsCount" type="number" placeholder="1" value={installmentsCount} onChange={(evento) => setInstallmentsCount(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
                             </div>
                         </div>
                     ) : (
@@ -525,31 +576,31 @@ function LoanManagement() {
                                     <input id="totalValueShared" type="text" placeholder="R$ 0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
                                 </div>
                                 <div>
-                                    <label htmlFor="installmentsCountShared" className="block text-sm font-medium text-gray-300 mb-1">Nº de Parcelas</label>
-                                    <input id="installmentsCountShared" type="number" placeholder="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
+                                    <label htmlFor="installmentsCountShared" className="block text-sm font-medium text-gray-300 mb-1">Número de Parcelas</label>
+                                    <input id="installmentsCountShared" type="number" placeholder="1" value={installmentsCount} onChange={(evento) => setInstallmentsCount(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" required />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                                 <div>
-                                    <label htmlFor="selectedClient1" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 1</label>
-                                    <select id="selectedClient1" value={selectedClient1} onChange={(e) => setSelectedClient1(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                    <label htmlFor="selectedClient1Id" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 1</label>
+                                    <select id="selectedClient1Id" value={selectedClient1Id} onChange={(evento) => setSelectedClient1Id(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                                         <option value="">Selecione a Pessoa 1</option>
-                                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                        {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label htmlFor="person1Share" className="block text-sm font-medium text-gray-300 mb-1">Valor da Pessoa 1</label>
-                                    <input id="person1Share" type="text" placeholder="R$ 0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                                    <label htmlFor="person1ShareInput" className="block text-sm font-medium text-gray-300 mb-1">Valor da Pessoa 1</label>
+                                    <input id="person1ShareInput" type="text" placeholder="R$ 0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
                                 </div>
                                 <div className="p-2 bg-gray-800 rounded-md text-center text-gray-300 h-10 flex items-center justify-center">
                                     <span className="text-sm font-medium text-gray-300 mr-2">Valor Pessoa 2:</span>
                                     <span className="font-bold">{person2ShareDisplay}</span>
                                 </div>
                                 <div>
-                                     <label htmlFor="selectedClient2" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 2</label>
-                                    <select id="selectedClient2" value={selectedClient2} onChange={(e) => setSelectedClient2(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                                     <label htmlFor="selectedClient2Id" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 2</label>
+                                    <select id="selectedClient2Id" value={selectedClient2Id} onChange={(evento) => setSelectedClient2Id(evento.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                                         <option value="">Selecione a Pessoa 2</option>
-                                        {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+                                        {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                     </select>
                                 </div>
                             </div>
@@ -559,7 +610,7 @@ function LoanManagement() {
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
                     <button onClick={handleSaveLoan} disabled={isLoading} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition disabled:opacity-50">
-                        {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar' : 'Salvar'}
+                        {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar Compra' : 'Salvar Compra'}
                     </button>
                 </div>
             </GenericModal>
