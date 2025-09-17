@@ -6,16 +6,22 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 
-// --- Ícones ---
+// --- Ícones (sem alterações) ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+// NOVO: Ícone de pessoa
+const UserIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
+const CardIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
+
 
 export default function SubscriptionManagement() {
     const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
 
     const [subscriptions, setSubscriptions] = useState([]);
     const [cards, setCards] = useState([]);
+    const [clients, setClients] = useState([]);
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -26,7 +32,8 @@ export default function SubscriptionManagement() {
     const [valueInput, setValueInput] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [cardId, setCardId] = useState('');
-    const [status, setStatus] = useState('Ativa'); // Agora o status é 'Ativa' ou 'Inativa'
+    const [clientId, setClientId] = useState('');
+    const [status, setStatus] = useState('Ativa');
 
     useEffect(() => {
         if (!isAuthReady || !userId) return;
@@ -34,22 +41,27 @@ export default function SubscriptionManagement() {
         const basePath = [...userCollectionPath, userId];
         
         const cardsRef = collection(db, ...basePath, 'cards');
-        const unsubCards = onSnapshot(cardsRef, (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        
+        const clientsRef = collection(db, ...basePath, 'clients');
         const subscriptionsRef = collection(db, ...basePath, 'subscriptions');
+
+        const unsubCards = onSnapshot(cardsRef, (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubClients = onSnapshot(clientsRef, (snapshot) => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        
         const q = query(subscriptionsRef, orderBy("createdAt", "desc"));
         const unsubSubscriptions = onSnapshot(q, (snapshot) => setSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
-        return () => { unsubCards(); unsubSubscriptions(); };
+        return () => { unsubCards(); unsubSubscriptions(); unsubClients(); };
     }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
 
     const getCardName = (cId) => cards.find(card => card.id === cId)?.name || 'N/A';
+    const getClientName = (cId) => clients.find(client => client.id === cId)?.name || 'Não atribuído';
 
     const resetForm = () => {
         setName('');
         setValueInput('');
         setDueDate('');
         setCardId('');
+        setClientId('');
         setStatus('Ativa');
     };
     
@@ -57,12 +69,11 @@ export default function SubscriptionManagement() {
         setEditingSubscription(sub);
         if (sub) {
             setName(sub.name || '');
-            // ✅ CORREÇÃO: Usando 'amount' ou 'value' para compatibilidade com dados antigos
             const amount = sub.amount !== undefined ? sub.amount : sub.value;
             setValueInput(formatCurrencyForInput(amount));
             setDueDate(sub.dueDate ? sub.dueDate.toString() : '');
             setCardId(sub.cardId || '');
-            // ✅ CORREÇÃO: Garante que o status seja sempre um valor válido
+            setClientId(sub.clientId || '');
             setStatus(sub.status || (sub.isActive ? 'Ativa' : 'Inativa'));
         } else {
             resetForm();
@@ -80,8 +91,8 @@ export default function SubscriptionManagement() {
         const value = parseCurrencyInput(valueInput);
         const day = parseInt(dueDate, 10);
 
-        if (!name.trim() || !value || !cardId) {
-            showToast('Por favor, preencha nome, valor e cartão.', 'warning');
+        if (!name.trim() || !value || !cardId || !clientId) {
+            showToast('Por favor, preencha nome, valor, cartão e pessoa.', 'warning');
             return;
         }
 
@@ -93,12 +104,13 @@ export default function SubscriptionManagement() {
         const userCollectionPath = getUserCollectionPathSegments();
         const subscriptionData = {
             name,
-            amount: value, // Padronizando para 'amount'
-            value: value, // Mantendo 'value' por compatibilidade, se necessário
+            amount: value,
+            value: value,
             dueDate: day,
             cardId: cardId,
-            status: status, // 'Ativa' ou 'Inativa'
-            isActive: status === 'Ativa', // Campo booleano para facilitar filtros
+            clientId: clientId,
+            status: status,
+            isActive: status === 'Ativa',
         };
 
         try {
@@ -171,9 +183,17 @@ export default function SubscriptionManagement() {
                                 <p className={`text-sm mb-4 ${currentStatus === 'Ativa' ? 'text-gray-400' : 'text-gray-600'}`}>
                                     Vence dia: <span className="font-semibold">{sub.dueDate}</span>
                                 </p>
-                                <div className={`flex items-center text-sm pt-4 border-t ${currentStatus === 'Ativa' ? 'text-gray-300 border-gray-700' : 'text-gray-600 border-gray-700/50'}`}>
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                                    {getCardName(sub.cardId)}
+                                {/* ALTERADO: Div para agrupar informações de pessoa e cartão */}
+                                <div className={`pt-4 border-t space-y-2 ${currentStatus === 'Ativa' ? 'text-gray-300 border-gray-700' : 'text-gray-600 border-gray-700/50'}`}>
+                                    {/* NOVO: Exibição do nome da pessoa */}
+                                    <div className="flex items-center text-sm">
+                                        <UserIcon />
+                                        {getClientName(sub.clientId)}
+                                    </div>
+                                    <div className="flex items-center text-sm">
+                                        <CardIcon />
+                                        {getCardName(sub.cardId)}
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex items-center justify-end gap-3 mt-5">
@@ -208,6 +228,13 @@ export default function SubscriptionManagement() {
                         <select id="subscriptionCard" value={cardId} onChange={(e) => setCardId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
                             <option value="">Selecione o Cartão</option>
                             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="subscriptionClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
+                        <select id="subscriptionClient" value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                            <option value="">Selecione a Pessoa</option>
+                            {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                         </select>
                     </div>
                     <div>
