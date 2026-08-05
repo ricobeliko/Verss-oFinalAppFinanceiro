@@ -285,6 +285,9 @@ function LoanManagement({ onOpenPdfModal }) {
     };
 
     const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
+        console.log("Debug - userId atual:", userId);
+        console.log("Debug - loanId:", loanId);
+
         const loanToUpdate = allLoans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
             showToast('Erro: Compra não encontrada.', 'error');
@@ -324,7 +327,11 @@ function LoanManagement({ onOpenPdfModal }) {
         
         const finalStatus = newBalanceDue <= 0.01 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
 
-        const fieldsToUpdate = {};
+        const fieldsToUpdate = {
+            userId: userId,
+            updatedAt: serverTimestamp()
+        };
+
         if (personKey) {
             fieldsToUpdate[`sharedDetails.${personKey}.installments`] = installmentsList;
             fieldsToUpdate[`sharedDetails.${personKey}.valuePaid`] = newValuePaid;
@@ -337,6 +344,8 @@ function LoanManagement({ onOpenPdfModal }) {
             fieldsToUpdate.statusPaymentClient = finalStatus;
         }
         
+        console.log("Debug - Payload fieldsToUpdate:", fieldsToUpdate);
+
         try {
             const userCollectionPath = getUserCollectionPathSegments();
             const loanDocumentReference = doc(database, ...userCollectionPath, userId, 'loans', loanId);
@@ -344,7 +353,7 @@ function LoanManagement({ onOpenPdfModal }) {
             showToast(`Parcela marcada como ${newStatus}!`, 'success');
         } catch (error) {
             showToast(`Erro ao atualizar parcela: ${error.message}`, 'error');
-            console.error("Erro detalhado:", error);
+            console.error("Erro detalhado do Firestore:", error);
         }
     };
 

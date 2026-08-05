@@ -1,7 +1,7 @@
 // src/features/dashboard/Dashboard.jsx
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
@@ -96,7 +96,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     break;
                 case 'Despesa':
                     const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
-                    await updateDoc(expenseDocRef, { status: newStatus });
+                    await updateDoc(expenseDocRef, { status: newStatus, userId: userId, updatedAt: serverTimestamp() });
                     break;
                 case 'Assinatura':
                     const paidSubscriptionsRef = collection(db, ...userCollectionPath, userId, 'paidSubscriptions');
@@ -105,6 +105,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             subscriptionId: item.originalId,
                             month: selectedMonth,
                             paidDate: new Date().toISOString().split('T')[0],
+                            userId: userId,
+                            createdAt: serverTimestamp()
                         });
                     } else {
                         const q = query(paidSubscriptionsRef, where("subscriptionId", "==", item.originalId), where("month", "==", selectedMonth));
@@ -130,36 +132,63 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast("Erro: Compra não encontrada.", "error");
             return;
         }
-        const userCollectionPath = getUserCollectionPathSegments();
-        const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
-        let updatedFields = {};
+
+        const updatedLoanData = JSON.parse(JSON.stringify(loanToUpdate));
+        let installmentsList;
+        let originalAmount;
+
+        if (personKey) {
+            installmentsList = updatedLoanData.sharedDetails[personKey].installments;
+            originalAmount = updatedLoanData.sharedDetails[personKey].shareAmount;
+        } else {
+            installmentsList = updatedLoanData.installments;
+            originalAmount = updatedLoanData.totalValue;
+        }
+        
+        const installmentIndex = Array.isArray(installmentsList) 
+            ? installmentsList.findIndex(installment => installment.number === installmentNumber) 
+            : -1;
+
+        if (installmentIndex === -1) {
+            showToast('Erro: Parcela não encontrada.', 'error');
+            return;
+        }
+
+        installmentsList[installmentIndex].status = newStatus;
+        installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
+        
+        const newValuePaid = installmentsList
+            .filter(installment => installment.status === 'Paga')
+            .reduce((sum, installment) => sum + installment.value, 0);
+
+        const newBalanceDue = parseFloat((originalAmount - newValuePaid).toFixed(2));
+        const finalStatus = newBalanceDue <= 0.01 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+
+        const fieldsToUpdate = {
+            userId: userId,
+            updatedAt: serverTimestamp()
+        };
+
+        if (personKey) {
+            fieldsToUpdate[`sharedDetails.${personKey}.installments`] = installmentsList;
+            fieldsToUpdate[`sharedDetails.${personKey}.valuePaid`] = newValuePaid;
+            fieldsToUpdate[`sharedDetails.${personKey}.balanceDue`] = newBalanceDue;
+            fieldsToUpdate[`sharedDetails.${personKey}.statusPayment`] = finalStatus;
+        } else {
+            fieldsToUpdate.installments = installmentsList;
+            fieldsToUpdate.valuePaidClient = newValuePaid;
+            fieldsToUpdate.balanceDueClient = newBalanceDue;
+            fieldsToUpdate.statusPaymentClient = finalStatus;
+        }
 
         try {
-            if (loanToUpdate.isShared && personKey) {
-                const installments = [...loanToUpdate.sharedDetails[personKey].installments];
-                const installmentIndex = installments.findIndex(inst => inst.number === installmentNumber);
-                if (installmentIndex === -1) throw new Error("Parcela compartilhada não encontrada.");
-                
-                installments[installmentIndex].status = newStatus;
-                installments[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
-                
-                updatedFields[`sharedDetails.${personKey}.installments`] = installments;
-
-            } else if (!loanToUpdate.isShared) {
-                const installments = [...loanToUpdate.installments];
-                const installmentIndex = installments.findIndex(inst => inst.number === installmentNumber);
-                if (installmentIndex === -1) throw new Error("Parcela não encontrada.");
-
-                installments[installmentIndex].status = newStatus;
-                installments[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
-
-                updatedFields.installments = installments;
-            }
-
-            await updateDoc(loanDocRef, updatedFields);
+            const userCollectionPath = getUserCollectionPathSegments();
+            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
+            await updateDoc(loanDocRef, fieldsToUpdate);
+            showToast(`Parcela marcada como ${newStatus}!`, "success");
         } catch (error) {
             console.error("Erro ao atualizar parcela:", error);
-            showToast(`Erro: ${error.message}`, "error");
+            showToast(`Erro ao atualizar parcela: ${error.message}`, "error");
         }
     };
 
@@ -403,7 +432,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     if (installmentIndex > -1) {
                         installments[installmentIndex].status = 'Paga';
                         installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                        batch.update(loanDocRef, { [`sharedDetails.${item.personKey}.installments`]: installments });
+                        batch.update(loanDocRef, { 
+                            [`sharedDetails.${item.personKey}.installments`]: installments,
+                            userId: userId,
+                            updatedAt: serverTimestamp()
+                        });
                         updatesMade++;
                     }
                 } else if (!loanToUpdate.isShared) {
@@ -412,13 +445,21 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     if (installmentIndex > -1) {
                         installments[installmentIndex].status = 'Paga';
                         installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                        batch.update(loanDocRef, { installments: installments });
+                        batch.update(loanDocRef, { 
+                            installments: installments,
+                            userId: userId,
+                            updatedAt: serverTimestamp()
+                        });
                         updatesMade++;
                     }
                 }
             } else if (item.type === 'Despesa') {
                 const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
-                batch.update(expenseDocRef, { status: 'Paga' });
+                batch.update(expenseDocRef, { 
+                    status: 'Paga',
+                    userId: userId,
+                    updatedAt: serverTimestamp()
+                });
                 updatesMade++;
             } else if (item.type === 'Assinatura') {
                 const isPaid = paidSubscriptions.some(ps => ps.subscriptionId === item.originalId && ps.month === selectedMonth);
@@ -428,6 +469,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         subscriptionId: item.originalId,
                         month: selectedMonth,
                         paidDate: new Date().toISOString().split('T')[0],
+                        userId: userId,
+                        createdAt: serverTimestamp()
                     };
                     batch.set(doc(paidSubscriptionsRef), newPaidSub);
                     updatesMade++;
