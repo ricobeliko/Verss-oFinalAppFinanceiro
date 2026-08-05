@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { useAppContext } from '../context/AppContext';
-import { functions } from '../utils/firebase'; // Importe a instância do Firebase
+// src/components/UpgradePrompt.jsx
 
-// ✅ CORREÇÃO: Remova a lógica de chamada daqui e receba a função via props
+import React from 'react';
+
 export default function UpgradePrompt({ onUpgradeClick, isLoading }) {
   return (
-    <div className="text-center p-6 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
-      <h3 className="text-2xl font-bold text-white mb-2">Acesso Vitalício ao FinControl Pro</h3>
-      <p className="text-gray-400 mb-4">
+    <div className="text-center p-8 bg-carbon-900 border border-gold/30 rounded-3xl shadow-2xl space-y-4">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gold/10 text-gold border border-gold/20 mb-1 shadow-inner">
+        👑
+      </div>
+      <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-gold-cream">Acesso Vitalício ao FinControl Pro</h3>
+      <p className="text-sm text-gray-400 max-w-sm mx-auto leading-relaxed">
         Libere relatórios avançados, gráficos detalhados e todas as funcionalidades Pro com um pagamento único.
       </p>
       <button
-        onClick={onUpgradeClick} // Usa a função recebida
+        onClick={onUpgradeClick}
         disabled={isLoading}
-        className="w-full bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-wait"
+        className="w-full bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-95 transition disabled:opacity-50 disabled:cursor-wait cursor-pointer tracking-wide"
       >
         {isLoading ? 'Redirecionando...' : 'Liberar Acesso Vitalício Agora'}
       </button>

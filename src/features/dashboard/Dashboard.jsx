@@ -11,10 +11,13 @@ import Spinner from '../../components/Spinner';
 
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
-    <svg className="w-4 h-4 inline-block ml-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-4 h-4 inline-block ml-1 text-gold transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         {direction === 'ascending' ? <path strokeLinecap="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
     </svg>
 );
+
+const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
+const TargetIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
     const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext();
@@ -72,7 +75,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         const paidSubscriptionsQuery = query(collection(db, ...userCollectionPath, userId, 'paidSubscriptions'), where("month", "==", selectedMonth));
         const unsubPaid = onSnapshot(paidSubscriptionsQuery, snapshot => {
             setDashboardData(prev => ({ ...prev, paidSubscriptions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
-            // CORREÇÃO: Removida a condição 'if (isLoading)' para garantir que o loading sempre termine.
             setIsLoading(false);
         }, error => {
             console.error("Erro ao buscar assinaturas pagas:", error);
@@ -264,24 +266,15 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             });
             
-            // ✅ INÍCIO DA CORREÇÃO
-            // A lógica para adicionar despesas avulsas à fatura foi ajustada.
             expenses.forEach(expense => {
-                // Garante que a data da despesa é um objeto Date válido.
                 const expenseDate = expense.date;
                 if (!(expenseDate instanceof Date) || isNaN(expenseDate)) return;
 
-                // Aplica os filtros de cartão e cliente.
-                // Uma despesa sem `clientId` é considerada para 'Todas as Pessoas'.
                 if (
                     (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
                     (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
                 ) {
                     const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
-                    
-                    // Se a despesa não tem cartão (é avulsa como Pix/dinheiro),
-                    // consideramos a data da própria despesa para o mês.
-                    // Se tem cartão, calculamos a data de vencimento da fatura.
                     const relevantDate = card ? getInvoiceDueDate(expenseDate, card) : expenseDate;
                     
                     if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
@@ -295,7 +288,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     }
                 }
             });
-            // ✅ FIM DA CORREÇÃO
 
             allItems.sort((a, b) => {
                 let aValue = a[sortConfig.key] || '';
@@ -339,6 +331,46 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         }
     }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
     
+    // Análise de Inteligência (Auditoria Relâmpago & Metas de Quitação)
+    const intelligenceData = useMemo(() => {
+        let upcomingFinishes = [];
+        loans.forEach(loan => {
+            const isFullyPaid = loan.isShared 
+                ? (loan.sharedDetails?.person1?.statusPayment === 'Pago Total' && loan.sharedDetails?.person2?.statusPayment === 'Pago Total')
+                : (loan.statusPaymentClient === 'Pago Total');
+
+            if (!isFullyPaid) {
+                let allInsts = [];
+                if (loan.isShared) {
+                    if (loan.sharedDetails?.person1?.installments) allInsts.push(...loan.sharedDetails.person1.installments);
+                    if (loan.sharedDetails?.person2?.installments) allInsts.push(...loan.sharedDetails.person2.installments);
+                } else if (Array.isArray(loan.installments)) {
+                    allInsts.push(...loan.installments);
+                }
+
+                const pendingInsts = allInsts.filter(i => i.status !== 'Paga');
+                if (pendingInsts.length > 0) {
+                    pendingInsts.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+                    const lastInst = pendingInsts[pendingInsts.length - 1];
+                    upcomingFinishes.push({
+                        description: loan.description || 'Compra',
+                        remaining: pendingInsts.length,
+                        finalDate: lastInst.dueDate
+                    });
+                }
+            }
+        });
+
+        const activeSubscriptionsTotal = subscriptions
+            .filter(s => s.isActive)
+            .reduce((acc, s) => acc + (s.amount !== undefined ? s.amount : (s.value || 0)), 0);
+
+        return {
+            activeSubscriptionsTotal,
+            upcomingFinishes: upcomingFinishes.slice(0, 3)
+        };
+    }, [loans, subscriptions]);
+
     const requestSort = (key) => {
         let direction = 'ascending';
         if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -416,48 +448,90 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     if (isLoading) {
         return (
-            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
+            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl">
                 <Spinner />
             </div>
         );
     }
     
     return (
-        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg space-y-6">
-            <div className="space-y-8">
-                <h2 className="text-2xl font-bold text-white">Resumo Financeiro</h2>
+        <div className="space-y-8 animate-fadeIn">
+            {/* Header com Filtros em Cards Carbono/Dourado */}
+            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">
+                            Resumo Financeiro 💳
+                        </h2>
+                        <p className="text-sm text-gray-400 mt-1">
+                            Acompanhe suas faturas e o controle do seu cartão Black.
+                        </p>
+                    </div>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" />
-                    <select value={selectedCardFilter} onChange={(e) => setSelectedCardFilter(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
+                {/* Filtros */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    <input 
+                        type="month" 
+                        value={selectedMonth} 
+                        onChange={(e) => setSelectedMonth(e.target.value)} 
+                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition" 
+                    />
+                    <select 
+                        value={selectedCardFilter} 
+                        onChange={(e) => setSelectedCardFilter(e.target.value)} 
+                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
+                    >
                         <option value="">Todos os Cartões</option>
                         {cards.map(card => (<option key={card.id} value={card.id}>{card.name}</option>))}
                     </select>
-                    <select value={selectedClientFilter} onChange={(e) => setSelectedClientFilter(e.target.value)} className="p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition">
+                    <select 
+                        value={selectedClientFilter} 
+                        onChange={(e) => setSelectedClientFilter(e.target.value)} 
+                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
+                    >
                         <option value="">Todas as Pessoas</option>
                         {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
                     </select>
                 </div>
+            </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
+            {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Card Fatura Total com Gradiente Dourado Sutil */}
+                    <div className="bg-gradient-to-br from-carbon-900 via-carbon-900 to-carbon-800 border border-carbon-700 p-6 rounded-3xl shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-gold-glow">
+                        <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-gray-400">Fatura Total do Mês</h3>
-                            <p className="text-3xl font-bold text-white mt-2">{formatCurrencyDisplay(summary.totalFatura)}</p>
-                        </div>
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
-                            <h3 className="text-sm font-medium text-gray-400">Progresso de Pagamento</h3>
-                            <div className="w-full bg-gray-700 rounded-full h-2.5 my-3">
-                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${paidPercentage}%` }}></div>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-green-400">{formatCurrencyDisplay(summary.totalRecebido)} <span className="text-gray-500">Pago</span></span>
-                                <span className="text-yellow-400">{formatCurrencyDisplay(summary.totalPendente)} <span className="text-gray-500">Pendente</span></span>
+                            <div className="w-10 h-10 rounded-2xl bg-gold/10 text-gold flex items-center justify-center font-bold border border-gold/20">
+                                💳
                             </div>
                         </div>
+                        <p className="text-3xl font-extrabold tracking-tight text-gold-cream mt-4">
+                            {formatCurrencyDisplay(summary.totalFatura)}
+                        </p>
+                    </div>
+
+                    {/* Card Progresso de Pagamento */}
+                    <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                        <h3 className="text-sm font-medium text-gray-400">Progresso de Pagamento</h3>
+                        <div className="w-full bg-carbon-800 rounded-full h-3 my-4 overflow-hidden border border-carbon-700">
+                            <div className="bg-gradient-to-r from-gold-light to-gold h-3 rounded-full transition-all duration-500" style={{ width: `${paidPercentage}%` }}></div>
+                        </div>
+                        <div className="flex justify-between text-xs sm:text-sm font-medium">
+                            <span className="text-gold font-semibold">{formatCurrencyDisplay(summary.totalRecebido)} <span className="text-gray-400 font-normal">Pago</span></span>
+                            <span className="text-amber-300">{formatCurrencyDisplay(summary.totalPendente)} <span className="text-gray-400 font-normal">Pendente</span></span>
+                        </div>
+                    </div>
+
+                    {/* ProSummary em Card Carbono */}
+                    <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl">
                         <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
                     </div>
-                    <div className="lg:col-span-2">
+                </div>
+
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl">
                         <ProAnalyticsCharts
                             loans={filteredLoansForChart}
                             clients={clients}
@@ -466,104 +540,156 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             theme={theme}
                         />
                     </div>
-                </div>
 
-                <div className="bg-gray-900/50 border border-gray-800 rounded-lg">
-                    <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-                        <h3 className="text-lg font-semibold text-white">Itens da Fatura</h3>
-                        <button 
-                            onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
-                            className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold transition"
-                        >
-                            Marcar Tudo Como Pago
-                        </button>
+                    {/* Novos Widgets de Inteligência (Auditoria Relâmpago & Metas de Quitação) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        {/* Widget 1: Auditoria Relâmpago (Mini Modo Crise) */}
+                        <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl space-y-4">
+                            <div className="flex items-center gap-2.5 text-amber-400">
+                                <ShieldAlertIcon />
+                                <h3 className="text-sm font-bold uppercase tracking-wider">Auditoria Relâmpago</h3>
+                            </div>
+                            <div className="space-y-2.5 text-xs text-gray-300">
+                                <div className="p-3 bg-carbon-800/60 border border-carbon-700/60 rounded-2xl flex justify-between items-center">
+                                    <span>Compromissos Recorrentes (Assinaturas)</span>
+                                    <span className="font-mono font-bold text-gold">{formatCurrencyDisplay(intelligenceData.activeSubscriptionsTotal)}/mês</span>
+                                </div>
+                                <p className="text-[11px] text-gray-400 leading-relaxed px-1">
+                                    💡 <strong className="text-gold-cream">Dica de Ouro:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Widget 2: Metas & Timeline de Quitação */}
+                        <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl space-y-4">
+                            <div className="flex items-center gap-2.5 text-gold">
+                                <TargetIcon />
+                                <h3 className="text-sm font-bold uppercase tracking-wider">Metas & Quitação de Dívidas</h3>
+                            </div>
+                            {intelligenceData.upcomingFinishes.length > 0 ? (
+                                <div className="space-y-2.5">
+                                    {intelligenceData.upcomingFinishes.map((item, idx) => (
+                                        <div key={idx} className="p-3 bg-carbon-800/60 border border-carbon-700/60 rounded-2xl flex justify-between items-center">
+                                            <div className="truncate pr-2">
+                                                <span className="text-xs font-bold text-gold-cream block truncate">{item.description}</span>
+                                                <span className="text-[10px] text-gray-400">Faltam {item.remaining} parcelas</span>
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-emerald-400 whitespace-nowrap bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
+                                                Até {new Date(item.finalDate + 'T00:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-6 text-xs text-gray-500">
+                                    Nenhuma compra parcelada ativa para projetar quitação no momento.
+                                </div>
+                            )}
+                        </div>
+
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full">
-                            <thead>
-                                <tr className="border-b border-gray-800">
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('type')}>
-                                        Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Descrição</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('clientId')}>
-                                        Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider cursor-pointer" onClick={() => requestSort('cardId')}>
-                                        Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor da Parcela</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Nº Parcelas</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800">
-                                {displayableItems.length > 0 ? displayableItems.map((item) => {
-                                    const client = clients.find(c => c.id === item.clientId);
-                                    const card = cards.find(c => c.id === item.cardId);
-                                    return (
-                                        <tr key={item.id} className="hover:bg-gray-800/60">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{item.type}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{item.description}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{client?.name || '---'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 flex items-center gap-2">
-                                                {card ? (
-                                                    <>
-                                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: card.color || '#888' }}></div>
-                                                        {card.name}
-                                                    </>
-                                                ) : '---'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-300">{formatCurrencyDisplay(item.value)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                                {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                                    item.currentStatus === 'Paga' ? 'bg-green-500/20 text-green-400' :
-                                                    item.currentStatus === 'Pendente' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                    item.currentStatus === 'Atrasado' ? 'bg-red-500/20 text-red-400' :
-                                                    'bg-gray-500/20 text-gray-400'
-                                                }`}>
-                                                    {item.currentStatus}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {item.currentStatus !== 'Paga' && (
-                                                    <button onClick={() => updateItemStatus(item, 'Paga')} className="bg-green-500/20 text-green-300 px-3 py-1 rounded-md hover:bg-green-500/30 text-xs font-semibold">
-                                                        Marcar Paga
-                                                    </button>
-                                                )}
-                                                {item.currentStatus === 'Paga' && (
-                                                     <button onClick={() => updateItemStatus(item, 'Pendente')} className="bg-red-500/20 text-red-400 px-3 py-1 rounded-md hover:bg-red-500/30 text-xs font-semibold">
-                                                        Desmarcar
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                }) : (
-                                    <tr>
-                                        <td colSpan="8" className="text-center py-10 text-gray-500">
-                                            Nenhum item na fatura para os filtros selecionados.
+                </div>
+            </div>
+
+            {/* Tabela de Itens da Fatura */}
+            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
+                <div className="p-6 border-b border-carbon-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 className="text-lg font-bold text-gold-cream">Itens da Fatura</h3>
+                    <button 
+                        onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
+                        className="bg-gold/10 text-gold border border-gold/30 px-4 py-2 rounded-2xl hover:bg-gold/20 text-xs font-semibold transition cursor-pointer"
+                    >
+                        Marcar Tudo Como Pago
+                    </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                    <table className="min-w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('type')}>
+                                    Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
+                                </th>
+                                <th className="px-6 py-4">Descrição</th>
+                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('clientId')}>
+                                    Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
+                                </th>
+                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('cardId')}>
+                                    Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
+                                </th>
+                                <th className="px-6 py-4">Valor da Parcela</th>
+                                <th className="px-6 py-4">Nº Parcelas</th>
+                                <th className="px-6 py-4">Status</th>
+                                <th className="px-6 py-4">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-carbon-800 text-sm">
+                            {displayableItems.length > 0 ? displayableItems.map((item) => {
+                                const client = clients.find(c => c.id === item.clientId);
+                                const card = cards.find(c => c.id === item.cardId);
+                                return (
+                                    <tr key={item.id} className="hover:bg-carbon-800/40 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400 font-medium">{item.type}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream">{item.description}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">{client?.name || '---'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">
+                                            {card ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }}></div>
+                                                    <span>{card.name}</span>
+                                                </div>
+                                            ) : '---'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap font-bold text-gold">{formatCurrencyDisplay(item.value)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">
+                                            {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                                                item.currentStatus === 'Paga' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                item.currentStatus === 'Pendente' ? 'bg-gold/10 text-gold border-gold/20' :
+                                                item.currentStatus === 'Atrasado' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                                'bg-gray-800 text-gray-400 border-gray-700'
+                                            }`}>
+                                                {item.currentStatus}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {item.currentStatus !== 'Paga' && (
+                                                <button onClick={() => updateItemStatus(item, 'Paga')} className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-emerald-500/20 cursor-pointer">
+                                                    Marcar Paga
+                                                </button>
+                                            )}
+                                            {item.currentStatus === 'Paga' && (
+                                                 <button onClick={() => updateItemStatus(item, 'Pendente')} className="bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-rose-500/20 cursor-pointer">
+                                                     Desmarcar
+                                                 </button>
+                                            )}
                                         </td>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                );
+                            }) : (
+                                <tr>
+                                    <td colSpan="8" className="text-center py-12 text-gray-500">
+                                        Nenhum item na fatura para os filtros selecionados.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-                <GenericModal 
-                    isOpen={isMarkAllPaidConfirmationOpen} 
-                    onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
-                    onConfirm={handleMarkAllAsPaid}
-                    title="Confirmar Ação" 
-                    message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
-                    isConfirmation={true} 
-                    theme={theme} 
-                />
             </div>
+
+            <GenericModal 
+                isOpen={isMarkAllPaidConfirmationOpen} 
+                onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
+                onConfirm={handleMarkAllAsPaid}
+                title="Confirmar Ação" 
+                message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
+                isConfirmation={true} 
+                theme={theme} 
+            />
         </div>
     );
 }

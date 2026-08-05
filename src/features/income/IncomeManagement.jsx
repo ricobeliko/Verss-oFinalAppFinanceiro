@@ -118,85 +118,91 @@ function IncomeManagement() {
     const getClientName = (cId) => clients.find(c => c.id === cId)?.name || 'N/A';
 
     return (
-        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="space-y-8 animate-fadeIn">
+            {/* Header Carbono & Dourado */}
+            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Gerenciamento de Receitas</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione suas fontes de renda e ganhos avulsos.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Receitas</h1>
+                    <p className="text-sm text-gray-400 mt-1">Adicione e acompanhe suas fontes de renda e ganhos avulsos.</p>
                 </div>
-                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
+                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer">
                     <PlusIcon />
-                    Adicionar Receita
+                    <span>Adicionar Receita</span>
                 </button>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="min-w-full bg-gray-800/50 rounded-lg">
-                    <thead className="border-b border-gray-700">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Data</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Descrição</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pessoa</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Valor</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {incomes.length > 0 ? incomes.map((income) => (
-                            <tr key={income.id} className="hover:bg-gray-800">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{new Date(income.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                                <td className="px-6 py-4 whitespace-nowrap font-medium text-white">{income.description}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{getClientName(income.clientId)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-400">{formatCurrencyDisplay(income.value)}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={() => handleOpenModal(income)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                        <button onClick={() => confirmDelete(income.id)} className="text-red-500 hover:text-red-400 transition" title="Deletar"><DeleteIcon /></button>
-                                    </div>
-                                </td>
+            {/* Tabela de Receitas */}
+            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse">
+                        <thead>
+                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                                <th className="px-6 py-4">Data</th>
+                                <th className="px-6 py-4">Descrição</th>
+                                <th className="px-6 py-4">Pessoa</th>
+                                <th className="px-6 py-4">Valor</th>
+                                <th className="px-6 py-4">Ações</th>
                             </tr>
-                        )) : (
-                           <tr>
-                                <td colSpan="5" className="text-center py-10 text-gray-500">
-                                    Nenhuma receita cadastrada.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-carbon-800 text-sm">
+                            {incomes.length > 0 ? incomes.map((income) => (
+                                <tr key={income.id} className="hover:bg-carbon-800/40 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{new Date(income.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream">{income.description}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{getClientName(income.clientId)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-emerald-400">{formatCurrencyDisplay(income.value)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap font-medium">
+                                        <div className="flex items-center gap-4">
+                                            <button onClick={() => handleOpenModal(income)} className="text-gold hover:text-gold-light transition cursor-pointer" title="Editar"><EditIcon /></button>
+                                            <button onClick={() => confirmDelete(income.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Deletar"><DeleteIcon /></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )) : (
+                               <tr>
+                                    <td colSpan="5" className="text-center py-12 text-gray-500">
+                                        Nenhuma receita cadastrada.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingIncome ? 'Editar Receita' : 'Adicionar Receita'} theme="dark">
+            {/* Modal de Cadastro/Edição */}
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingIncome ? 'Editar Receita' : 'Adicionar Receita'} theme="dark" maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="incomeDescription" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
-                        <input id="incomeDescription" type="text" placeholder="Ex: Salário, Venda" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                        <input id="incomeDescription" type="text" placeholder="Ex: Salário, Venda" value={description} onChange={(e) => setDescription(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="incomeValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">R$</span>
-                            <input id="incomeValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 pl-9 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required inputMode="decimal" />
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
+                            <input id="incomeValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full pl-12" required inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div>
                         <label htmlFor="incomeDate" className="block text-sm font-medium text-gray-300 mb-1">Data</label>
-                        <input id="incomeDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required />
+                        <input id="incomeDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="incomeClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
-                        <select id="incomeClient" value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md shadow-sm text-white focus:ring-purple-500 focus:border-purple-500 transition" required>
+                        <select id="incomeClient" value={clientId} onChange={(e) => setClientId(e.target.value)} required>
                             <option value="">Selecione a Pessoa</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                         </select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleSaveIncome} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">Salvar</button>
+                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
+                    <button onClick={handleSaveIncome} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20">Salvar</button>
                 </div>
             </GenericModal>
 
+            {/* Modal de Confirmação de Exclusão */}
             <GenericModal 
                 isOpen={isConfirmationModalOpen} 
                 onClose={() => setIsConfirmationModalOpen(false)} 

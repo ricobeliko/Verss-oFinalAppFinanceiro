@@ -1,3 +1,5 @@
+// src/context/AppContext.jsx
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -110,8 +112,6 @@ export function AppProvider({ children }) {
         currentUser,
         userId: currentUser?.uid,
         userProfile,
-        // ✅ A CORREÇÃO DEFINITIVA ESTÁ AQUI ✅
-        // Voltamos a verificar o campo `plan`, que é o que seu backend utiliza.
         isPro: userProfile?.plan === 'pro',
         isTrialActive: userProfile?.trialExpiresAt && typeof userProfile.trialExpiresAt.toDate === 'function'
             ? userProfile.trialExpiresAt.toDate() > new Date()
@@ -138,4 +138,3 @@ export function AppProvider({ children }) {
         </AppContext.Provider>
     );
 }
-

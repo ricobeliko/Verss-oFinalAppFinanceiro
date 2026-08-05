@@ -1,3 +1,4 @@
+// src/pages/AuthScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -28,7 +29,6 @@ const MailIcon = ({ className }) => (
     </svg>
 );
 
-
 // --- Componente Principal ---
 function AuthScreen() {
     const { auth, db, getUserCollectionPathSegments, showToast } = useAppContext();
@@ -42,7 +42,7 @@ function AuthScreen() {
     const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     
-    // ✅ 1. Novos estados para a tela de verificação
+    // Estados para a tela de verificação
     const [showVerification, setShowVerification] = useState(false);
     const [countdown, setCountdown] = useState(10);
 
@@ -54,13 +54,12 @@ function AuthScreen() {
         }
     }, []);
 
-    // ✅ 2. Efeito para controlar o contador regressivo
+    // Efeito para controlar o contador regressivo
     useEffect(() => {
         let timer;
         if (showVerification && countdown > 0) {
             timer = setTimeout(() => setCountdown(countdown - 1), 1000);
         } else if (showVerification && countdown === 0) {
-            // Quando o tempo acabar, volta para a tela de login
             setShowVerification(false);
             setIsRegistering(false);
         }
@@ -96,9 +95,8 @@ function AuthScreen() {
 
             await signOut(auth);
 
-            // ✅ 3. Ativar a tela de verificação em vez de limpar o formulário
             setShowVerification(true);
-            setCountdown(10); // Reinicia o contador
+            setCountdown(10);
             
         } catch (error) {
             console.error("Erro no cadastro:", error);
@@ -144,19 +142,22 @@ function AuthScreen() {
         }
     };
 
-    // ✅ 4. Renderização condicional da nova tela
     if (showVerification) {
         return (
-            <div className="min-h-screen bg-[#1e1e1e] flex items-center justify-center p-4 font-sans text-white">
-                <div className="w-full max-w-md bg-gray-900/50 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-lg p-8 text-center">
-                    <MailIcon className="mx-auto text-purple-500" />
-                    <h2 className="text-2xl font-bold mt-4 mb-2">Confirme seu E-mail</h2>
-                    <p className="text-gray-300">
-                        Enviamos um link de verificação para <strong className="text-purple-400">{email}</strong>.
-                        Por favor, verifique sua caixa de entrada e spam para ativar sua conta.
-                    </p>
-                    <p className="text-gray-400 mt-6 text-sm">
-                        Você será redirecionado para a tela de login em <strong className="text-white">{countdown}</strong> segundos.
+            <div className="min-h-screen bg-carbon-900 flex items-center justify-center p-4 font-sans text-gray-300">
+                <div className="w-full max-w-md bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl p-8 text-center space-y-6">
+                    <div className="w-16 h-16 rounded-2xl bg-gold/10 text-gold border border-gold/20 flex items-center justify-center mx-auto shadow-lg">
+                        <MailIcon className="text-gold" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black text-gold-cream tracking-tight mb-2">Confirme seu E-mail</h2>
+                        <p className="text-sm text-gray-400 leading-relaxed">
+                            Enviamos um link de verificação para <strong className="text-gold">{email}</strong>.
+                            Por favor, verifique sua caixa de entrada e spam para ativar sua conta.
+                        </p>
+                    </div>
+                    <p className="text-xs text-gray-500 pt-2 border-t border-carbon-800">
+                        Você será redirecionado para a tela de login em <strong className="text-gold-cream font-bold">{countdown}</strong> segundos.
                     </p>
                 </div>
             </div>
@@ -164,101 +165,102 @@ function AuthScreen() {
     }
     
     return (
-        <div className="min-h-screen bg-[#1e1e1e] flex items-center justify-center p-4 font-sans">
-            <div className="w-full max-w-md bg-gray-900/50 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-lg p-8">
+        <div className="min-h-screen bg-carbon-900 flex items-center justify-center p-4 font-sans text-gray-300">
+            <div className="w-full max-w-md bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl p-8">
                 <div className="text-center mb-8">
-                    <FinControlLogo className="mx-auto text-purple-500" />
-                    <h1 className="text-3xl font-bold tracking-wider text-white mt-4">FinControl</h1>
-                    <p className="text-gray-400">{isRegistering ? 'Crie sua conta para começar' : 'Bem-vindo de volta'}</p>
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold-light to-gold flex items-center justify-center text-carbon-900 mx-auto shadow-lg shadow-gold/20">
+                        <FinControlLogo className="text-carbon-900" />
+                    </div>
+                    <h1 className="text-3xl font-black tracking-wider text-gold-cream mt-4">Fin<span className="text-gold">Control</span></h1>
+                    <p className="text-sm text-gray-400 mt-1">{isRegistering ? 'Crie sua conta Black para começar' : 'Bem-vindo de volta ao seu painel'}</p>
                 </div>
 
-                <form onSubmit={isRegistering ? handleRegister : handleLogin}>
+                <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
                     {isRegistering && (
-                        <div className="mb-4">
-                            <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="userName">Nome</label>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1.5" htmlFor="userName">Nome</label>
                             <input
                                 id="userName"
                                 type="text"
                                 value={userName}
                                 onChange={(e) => setUserName(e.target.value)}
                                 placeholder="Seu nome completo"
-                                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                className="w-full px-4 py-3.5 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream placeholder:text-gray-500 focus:ring-2 focus:ring-gold focus:outline-none transition-all text-sm font-medium"
                                 required
                             />
                         </div>
                     )}
-                    <div className="mb-4">
-                        <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="email">Email</label>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5" htmlFor="email">Email</label>
                         <input
                             id="email"
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="seu@email.com"
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full px-4 py-3.5 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream placeholder:text-gray-500 focus:ring-2 focus:ring-gold focus:outline-none transition-all text-sm font-medium"
                             required
                         />
                     </div>
-                    <div className="mb-6">
-                        <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="password">Senha</label>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1.5" htmlFor="password">Senha</label>
                         <input
                             id="password"
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="********"
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full px-4 py-3.5 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream placeholder:text-gray-500 focus:ring-2 focus:ring-gold focus:outline-none transition-all text-sm font-medium"
                             required
                         />
                     </div>
                     {isRegistering && (
-                         <div className="mb-6">
-                            <label className="block text-gray-400 text-sm font-bold mb-2" htmlFor="confirmPassword">Confirmar Senha</label>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1.5" htmlFor="confirmPassword">Confirmar Senha</label>
                             <input
                                 id="confirmPassword"
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 placeholder="********"
-                                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                className="w-full px-4 py-3.5 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream placeholder:text-gray-500 focus:ring-2 focus:ring-gold focus:outline-none transition-all text-sm font-medium"
                                 required
                             />
                         </div>
                     )}
-                     {!isRegistering && (
-                        <div className="flex items-center justify-between mb-6">
-                            <label className="flex items-center text-gray-400 text-sm">
+                    {!isRegistering && (
+                        <div className="flex items-center justify-between text-sm pt-1">
+                            <label className="flex items-center text-gray-400 cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={rememberMe}
                                     onChange={(e) => setRememberMe(e.target.checked)}
-                                    className="form-checkbox h-4 w-4 text-purple-600 bg-gray-800 border-gray-600 rounded focus:ring-purple-500"
+                                    className="form-checkbox h-4 w-4 text-gold bg-carbon-800 border-carbon-700 rounded focus:ring-gold accent-gold"
                                 />
                                 <span className="ml-2">Lembrar-me</span>
                             </label>
-                            <a href="#" className="text-sm text-purple-500 hover:text-purple-400">Esqueceu a senha?</a>
+                            <a href="#" className="text-gold hover:text-gold-light transition font-medium">Esqueceu a senha?</a>
                         </div>
                     )}
-                    <div className="flex items-center justify-between">
+                    <div className="pt-2">
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 disabled:opacity-50 flex items-center justify-center"
+                            className="w-full bg-gradient-to-r from-gold-light to-gold hover:opacity-90 text-carbon-900 font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-gold/20 transition duration-300 disabled:opacity-50 flex items-center justify-center cursor-pointer"
                         >
                             {isLoading && <Spinner />}
-                            <span className="ml-2">{isRegistering ? 'Cadastrar' : 'Entrar'}</span>
+                            <span className={isLoading ? "ml-2" : ""}>{isRegistering ? 'Criar Conta' : 'Entrar'}</span>
                         </button>
                     </div>
                 </form>
                 <div className="text-center mt-6">
                     <button onClick={() => {
                         setIsRegistering(!isRegistering);
-                        // Limpa o formulário ao trocar entre login e registro
                         setUserName('');
                         setEmail(localStorage.getItem('rememberedEmail') || '');
                         setPassword('');
                         setConfirmPassword('');
-                    }} className="text-sm text-gray-400 hover:text-white">
+                    }} className="text-sm text-gray-400 hover:text-gold transition cursor-pointer font-medium">
                         {isRegistering ? 'Já tem uma conta? Faça login' : 'Não tem uma conta? Cadastre-se'}
                     </button>
                 </div>
@@ -268,4 +270,3 @@ function AuthScreen() {
 }
 
 export default AuthScreen;
-

@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from 'react'; // Adicione o useState
+// src/components/ProAnalyticsCharts.jsx
+
+import React, { useState, useMemo } from 'react';
 import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
-    PieChart, Pie, Cell,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
+    PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import UpgradePrompt from './UpgradePrompt';
 import { formatCurrencyDisplay } from '../utils/currency';
-import { httpsCallable } from 'firebase/functions'; // Importe o httpsCallable
-import { functions } from '../utils/firebase'; // Importe a instância do Firebase
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../utils/firebase';
 
-// ... (as funções formatYAxis e CustomTooltip continuam iguais) ...
 const formatYAxis = (tick) => {
     if (tick >= 1000) return `R$ ${(tick / 1000).toLocaleString('pt-BR')}k`;
     return `R$ ${tick}`;
@@ -18,23 +19,21 @@ const formatYAxis = (tick) => {
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="p-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
-                <p className="font-bold text-gray-800 dark:text-gray-100">{label}</p>
-                <p className="text-blue-500 dark:text-blue-400">{`Total Gasto: ${formatCurrencyDisplay(payload[0].value)}`}</p>
+            <div className="p-3 bg-carbon-900 border border-carbon-700 rounded-2xl shadow-2xl text-xs space-y-1">
+                <p className="font-bold text-gold-cream">{label}</p>
+                <p className="text-gold font-mono font-bold">{`Total Gasto: ${formatCurrencyDisplay(payload[0].value)}`}</p>
             </div>
         );
     }
     return null;
 };
 
-
 const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
     const { isPro, isTrialActive, currentUser, showToast } = useAppContext();
-    const [isLoading, setIsLoading] = useState(false); // Adiciona estado de loading
+    const [isLoading, setIsLoading] = useState(false);
 
     const hasProAccess = isPro || isTrialActive;
 
-    // ✅ COPIE A MESMA FUNÇÃO QUE FUNCIONA NO HEADER
     const handleUpgrade = async () => {
         if (!currentUser) {
             showToast("Você precisa estar logado para fazer o upgrade.", "error");
@@ -59,7 +58,6 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
         }
     };
 
-    // ... (os `useMemo` para os gráficos continuam iguais) ...
     const dataForBarChart = useMemo(() => {
         const clientTotals = {};
         loans.forEach(loan => {
@@ -86,57 +84,60 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
         return Object.entries(categories).map(([name, value]) => ({ name, value }));
     }, [expenses, loans, subscriptions]);
 
-
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF1943', '#A45D5D'];
-    const textColor = theme === 'dark' ? '#A3A3A3' : '#333';
+    const COLORS = ['#F2B705', '#F29F05', '#D97904', '#BF5B04', '#8C3F02', '#592501', '#E8C547'];
+    const textColor = '#9CA3AF';
 
     return (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 relative min-h-[380px]">
+        <div className="relative min-h-[380px]">
             {!hasProAccess ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-900/30 backdrop-blur-sm rounded-lg">
-                    {/* ✅ PASSA A FUNÇÃO E O ESTADO PARA O COMPONENTE */}
-                    <UpgradePrompt onUpgradeClick={handleUpgrade} isLoading={isLoading} />
+                <div className="absolute inset-0 flex items-center justify-center bg-carbon-900/80 backdrop-blur-md rounded-3xl z-20 p-4">
+                    <div className="max-w-sm w-full">
+                        <UpgradePrompt onUpgradeClick={handleUpgrade} isLoading={isLoading} />
+                    </div>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* ... (o JSX dos gráficos continua o mesmo) ... */}
+                    
+                    {/* Gráfico de Barras: Gastos por Pessoa */}
                     <div>
-                        <h3 className="text-xl font-bold text-blue-400 mb-4">Gastos por Pessoa (Fatura)</h3>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-gold-cream mb-6">Gastos por Pessoa (Fatura)</h3>
                         {dataForBarChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={dataForBarChart}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#4A5568' : '#E2E8F0'}/>
-                                    <XAxis dataKey="name" tick={{ fill: textColor }} />
-                                    <YAxis tick={{ fill: textColor }} tickFormatter={formatYAxis} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{fill: theme === 'dark' ? 'rgba(96, 165, 250, 0.2)' : 'rgba(200, 200, 255, 0.3)'}}/>
-                                    <Bar dataKey="Total Gasto" fill={theme === 'dark' ? '#60a5fa' : '#3b82f6'} radius={[4, 4, 0, 0]}>
-                                        <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill={textColor} fontSize={12}/>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fill: textColor, fontSize: 12 }} axisLine={{ stroke: '#333' }} />
+                                    <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={formatYAxis} axisLine={{ stroke: '#333' }} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(242, 183, 5, 0.05)' }} />
+                                    <Bar dataKey="Total Gasto" fill="#F2B705" radius={[8, 8, 0, 0]}>
+                                        <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill="#F2B705" fontSize={11} fontWeight="bold" />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="flex items-center justify-center h-[300px] text-gray-500">Nenhuma compra para os filtros.</div>
+                            <div className="flex items-center justify-center h-[300px] text-gray-500 text-sm">Nenhuma compra para os filtros.</div>
                         )}
                     </div>
 
+                    {/* Gráfico de Pizza: Gastos por Categoria */}
                     <div>
-                        <h3 className="text-xl font-bold text-green-400 mb-4">Gastos Totais por Categoria</h3>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-gold-cream mb-6">Gastos Totais por Categoria</h3>
                         {dataForPieChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
-                                    <Pie data={dataForPieChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                    <Pie data={dataForPieChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                                         {dataForPieChart.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#171717" strokeWidth={2} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value) => formatCurrencyDisplay(value)} />
-                                    <Legend />
+                                    <Tooltip formatter={(value) => formatCurrencyDisplay(value)} contentStyle={{ backgroundColor: '#171717', borderColor: '#333', borderRadius: '1rem', color: '#F2B705' }} />
+                                    <Legend wrapperStyle={{ fontSize: '12px', color: '#9CA3AF', paddingTop: '10px' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                             <div className="flex items-center justify-center h-[300px] text-gray-500">Nenhum gasto para os filtros.</div>
+                            <div className="flex items-center justify-center h-[300px] text-gray-500 text-sm">Nenhum gasto para os filtros.</div>
                         )}
                     </div>
+
                 </div>
             )}
         </div>

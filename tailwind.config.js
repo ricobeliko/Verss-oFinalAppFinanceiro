@@ -4,17 +4,30 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  // AJUSTE: O darkMode foi removido para fixar o tema.
   theme: {
     extend: {
       fontFamily: {
-        // AJUSTE: 'Roboto' agora é a fonte padrão 'sans'.
         'sans': ['Roboto', 'sans-serif'], 
         'gloock': ['Gloock', 'serif'],
         'concert-one': ['Concert One', 'cursive'],
         'basic': ['Basic', 'sans-serif'],
-        'inter': ['Inter', 'sans-serif'], // Inter mantida caso precise dela.
+        'inter': ['Inter', 'sans-serif'],
       },
+      colors: {
+        carbon: {
+          900: '#1A1A1A',
+          800: '#3A3A3A',
+          700: '#4A4A4A',
+        },
+        gold: {
+          DEFAULT: '#F2B705',
+          light: '#F6D365',
+          cream: '#FFF3D6',
+        }
+      },
+      boxShadow: {
+        'gold-glow': '0 10px 30px -10px rgba(242, 183, 5, 0.3)',
+      }
     },
   },
   plugins: [],

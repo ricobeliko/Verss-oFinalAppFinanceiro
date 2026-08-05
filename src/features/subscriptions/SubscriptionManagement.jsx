@@ -6,14 +6,12 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 
-// --- Ícones (sem alterações) ---
+// --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-// NOVO: Ícone de pessoa
-const UserIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
-const CardIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
-
+const UserIcon = () => <svg className="w-4 h-4 mr-2 text-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
+const CardIcon = () => <svg className="w-4 h-4 mr-2 text-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
 
 export default function SubscriptionManagement() {
     const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
@@ -152,107 +150,113 @@ export default function SubscriptionManagement() {
     };
     
     return (
-        <div className="p-6 bg-gray-900/50 border border-gray-800 rounded-lg">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="space-y-8 animate-fadeIn">
+            {/* Header Carbono & Dourado */}
+            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">Gerenciamento de Assinaturas</h1>
-                    <p className="text-sm text-gray-400 mt-1">Controle suas assinaturas e serviços recorrentes.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Assinaturas</h1>
+                    <p className="text-sm text-gray-400 mt-1">Controle suas assinaturas e serviços recorrentes com facilidade.</p>
                 </div>
-                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition">
+                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer">
                     <PlusIcon />
-                    Adicionar Assinatura
+                    <span>Adicionar Assinatura</span>
                 </button>
             </div>
 
+            {/* Grid de Cards de Assinaturas */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {subscriptions.length > 0 ? subscriptions.map((sub) => {
                     const currentStatus = sub.status || (sub.isActive ? 'Ativa' : 'Inativa');
                     const amount = sub.amount !== undefined ? sub.amount : sub.value;
                     return (
-                        <div key={sub.id} className={`p-5 rounded-lg shadow-lg flex flex-col justify-between border ${currentStatus === 'Ativa' ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-800/30 border-gray-800'}`}>
+                        <div key={sub.id} className={`p-6 rounded-3xl shadow-2xl flex flex-col justify-between border transition-all duration-300 hover:border-gold/30 ${currentStatus === 'Ativa' ? 'bg-carbon-900 border-carbon-800' : 'bg-carbon-900/40 border-carbon-800/50'}`}>
                             <div>
-                                <div className="flex justify-between items-start mb-3">
-                                    <h3 className={`text-xl font-bold ${currentStatus === 'Ativa' ? 'text-white' : 'text-gray-500'}`}>{sub.name}</h3>
-                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${currentStatus === 'Ativa' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-400'}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className={`text-lg font-bold tracking-tight ${currentStatus === 'Ativa' ? 'text-gold-cream' : 'text-gray-500'}`}>{sub.name}</h3>
+                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${currentStatus === 'Ativa' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
                                         {currentStatus}
                                     </span>
                                 </div>
-                                <p className={`text-2xl font-extrabold mb-1 ${currentStatus === 'Ativa' ? 'text-purple-400' : 'text-purple-400/50'}`}>
+                                <p className={`text-2xl font-black mb-2 font-mono ${currentStatus === 'Ativa' ? 'text-gold' : 'text-gray-500'}`}>
                                     {formatCurrencyDisplay(amount)}
                                 </p>
-                                <p className={`text-sm mb-4 ${currentStatus === 'Ativa' ? 'text-gray-400' : 'text-gray-600'}`}>
-                                    Vence dia: <span className="font-semibold">{sub.dueDate}</span>
+                                <p className={`text-xs mb-5 font-medium ${currentStatus === 'Ativa' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    Vence dia: <span className="font-bold text-gold-cream">{sub.dueDate}</span>
                                 </p>
-                                {/* ALTERADO: Div para agrupar informações de pessoa e cartão */}
-                                <div className={`pt-4 border-t space-y-2 ${currentStatus === 'Ativa' ? 'text-gray-300 border-gray-700' : 'text-gray-600 border-gray-700/50'}`}>
-                                    {/* NOVO: Exibição do nome da pessoa */}
-                                    <div className="flex items-center text-sm">
+                                
+                                <div className={`pt-4 border-t space-y-2.5 ${currentStatus === 'Ativa' ? 'text-gray-300 border-carbon-800' : 'text-gray-600 border-carbon-800/50'}`}>
+                                    <div className="flex items-center text-xs font-medium">
                                         <UserIcon />
-                                        {getClientName(sub.clientId)}
+                                        <span className="truncate">{getClientName(sub.clientId)}</span>
                                     </div>
-                                    <div className="flex items-center text-sm">
+                                    <div className="flex items-center text-xs font-medium">
                                         <CardIcon />
-                                        {getCardName(sub.cardId)}
+                                        <span className="truncate">{getCardName(sub.cardId)}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center justify-end gap-3 mt-5">
-                                <button onClick={() => handleOpenModal(sub)} className="text-purple-400 hover:text-purple-300 transition" title="Editar"><EditIcon /></button>
-                                <button onClick={() => confirmDeleteSubscription(sub.id)} className="text-red-500 hover:text-red-400 transition" title="Excluir"><DeleteIcon /></button>
+                            <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-carbon-800">
+                                <button onClick={() => handleOpenModal(sub)} className="text-gold hover:text-gold-light transition cursor-pointer" title="Editar"><EditIcon /></button>
+                                <button onClick={() => confirmDeleteSubscription(sub.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Excluir"><DeleteIcon /></button>
                             </div>
                         </div>
                     )
                 }) : (
-                    <div className="col-span-full text-center py-10 text-gray-500">
+                    <div className="col-span-full text-center py-16 text-gray-500 bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl">
                         Nenhuma assinatura cadastrada.
                     </div>
                 )}
             </div>
             
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} theme="dark">
+            {/* Modal de Cadastro/Edição */}
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} theme="dark" maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="subscriptionName" className="block text-sm font-medium text-gray-300 mb-1">Nome</label>
-                        <input id="subscriptionName" type="text" placeholder="Ex: Netflix, Spotify" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required />
+                        <input id="subscriptionName" type="text" placeholder="Ex: Netflix, Spotify" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="subscriptionValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
-                        <input id="subscriptionValue" type="text" placeholder="R$ 0,00" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required inputMode="decimal" />
+                        <div className="relative w-full">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
+                            <input id="subscriptionValue" type="text" placeholder="0,00" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full pl-12" required inputMode="decimal" />
+                        </div>
                     </div>
                     <div>
                         <label htmlFor="subscriptionDueDate" className="block text-sm font-medium text-gray-300 mb-1">Dia da Cobrança</label>
-                        <input id="subscriptionDueDate" type="number" placeholder="Dia do mês" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" min="1" max="31" required />
+                        <input id="subscriptionDueDate" type="number" placeholder="Ex: 10" value={dueDate} onChange={(e) => setDueDate(e.target.value)} min="1" max="31" required />
                     </div>
                     <div>
                         <label htmlFor="subscriptionCard" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
-                        <select id="subscriptionCard" value={cardId} onChange={(e) => setCardId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                        <select id="subscriptionCard" value={cardId} onChange={(e) => setCardId(e.target.value)} required>
                             <option value="">Selecione o Cartão</option>
                             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                         </select>
                     </div>
                     <div>
                         <label htmlFor="subscriptionClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
-                        <select id="subscriptionClient" value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white" required>
+                        <select id="subscriptionClient" value={clientId} onChange={(e) => setClientId(e.target.value)} required>
                             <option value="">Selecione a Pessoa</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                         </select>
                     </div>
                     <div>
                         <label htmlFor="subscriptionStatus" className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                        <select id="subscriptionStatus" value={status} onChange={(e) => setStatus(e.target.value)} className="w-full p-2 bg-gray-700 border-2 border-gray-600 rounded-md text-white">
+                        <select id="subscriptionStatus" value={status} onChange={(e) => setStatus(e.target.value)}>
                             <option value="Ativa">Ativa</option>
                             <option value="Inativa">Inativa</option>
                         </select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-md text-white transition">Cancelar</button>
-                    <button onClick={handleSaveSubscription} className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white transition">
+                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
+                    <button onClick={handleSaveSubscription} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/25">
                         {editingSubscription ? 'Atualizar' : 'Salvar'}
                     </button>
                 </div>
             </GenericModal>
 
+            {/* Modal de Confirmação de Exclusão */}
             <GenericModal 
                 isOpen={isConfirmationModalOpen} 
                 onClose={() => setIsConfirmationModalOpen(false)} 
