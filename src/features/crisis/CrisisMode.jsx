@@ -1,57 +1,20 @@
 // src/features/crisis/CrisisMode.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { useAppContext } from '../../context/AppContext';
+import React, { useMemo } from 'react';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import Spinner from '../../components/Spinner';
+import { useLoans } from '../../hooks/useLoans';
+import { useExpenses } from '../../hooks/useExpenses';
+import { useSubscriptions } from '../../hooks/useSubscriptions';
+import { useCards } from '../../hooks/useCards';
 
 export default function CrisisMode({ selectedMonth }) {
-    const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
-    
-    const [loans, setLoans] = useState([]);
-    const [expenses, setExpenses] = useState([]);
-    const [subscriptions, setSubscriptions] = useState([]);
-    const [cards, setCards] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { loans, loading: loadingLoans } = useLoans();
+    const { expenses, loading: loadingExpenses } = useExpenses();
+    const { subscriptions, loading: loadingSubs } = useSubscriptions();
+    const { cards, loading: loadingCards } = useCards();
 
-    // Sincroniza dados do Firebase em tempo real
-    useEffect(() => {
-        if (!isAuthReady || !userId || !db) return;
-        setIsLoading(true);
-
-        const userCollectionPath = getUserCollectionPathSegments();
-        const basePath = [...userCollectionPath, userId];
-
-        const unsubLoans = onSnapshot(collection(db, ...basePath, 'loans'), (snap) => {
-            setLoans(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        const unsubExpenses = onSnapshot(collection(db, ...basePath, 'expenses'), (snap) => {
-            setExpenses(snap.docs.map(d => {
-                const data = d.data();
-                const dateValue = data.date?.toDate ? data.date.toDate().toISOString() : data.date;
-                const convertedDate = dateValue ? new Date(String(dateValue).substring(0, 10) + 'T00:00:00Z') : null;
-                return { id: d.id, ...data, date: convertedDate };
-            }));
-        });
-
-        const unsubSubs = onSnapshot(collection(db, ...basePath, 'subscriptions'), (snap) => {
-            setSubscriptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        const unsubCards = onSnapshot(collection(db, ...basePath, 'cards'), (snap) => {
-            setCards(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setIsLoading(false);
-        });
-
-        return () => {
-            unsubLoans();
-            unsubExpenses();
-            unsubSubs();
-            unsubCards();
-        };
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
+    const isLoading = loadingLoans || loadingExpenses || loadingSubs || loadingCards;
 
     // Auditoria Cirúrgica e Esmiuçada
     const auditData = useMemo(() => {
@@ -104,9 +67,9 @@ export default function CrisisMode({ selectedMonth }) {
 
         // 3. Despesas Avulsas do Mês
         const monthExpenses = expenses.filter(exp => {
-            const expDate = exp.date;
-            if (!(expDate instanceof Date) || isNaN(expDate)) return false;
-            return expDate.getUTCFullYear() === filterYear && expDate.getUTCMonth() + 1 === filterMonth;
+            if (!exp.date) return false;
+            const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
+            return dateStr.startsWith(selectedMonth);
         });
 
         const expenseList = monthExpenses.map(exp => {

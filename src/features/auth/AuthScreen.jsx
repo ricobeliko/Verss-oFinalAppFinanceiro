@@ -5,6 +5,7 @@ import {
     createUserWithEmailAndPassword,
     sendEmailVerification,
     signInWithEmailAndPassword,
+    sendPasswordResetEmail,
     signOut,
     setPersistence,
     browserLocalPersistence
@@ -45,6 +46,11 @@ function AuthScreen() {
     // Estados para a tela de verificação
     const [showVerification, setShowVerification] = useState(false);
     const [countdown, setCountdown] = useState(10);
+
+    // Estados para recuperação de senha
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [resetEmail, setResetEmail] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
 
     useEffect(() => {
         const savedEmail = localStorage.getItem('rememberedEmail');
@@ -139,6 +145,36 @@ function AuthScreen() {
             }
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handlePasswordReset = async (e) => {
+        e.preventDefault();
+        const targetEmail = resetEmail.trim() || email.trim();
+        if (!targetEmail || !targetEmail.includes('@')) {
+            showToast('Por favor, informe um endereço de e-mail válido.', 'warning');
+            return;
+        }
+
+        setIsResetting(true);
+        try {
+            await sendPasswordResetEmail(auth, targetEmail);
+            showToast('E-mail de recuperação enviado! Verifique sua caixa de entrada e pasta de spam.', 'success');
+            setIsResetModalOpen(false);
+            setResetEmail('');
+        } catch (error) {
+            console.error("Erro na recuperação de senha:", error);
+            if (error.code === 'auth/user-not-found') {
+                // Mensagem neutra para segurança contra enumeração de usuários
+                showToast('Se este e-mail estiver cadastrado, você receberá o link de recuperação.', 'info');
+                setIsResetModalOpen(false);
+            } else if (error.code === 'auth/invalid-email') {
+                showToast('Formato de e-mail inválido.', 'error');
+            } else {
+                showToast('Não foi possível enviar o e-mail de recuperação. Tente novamente mais tarde.', 'error');
+            }
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -239,7 +275,16 @@ function AuthScreen() {
                                 />
                                 <span className="ml-2">Lembrar-me</span>
                             </label>
-                            <a href="#" className="text-gold hover:text-gold-light transition font-medium">Esqueceu a senha?</a>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    setResetEmail(email);
+                                    setIsResetModalOpen(true);
+                                }} 
+                                className="text-gold hover:text-gold-light transition font-medium cursor-pointer"
+                            >
+                                Esqueceu a senha?
+                            </button>
                         </div>
                     )}
                     <div className="pt-2">
@@ -265,6 +310,58 @@ function AuthScreen() {
                     </button>
                 </div>
             </div>
+
+            {/* Modal de Recuperação de Senha */}
+            {isResetModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+                    <div className="relative w-full max-w-md bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl p-6 sm:p-8 text-gray-200 animate-scaleUp">
+                        <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#2A2A2A]">
+                            <h3 className="text-xl font-bold text-[#FFF3D6] tracking-tight">Recuperar Senha</h3>
+                            <button 
+                                onClick={() => setIsResetModalOpen(false)}
+                                className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handlePasswordReset} className="space-y-4">
+                            <p className="text-xs text-gray-400 leading-relaxed">
+                                Digite o seu e-mail cadastrado. Enviaremos um link seguro para você redefinir a sua senha.
+                            </p>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-300 mb-1" htmlFor="resetEmail">E-mail Cadastrado</label>
+                                <input 
+                                    id="resetEmail" 
+                                    type="email" 
+                                    value={resetEmail} 
+                                    onChange={(e) => setResetEmail(e.target.value)} 
+                                    placeholder="seu@email.com" 
+                                    className="w-full"
+                                    required 
+                                />
+                            </div>
+                            <div className="flex justify-end gap-3 pt-3 border-t border-[#2A2A2A]">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setIsResetModalOpen(false)} 
+                                    className="py-2.5 px-5 bg-[#2A2A2A] hover:bg-[#3A3A3A] rounded-2xl text-gray-300 text-xs font-semibold transition cursor-pointer"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isResetting} 
+                                    className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 text-carbon-900 text-xs font-extrabold rounded-2xl shadow-lg shadow-gold/20 transition cursor-pointer disabled:opacity-50 flex items-center"
+                                >
+                                    {isResetting && <Spinner />}
+                                    <span className={isResetting ? "ml-2" : ""}>Enviar Link</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

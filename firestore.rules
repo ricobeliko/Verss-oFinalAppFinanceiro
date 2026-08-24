@@ -3,20 +3,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Regra OTIMIZADA e SEGURA para o caminho de desenvolvimento
-    match /users_fallback/{userId}/{path=**} {
-      // Permite que o usuário leia e apague seus próprios dados
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
-
-      // Permite a criação de documentos (ex: perfil, cartões, etc.)
-      allow create: if request.auth != null && request.auth.uid == userId;
-
-      // Permite a atualização, EXCETO do campo 'plan'
-      allow update: if request.auth != null && request.auth.uid == userId
-                      && request.resource.data.plan == resource.data.plan; // <-- Trava de segurança
+    // Helper functions para validação de autenticação e propriedade
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Adicione aqui a mesma regra para o caminho de produção, se necessário
-    // match /artifacts/{appId}/users/{userId}/{path=**} { ... }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Regras para o documento de perfil do usuário
+    match /users_fallback/{userId} {
+      // Leitura e exclusão permitidas apenas pelo próprio dono
+      allow read, delete: if isOwner(userId);
+
+      // Criação inicial permitida APENAS com plano 'free' e sem privilégios Pro forjados
+      allow create: if isOwner(userId)
+                    && (!('plan' in request.resource.data) || request.resource.data.plan == 'free')
+                    && (!('proSince' in request.resource.data) || request.resource.data.proSince == null);
+
+      // Atualização: Impede que o cliente eleve seu próprio plano para 'pro' ou altere 'proSince'
+      allow update: if isOwner(userId)
+                    && request.resource.data.plan == resource.data.plan
+                    && (!('proSince' in request.resource.data) || request.resource.data.proSince == resource.data.proSince);
+
+      // Subcoleção de auditoria de pagamentos (somente leitura pelo dono, escrita exclusiva do Admin SDK)
+      match /payments/{paymentId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Subcoleções financeiras operacionais (cartões, pessoas, compras, despesas, receitas, assinaturas)
+      match /{subcollection}/{docId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+                      && (!('userId' in request.resource.data) || request.resource.data.userId == userId);
+
+        allow update: if isOwner(userId)
+                      && (!('userId' in request.resource.data) || request.resource.data.userId == userId);
+      }
+    }
+
+    // Coleção de controle de taxa da IA (Exclusivo Cloud Functions / Admin SDK)
+    match /ai_rate_limits/{userId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -18,35 +18,63 @@ export const formatCurrencyDisplay = (value) => {
 };
 
 /**
- * Converte uma string de moeda formatada (ex: "1.234,56") para um número (ex: 1234.56).
- * Esta função é a parceira da 'handleCurrencyInputChange' e desfaz a formatação com segurança.
- * @param {string} inputString - A string de entrada da moeda.
+ * Converte uma string de moeda formatada ou valor numérico para um número Float válido (ex: "1.234,56" -> 1234.56).
+ * Suporta formatos brasileiros ("1.234,56"), formatos com vírgula ("1234,56"), decimais com ponto ("100.50") e números diretos.
+ * @param {string | number | null | undefined} inputString - A entrada da moeda.
  * @returns {number} O valor numérico analisado. Retorna 0 se a entrada for inválida.
  */
 export const parseCurrencyInput = (inputString) => {
-  if (typeof inputString !== 'string' || !inputString.trim()) {
+  if (inputString === null || inputString === undefined || inputString === '') {
     return 0;
   }
-  // Remove tudo que não for dígito ou a vírgula do decimal.
-  const cleanedString = inputString
-    .replace(/\./g, '')  // Remove os pontos de milhar
-    .replace(',', '.'); // Troca a vírgula do decimal por um ponto
+  if (typeof inputString === 'number') {
+    return isNaN(inputString) ? 0 : inputString;
+  }
+  if (typeof inputString !== 'string') {
+    return 0;
+  }
 
-  // Remove qualquer caractere não numérico que possa ter sobrado (exceto o ponto decimal)
-  const finalString = cleanedString.replace(/[^0-9.]/g, '');
-    
+  let str = inputString.trim();
+  if (!str) return 0;
+
+  // Se contiver ponto E vírgula (ex: "1.234,56" ou "1,234.56")
+  if (str.includes('.') && str.includes(',')) {
+    const lastDot = str.lastIndexOf('.');
+    const lastComma = str.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // Padrão Brasileiro: 1.234,56 -> remove pontos e troca vírgula por ponto
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Padrão Internacional: 1,234.56 -> remove vírgulas
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    // Apenas vírgula: "1234,56" -> troca vírgula por ponto
+    str = str.replace(',', '.');
+  } else if (str.includes('.')) {
+    // Apenas pontos: se tiver múltiplos pontos (ex: 1.000.000) remove todos exceto se for decimal único
+    const parts = str.split('.');
+    if (parts.length > 2) {
+      str = str.replace(/\./g, '');
+    }
+    // Se tiver 1 ponto único, mantém como ponto decimal padrão (ex: "100.50")
+  }
+
+  // Remove caracteres que não sejam dígitos, ponto decimal ou sinal negativo
+  const finalString = str.replace(/[^0-9.-]/g, '');
   const parsed = parseFloat(finalString);
   return isNaN(parsed) ? 0 : parsed;
 };
 
 /**
  * Formata um valor numérico para ser usado em um campo de input (ex: 1234.56 -> "1.234,56").
- * Útil para preencher o formulário ao editar uma compra existente.
- * @param {number} value - O valor numérico.
+ * Útil para preencher o formulário ao editar uma compra ou valor existente.
+ * @param {number | string} value - O valor numérico.
  * @returns {string} O valor formatado para um campo de input.
  */
 export const formatCurrencyForInput = (value) => {
-    const num = Number(value);
+    if (value === null || value === undefined || value === '') return '';
+    const num = typeof value === 'number' ? value : parseCurrencyInput(value);
     if (isNaN(num)) return '';
     return num.toLocaleString('pt-BR', {
         minimumFractionDigits: 2,
@@ -54,26 +82,34 @@ export const formatCurrencyForInput = (value) => {
     });
 };
 
-
 /**
  * Manipulador de eventos onChange para campos de input de moeda.
- * Esta é a "máscara inteligente" que aceita qualquer formato e o padroniza.
+ * Aceita digitação progressiva e mantém formatação consistente.
  * @param {function} setter - A função setState do React para atualizar o valor do estado.
  */
 export const handleCurrencyInputChange = (setter) => (e) => {
   let value = e.target.value;
   
-  // 1. Remove tudo que não for dígito. Isso trata "1.599,18" e "1599,18" da mesma forma.
-  value = value.replace(/\D/g, '');
+  if (value === null || value === undefined) {
+    setter('');
+    return;
+  }
+
+  // 1. Remove tudo que não for dígito
+  const digitsOnly = String(value).replace(/\D/g, '');
 
   // 2. Se estiver vazio, define o estado como uma string vazia para o placeholder aparecer.
-  if (value === '') {
+  if (digitsOnly === '') {
     setter('');
     return;
   }
 
   // 3. Converte para número para remover zeros à esquerda (ex: "0050" -> 50)
-  const numberValue = parseInt(value, 10);
+  const numberValue = parseInt(digitsOnly, 10);
+  if (isNaN(numberValue)) {
+    setter('');
+    return;
+  }
 
   // 4. Formata o número de centavos de volta para uma string no formato BRL (ex: 123456 -> "1.234,56")
   const formattedValue = (numberValue / 100).toLocaleString('pt-BR', {

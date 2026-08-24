@@ -1,9 +1,12 @@
 // src/features/income/IncomeManagement.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
+import Button from '../../components/Button';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
+import { useIncomes } from '../../hooks/useIncomes';
+import { useClients } from '../../hooks/useClients';
 
 // --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -11,10 +14,10 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" heig
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 function IncomeManagement() {
-    const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
+    const { userId, db, showToast, getUserCollectionPathSegments, theme } = useAppContext();
 
-    const [incomes, setIncomes] = useState([]);
-    const [clients, setClients] = useState([]);
+    const { incomes } = useIncomes();
+    const { clients } = useClients();
 
     // --- State de Controle dos Modais ---
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,23 +30,7 @@ function IncomeManagement() {
     const [valueInput, setValueInput] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [clientId, setClientId] = useState('');
-
-    useEffect(() => {
-        if (!isAuthReady || !userId) return;
-        const userCollectionPath = getUserCollectionPathSegments();
-        const basePath = [...userCollectionPath, userId];
-        
-        const clientsRef = collection(db, ...basePath, 'clients');
-        const unsubClients = onSnapshot(clientsRef, (snapshot) => setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        
-        const incomesRef = collection(db, ...basePath, 'incomes');
-        const q = query(incomesRef, orderBy("createdAt", "desc"));
-        const unsubIncomes = onSnapshot(q, (snapshot) => {
-            setIncomes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-
-        return () => { unsubClients(); unsubIncomes(); };
-    }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const resetForm = () => {
         setDescription('');
@@ -73,14 +60,27 @@ function IncomeManagement() {
     };
 
     const handleSaveIncome = async () => {
+        if (isSubmitting) return;
+
         const value = parseCurrencyInput(valueInput);
         if (!description.trim() || !value || !date || !clientId) {
-            showToast('Por favor, preencha todos os campos.', 'warning');
+            showToast('Por favor, preencha todos os campos obrigatórios.', 'warning');
             return;
         }
+
+        setIsSubmitting(true);
         const userCollectionPath = getUserCollectionPathSegments();
-        const incomeData = { description, value, date, clientId };
+        const incomeData = { description: description.trim(), value, date, clientId, status: 'Recebido' };
         try {
+            if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+                const newIncome = { id: `income-e2e-${Date.now()}`, ...incomeData, userId };
+                window.__FINCONTROL_E2E_MOCK_DATA__.incomes = [...(window.__FINCONTROL_E2E_MOCK_DATA__.incomes || []), newIncome];
+                showToast("Receita adicionada com sucesso!", "success");
+                handleCloseModal();
+                setIsSubmitting(false);
+                return;
+            }
+
             if (editingIncome) {
                 const incomeDocRef = doc(db, ...userCollectionPath, userId, 'incomes', editingIncome.id);
                 await updateDoc(incomeDocRef, { ...incomeData, updatedAt: serverTimestamp() });
@@ -93,6 +93,8 @@ function IncomeManagement() {
             handleCloseModal();
         } catch (error) {
             showToast(`Erro ao salvar receita: ${error.message}`, "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -102,7 +104,9 @@ function IncomeManagement() {
     };
 
     const handleDeleteConfirmed = async () => {
-        if (!incomeToDelete) return;
+        if (!incomeToDelete || isSubmitting) return;
+
+        setIsSubmitting(true);
         const userCollectionPath = getUserCollectionPathSegments();
         try {
             await deleteDoc(doc(db, ...userCollectionPath, userId, 'incomes', incomeToDelete));
@@ -110,12 +114,13 @@ function IncomeManagement() {
         } catch (error) {
             showToast(`Erro ao deletar receita: ${error.message}`, "error");
         } finally {
+            setIsSubmitting(false);
             setIsConfirmationModalOpen(false);
             setIncomeToDelete(null);
         }
     };
     
-    const getClientName = (cId) => clients.find(c => c.id === cId)?.name || 'N/A';
+    const getClientName = (cId) => clients.find(client => client.id === cId)?.name || 'N/A';
 
     return (
         <div className="space-y-8 animate-fadeIn">
@@ -125,10 +130,14 @@ function IncomeManagement() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Receitas</h1>
                     <p className="text-sm text-gray-400 mt-1">Adicione e acompanhe suas fontes de renda e ganhos avulsos.</p>
                 </div>
-                <button onClick={() => handleOpenModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer">
-                    <PlusIcon />
-                    <span>Adicionar Receita</span>
-                </button>
+                <Button 
+                    variant="primary" 
+                    icon={<PlusIcon />}
+                    onClick={() => handleOpenModal()} 
+                    className="w-full sm:w-auto"
+                >
+                    Adicionar Receita
+                </Button>
             </div>
 
             {/* Tabela de Receitas */}
@@ -153,8 +162,24 @@ function IncomeManagement() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-emerald-400">{formatCurrencyDisplay(income.value)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap font-medium">
                                         <div className="flex items-center gap-4">
-                                            <button onClick={() => handleOpenModal(income)} className="text-gold hover:text-gold-light transition cursor-pointer" title="Editar"><EditIcon /></button>
-                                            <button onClick={() => confirmDelete(income.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Deletar"><DeleteIcon /></button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleOpenModal(income)} 
+                                                aria-label={`Editar receita ${income.description || ''}`.trim()}
+                                                className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                                title="Editar"
+                                            >
+                                                <EditIcon />
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => confirmDelete(income.id)} 
+                                                aria-label={`Excluir receita ${income.description || ''}`.trim()}
+                                                className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                                title="Deletar"
+                                            >
+                                                <DeleteIcon />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -180,8 +205,8 @@ function IncomeManagement() {
                     <div>
                         <label htmlFor="incomeValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
-                            <input id="incomeValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full pl-12" required inputMode="decimal" placeholder="0,00" />
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
+                            <input id="incomeValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div>
@@ -196,9 +221,21 @@ function IncomeManagement() {
                         </select>
                     </div>
                 </div>
-                <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleSaveIncome} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20">Salvar</button>
+                <div className="mt-6 flex justify-end gap-3">
+                    <Button 
+                        variant="secondary" 
+                        onClick={handleCloseModal}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button 
+                        variant="primary" 
+                        type="submit"
+                        isLoading={isSubmitting}
+                        onClick={handleSaveIncome}
+                    >
+                        {editingIncome ? 'Atualizar Receita' : 'Salvar Receita'}
+                    </Button>
                 </div>
             </GenericModal>
 

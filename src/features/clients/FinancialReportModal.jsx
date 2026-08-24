@@ -1,13 +1,16 @@
 // src/features/clients/FinancialReportModal.jsx
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import React, { useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { copyTextToClipboardFallback } from '../../utils/helpers';
+import { generateTransactionsCsv, downloadCsvFile } from '../../services/csvExportService';
 import UpgradePrompt from '../../components/UpgradePrompt';
-import jsPDF from 'jspdf';
+import Button from '../../components/Button';
 import html2canvas from 'html2canvas';
+import { useLoans } from '../../hooks/useLoans';
+import { useExpenses } from '../../hooks/useExpenses';
+import { useSubscriptions } from '../../hooks/useSubscriptions';
 
 // --- Ícones ---
 const XIcon = () => (
@@ -18,35 +21,12 @@ const XIcon = () => (
 );
 
 export default function FinancialReportModal({ isOpen, onClose, client }) {
-    const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments } = useAppContext();
-    const [allLoans, setAllLoans] = useState([]);
-    const [allExpenses, setAllExpenses] = useState([]);
-    const [allSubscriptions, setAllSubscriptions] = useState([]);
+    const { isPro, isTrialActive, showToast } = useAppContext();
+    const { loans: allLoans } = useLoans();
+    const { expenses: allExpenses } = useExpenses();
+    const { subscriptions: allSubscriptions } = useSubscriptions();
 
     const hasProAccess = isPro || isTrialActive;
-
-    useEffect(() => {
-        if (!isOpen || !client || !userId || !hasProAccess) return;
-
-        const userCollectionPath = getUserCollectionPathSegments();
-        const basePath = [...userCollectionPath, userId];
-        
-        const unsubLoans = onSnapshot(collection(db, ...basePath, 'loans'), snapshot => {
-            setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        const unsubExpenses = onSnapshot(collection(db, ...basePath, 'expenses'), snapshot => {
-            setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        const unsubSubs = onSnapshot(collection(db, ...basePath, 'subscriptions'), snapshot => {
-            setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-
-        return () => {
-            unsubLoans();
-            unsubExpenses();
-            unsubSubs();
-        };
-    }, [isOpen, client, userId, db, hasProAccess, getUserCollectionPathSegments]);
 
     const reportData = useMemo(() => {
         if (!client) return null;
@@ -212,25 +192,60 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
         }
     };
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         const reportElement = document.getElementById('financial-report-content');
         if (reportElement) {
             showToast('Gerando PDF... Aguarde.', 'info');
-            html2canvas(reportElement, {
-                backgroundColor: '#141414', 
-                scale: 2 
-            }).then(canvas => {
+            try {
+                const canvas = await html2canvas(reportElement, {
+                    backgroundColor: '#141414', 
+                    scale: 2 
+                });
+                const { default: jsPDF } = await import('jspdf');
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
                 pdf.save(`relatorio_${client.name.toLowerCase().replace(' ', '_')}.pdf`);
-            }).catch(err => {
+            } catch (err) {
                 showToast('Erro ao gerar PDF.', 'error');
-                console.error("Erro no html2canvas:", err);
-            });
+                console.error("Erro no html2canvas / jsPDF:", err);
+            }
         }
+    };
+
+    const handleExportCSV = () => {
+        if (!reportData) return;
+        const clientItems = [];
+
+        reportData.openLoans?.forEach(loan => {
+            let installments = [];
+            if (loan.isShared) {
+                if (loan.sharedDetails?.person1?.clientId === client.id) installments = loan.sharedDetails.person1.installments;
+                else if (loan.sharedDetails?.person2?.clientId === client.id) installments = loan.sharedDetails.person2.installments;
+            } else {
+                installments = loan.installments;
+            }
+            installments = Array.isArray(installments) ? installments : [];
+            installments.forEach(inst => {
+                clientItems.push({
+                    type: 'Compra Parcelada',
+                    date: inst.dueDate,
+                    description: loan.description || 'Compra sem descrição',
+                    category: 'Parcelamento',
+                    clientName: reportData.clientName,
+                    cardName: '-',
+                    installment: `${inst.number}/${installments.length}`,
+                    value: inst.value || 0,
+                    status: inst.status || 'Pendente'
+                });
+            });
+        });
+
+        const csvContent = generateTransactionsCsv(clientItems);
+        downloadCsvFile(csvContent, `relatorio_${client.name.toLowerCase().replace(/\s+/g, '_')}.csv`);
+        showToast('Relatório CSV exportado com sucesso!', 'success');
     };
 
     if (!isOpen) return null;
@@ -239,15 +254,25 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={onClose}></div>
 
-            <div className="relative z-10 w-full max-w-4xl max-h-[90vh] bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl flex flex-col text-gray-200 overflow-hidden animate-scaleUp">
+            <div 
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="financial-report-title"
+                className="relative z-10 w-full max-w-4xl max-h-[90vh] bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl flex flex-col text-gray-200 overflow-hidden animate-scaleUp"
+            >
                 
                 {/* Cabeçalho */}
                 <div className="flex justify-between items-center p-6 border-b border-[#2A2A2A] flex-shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-[#FFF3D6] tracking-tight">Relatório Financeiro</h2>
+                        <h2 id="financial-report-title" className="text-xl font-bold text-[#FFF3D6] tracking-tight">Relatório Financeiro</h2>
                         <p className="text-sm text-gold mt-0.5">{reportData?.clientName}</p>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer">
+                    <button 
+                        type="button"
+                        onClick={onClose} 
+                        aria-label="Fechar relatório"
+                        className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                    >
                         <XIcon />
                     </button>
                 </div>
@@ -342,13 +367,31 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                 </div>
 
                 {/* Rodapé */}
-                <div className="flex justify-end items-center p-4 border-t border-[#2A2A2A] flex-shrink-0 gap-3">
-                    <button onClick={handleCopyText} disabled={!hasProAccess} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                <div className="flex flex-wrap justify-end items-center p-4 border-t border-[#2A2A2A] flex-shrink-0 gap-3">
+                    <Button 
+                        variant="secondary" 
+                        size="md" 
+                        onClick={handleCopyText} 
+                        disabled={!hasProAccess}
+                    >
                         Copiar Texto
-                    </button>
-                    <button onClick={handleExportPDF} disabled={!hasProAccess} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer text-sm shadow-lg shadow-gold/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                    </Button>
+                    <Button 
+                        variant="outline-gold" 
+                        size="md" 
+                        onClick={handleExportCSV} 
+                        disabled={!hasProAccess}
+                    >
+                        Exportar CSV
+                    </Button>
+                    <Button 
+                        variant="primary" 
+                        size="md" 
+                        onClick={handleExportPDF} 
+                        disabled={!hasProAccess}
+                    >
                         Exportar PDF
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

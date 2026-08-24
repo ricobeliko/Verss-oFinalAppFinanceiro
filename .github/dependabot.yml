@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # Monitoramento de dependências do Frontend e Raiz
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ricobeliko"
+    labels:
+      - "dependencies"
+      - "security"
+    ignore:
+      # Não permitir major automerge ou updates que quebrem compatibilidade
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Monitoramento de dependências das Cloud Functions
+  - package-ecosystem: "npm"
+    directory: "/functions"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "America/Sao_Paulo"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ricobeliko"
+    labels:
+      - "dependencies"
+      - "backend"
+      - "security"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

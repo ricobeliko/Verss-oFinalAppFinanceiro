@@ -1,9 +1,14 @@
 // src/features/loans/LoanManagement.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
+import { calculateInstallments, calculateRemainingAmount, calculatePaymentStatus } from '../../services/financialService';
 import GenericModal from '../../components/GenericModal';
+import Button from '../../components/Button';
+import { useLoans } from '../../hooks/useLoans';
+import { useClients } from '../../hooks/useClients';
+import { useCards } from '../../hooks/useCards';
 
 // --- Componentes de Ícone ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -13,12 +18,12 @@ const ChevronUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" heigh
 const WarningIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="text-rose-400 flex-shrink-0" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
-function LoanManagement({ onOpenPdfModal }) {
-    const { db: database, userId, isAuthReady: isAuthenticationReady, getUserCollectionPathSegments, theme, showToast } = useAppContext();
+function LoanManagement() {
+    const { db: database, userId, getUserCollectionPathSegments, showToast } = useAppContext();
 
-    const [allLoans, setAllLoans] = useState([]);
-    const [allClients, setAllClients] = useState([]);
-    const [allCards, setAllCards] = useState([]);
+    const { loans: allLoans } = useLoans();
+    const { clients: allClients } = useClients();
+    const { cards: allCards } = useCards();
 
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,25 +45,6 @@ function LoanManagement({ onOpenPdfModal }) {
     const [selectedClient2Id, setSelectedClient2Id] = useState('');
     const [person1ShareInput, setPerson1ShareInput] = useState('');
     const [person2ShareDisplay, setPerson2ShareDisplay] = useState('R$ 0,00');
-
-    useEffect(() => {
-        if (!isAuthenticationReady || !database || !userId) return;
-
-        const userCollectionPath = getUserCollectionPathSegments();
-        const clientsReference = collection(database, ...userCollectionPath, userId, 'clients');
-        const cardsReference = collection(database, ...userCollectionPath, userId, 'cards');
-        const loansReference = query(collection(database, ...userCollectionPath, userId, 'loans'), orderBy('createdAt', 'desc'));
-
-        const unsubscribeClients = onSnapshot(clientsReference, snapshot => setAllClients(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
-        const unsubscribeCards = onSnapshot(cardsReference, snapshot => setAllCards(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
-        const unsubscribeLoans = onSnapshot(loansReference, snapshot => setAllLoans(snapshot.docs.map(document => ({ id: document.id, ...document.data() }))));
-        
-        return () => {
-            unsubscribeClients();
-            unsubscribeCards();
-            unsubscribeLoans();
-        };
-    }, [database, userId, isAuthenticationReady, getUserCollectionPathSegments]);
     
     useEffect(() => {
         if (purchaseDate && selectedCardId && allCards.length > 0) {
@@ -163,47 +149,18 @@ function LoanManagement({ onOpenPdfModal }) {
     };
 
     const handleSaveLoan = async () => {
-        setIsLoading(true);
+        if (isLoading) return;
         const totalValue = parseCurrencyInput(totalValueInput);
         const installmentsNumber = parseInt(installmentsCount, 10);
 
-        if (!description.trim() || !totalValue || installmentsNumber < 1 || !purchaseDate || !selectedCardId || !firstDueDate) {
-            showToast('Preencha todos os campos obrigatórios da compra.', 'warning');
-            setIsLoading(false);
+        if (!description.trim() || !totalValue || isNaN(installmentsNumber) || installmentsNumber < 1 || !purchaseDate || !selectedCardId || !firstDueDate) {
+            showToast('Preencha todos os campos obrigatórios da compra com valores válidos.', 'warning');
             return;
         }
-        
-        const calculateInstallments = (value, count, startDate) => {
-            const numericValue = Number(value) || 0;
-            if (numericValue <= 0 || count < 1) return [];
 
-            const installmentValue = parseFloat((numericValue / count).toFixed(2));
-            let totalCalculated = 0;
-            const installments = [];
-            
-            for (let index = 0; index < count; index++) {
-                const dueDate = new Date(startDate + "T12:00:00Z");
-                dueDate.setUTCMonth(dueDate.getUTCMonth() + index);
-                
-                let currentInstallmentValue = installmentValue;
-                if (index === count - 1) {
-                    currentInstallmentValue = parseFloat((numericValue - totalCalculated).toFixed(2));
-                }
-
-                installments.push({
-                    number: index + 1,
-                    value: currentInstallmentValue,
-                    dueDate: dueDate.toISOString().split('T')[0],
-                    status: 'Pendente',
-                    paidDate: null
-                });
-                totalCalculated += installmentValue;
-            }
-            return installments;
-        };
-
+        setIsLoading(true);
         const loanData = { 
-            description, 
+            description: description.trim(), 
             totalValue, 
             installmentsCount: installmentsNumber, 
             purchaseDate, 
@@ -222,10 +179,10 @@ function LoanManagement({ onOpenPdfModal }) {
             }
             loanData.clientId = selectedClientId;
             loanData.isShared = false;
-            loanData.installments = calculateInstallments(totalValue, installmentsNumber, firstDueDate);
+            loanData.installments = calculateInstallments({ totalValue, count: installmentsNumber, startDate: firstDueDate });
         } else {
             const person1Share = parseCurrencyInput(person1ShareInput);
-            const person2Share = totalValue - person1Share;
+            const person2Share = parseFloat((totalValue - person1Share).toFixed(2));
 
             if (!selectedClient1Id || !selectedClient2Id || person1Share <= 0 || person2Share < 0) {
                 showToast('Preencha todos os campos da compra compartilhada.', 'warning');
@@ -239,14 +196,37 @@ function LoanManagement({ onOpenPdfModal }) {
             }
             
             loanData.isShared = true;
-            loanData.installments = calculateInstallments(totalValue, installmentsNumber, firstDueDate);
+            loanData.installments = calculateInstallments({ totalValue, count: installmentsNumber, startDate: firstDueDate });
             loanData.sharedDetails = {
-                person1: { clientId: selectedClient1Id, shareAmount: person1Share, installments: calculateInstallments(person1Share, installmentsNumber, firstDueDate), valuePaid: 0, balanceDue: person1Share, statusPayment: 'Pendente' },
-                person2: { clientId: selectedClient2Id, shareAmount: person2Share, installments: person2Share > 0 ? calculateInstallments(person2Share, installmentsNumber, firstDueDate) : [], valuePaid: 0, balanceDue: person2Share, statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' }
+                person1: { 
+                    clientId: selectedClient1Id, 
+                    shareAmount: person1Share, 
+                    installments: calculateInstallments({ totalValue: person1Share, count: installmentsNumber, startDate: firstDueDate }), 
+                    valuePaid: 0, 
+                    balanceDue: person1Share, 
+                    statusPayment: 'Pendente' 
+                },
+                person2: { 
+                    clientId: selectedClient2Id, 
+                    shareAmount: person2Share, 
+                    installments: person2Share > 0 ? calculateInstallments({ totalValue: person2Share, count: installmentsNumber, startDate: firstDueDate }) : [], 
+                    valuePaid: 0, 
+                    balanceDue: person2Share, 
+                    statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' 
+                }
             };
         }
 
         try {
+            if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+                const newLoan = { id: `loan-e2e-${Date.now()}`, ...loanData, userId };
+                window.__FINCONTROL_E2E_MOCK_DATA__.loans = [...(window.__FINCONTROL_E2E_MOCK_DATA__.loans || []), newLoan];
+                showToast('Compra adicionada com sucesso!', 'success');
+                handleCloseModal();
+                setIsLoading(false);
+                return;
+            }
+
             const userCollectionPath = getUserCollectionPathSegments();
             if (editingLoan) {
                 const loanDocumentReference = doc(database, ...userCollectionPath, userId, 'loans', editingLoan.id);
@@ -271,7 +251,8 @@ function LoanManagement({ onOpenPdfModal }) {
     };
 
     const handleDeleteLoanConfirmed = async () => {
-        if (!loanIdToDelete) return;
+        if (!loanIdToDelete || isLoading) return;
+        setIsLoading(true);
         try {
             const userCollectionPath = getUserCollectionPathSegments();
             await deleteDoc(doc(database, ...userCollectionPath, userId, 'loans', loanIdToDelete));
@@ -279,15 +260,13 @@ function LoanManagement({ onOpenPdfModal }) {
         } catch (error) {
             showToast(`Erro ao deletar: ${error.message}`, "error");
         } finally {
+            setIsLoading(false);
             setIsConfirmationModalOpen(false);
             setLoanIdToDelete(null);
         }
     };
 
     const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
-        console.log("Debug - userId atual:", userId);
-        console.log("Debug - loanId:", loanId);
-
         const loanToUpdate = allLoans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
             showToast('Erro: Compra não encontrada.', 'error');
@@ -314,7 +293,7 @@ function LoanManagement({ onOpenPdfModal }) {
         if (installmentIndex === -1) {
             showToast('Erro: Parcela não encontrada.', 'error');
             return;
-        };
+        }
 
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
@@ -323,9 +302,9 @@ function LoanManagement({ onOpenPdfModal }) {
             .filter(installment => installment.status === 'Paga')
             .reduce((sum, installment) => sum + installment.value, 0);
 
-        const newBalanceDue = parseFloat((originalAmount - newValuePaid).toFixed(2));
-        
-        const finalStatus = newBalanceDue <= 0.01 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+        const newBalanceDue = calculateRemainingAmount(originalAmount, newValuePaid);
+        const calculatedStatus = calculatePaymentStatus(originalAmount, newValuePaid);
+        const finalStatus = calculatedStatus === 'Pago' ? 'Pago Total' : (calculatedStatus === 'Parcial' ? 'Pago Parcial' : 'Pendente');
 
         const fieldsToUpdate = {
             userId: userId,
@@ -343,8 +322,6 @@ function LoanManagement({ onOpenPdfModal }) {
             fieldsToUpdate.balanceDueClient = newBalanceDue;
             fieldsToUpdate.statusPaymentClient = finalStatus;
         }
-        
-        console.log("Debug - Payload fieldsToUpdate:", fieldsToUpdate);
 
         try {
             const userCollectionPath = getUserCollectionPathSegments();
@@ -443,13 +420,14 @@ function LoanManagement({ onOpenPdfModal }) {
                         </div>
                     </div>
 
-                    <button 
+                    <Button 
+                        variant="primary" 
+                        icon={<PlusIcon />}
                         onClick={() => handleOpenModal()} 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer"
+                        className="flex-1 sm:flex-none"
                     >
-                        <PlusIcon />
-                        <span>Adicionar Compra</span>
-                    </button>
+                        Adicionar Compra
+                    </Button>
                 </div>
             </div>
             
@@ -525,11 +503,32 @@ function LoanManagement({ onOpenPdfModal }) {
                                    )}
                                </div>
                                <div className="flex items-center justify-end gap-4">
-                                   <button onClick={() => handleOpenModal(loan)} className="text-gold hover:text-gold-light transition cursor-pointer" title="Editar"><EditIcon /></button>
-                                   <button onClick={() => confirmDeleteLoan(loan.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Deletar"><DeleteIcon /></button>
-                                   <button onClick={() => toggleInstallmentsVisibility(loan.id)} className="text-gray-400 hover:text-white transition p-1.5 rounded-xl bg-carbon-800 hover:bg-carbon-700 cursor-pointer">
-                                       {visibleInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
-                                   </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleOpenModal(loan)} 
+                                        aria-label={`Editar compra ${loan.description || ''}`.trim()}
+                                        className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                        title="Editar"
+                                    >
+                                        <EditIcon />
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => confirmDeleteLoan(loan.id)} 
+                                        aria-label={`Excluir compra ${loan.description || ''}`.trim()}
+                                        className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                        title="Deletar"
+                                    >
+                                        <DeleteIcon />
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => toggleInstallmentsVisibility(loan.id)} 
+                                        aria-label={visibleInstallments[loan.id] ? "Ocultar parcelas" : "Ver parcelas"}
+                                        className="text-gray-400 hover:text-white transition p-1.5 rounded-xl bg-carbon-800 hover:bg-carbon-700 cursor-pointer"
+                                    >
+                                        {visibleInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
+                                    </button>
                                </div>
                             </div>
                             {visibleInstallments[loan.id] && (
@@ -594,8 +593,8 @@ function LoanManagement({ onOpenPdfModal }) {
                             <div className="w-full">
                                 <label htmlFor="totalValueInput" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
                                 <div className="relative w-full">
-                                    <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
-                                    <input id="totalValueInput" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full pl-12" required inputMode="decimal" />
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
+                                    <input id="totalValueInput" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
                                 </div>
                             </div>
                             <div className="w-full">
@@ -609,8 +608,8 @@ function LoanManagement({ onOpenPdfModal }) {
                                 <div className="w-full">
                                     <label htmlFor="totalValueShared" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
                                     <div className="relative w-full">
-                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
-                                        <input id="totalValueShared" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full pl-12" required inputMode="decimal" />
+                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
+                                        <input id="totalValueShared" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
                                     </div>
                                 </div>
                                 <div className="w-full">
@@ -629,8 +628,8 @@ function LoanManagement({ onOpenPdfModal }) {
                                 <div className="w-full">
                                     <label htmlFor="person1ShareInput" className="block text-sm font-medium text-gray-300 mb-1">Valor da Pessoa 1</label>
                                     <div className="relative w-full">
-                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold">R$</span>
-                                        <input id="person1ShareInput" type="text" placeholder="0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full pl-12" required inputMode="decimal" />
+                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
+                                        <input id="person1ShareInput" type="text" placeholder="0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
                                     </div>
                                 </div>
                                 <div className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl text-center text-gray-300 h-[50px] flex items-center justify-between px-4 w-full">
@@ -648,11 +647,21 @@ function LoanManagement({ onOpenPdfModal }) {
                         </div>
                     )}
                 </div>
-                <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleSaveLoan} disabled={isLoading} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50">
-                        {isLoading ? 'Salvando...' : editingLoan ? 'Atualizar Compra' : 'Salvar Compra'}
-                    </button>
+                <div className="mt-6 flex justify-end gap-3">
+                    <Button 
+                        variant="secondary" 
+                        onClick={handleCloseModal}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button 
+                        variant="primary" 
+                        type="submit"
+                        isLoading={isLoading}
+                        onClick={handleSaveLoan}
+                    >
+                        {editingLoan ? 'Atualizar Compra' : 'Salvar Compra'}
+                    </Button>
                 </div>
             </GenericModal>
 

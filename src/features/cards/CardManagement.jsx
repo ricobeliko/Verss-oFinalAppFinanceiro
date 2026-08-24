@@ -1,10 +1,16 @@
 // src/features/cards/CardManagement.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useCallback } from 'react';
+import { collection, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import CarbonCard from '../../components/CarbonCard';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
+import { calculateCardLimitIntelligence } from '../../services/financialService';
+import { useCards } from '../../hooks/useCards';
+import { useLoans } from '../../hooks/useLoans';
+import { useSubscriptions } from '../../hooks/useSubscriptions';
+import { useExpenses } from '../../hooks/useExpenses';
+import { usePaidSubscriptions } from '../../hooks/usePaidSubscriptions';
 
 // --- Ícones ---
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
@@ -32,35 +38,22 @@ const getInvoiceDueDate = (transactionDate, card) => {
 };
 
 export default function CardManagement() {
-    const { userId, db, showToast, isAuthReady, getUserCollectionPathSegments, theme } = useAppContext();
+    const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
     
-    const [cards, setCards] = useState([]);
-    const [allLoans, setAllLoans] = useState([]);
-    const [allSubscriptions, setAllSubscriptions] = useState([]);
-    const [allExpenses, setAllExpenses] = useState([]);
-    const [paidSubscriptions, setPaidSubscriptions] = useState([]);
+    const { cards } = useCards();
+    const { loans: allLoans } = useLoans();
+    const { subscriptions: allSubscriptions } = useSubscriptions();
+    const { expenses: allExpenses } = useExpenses();
+    const { paidSubscriptions } = usePaidSubscriptions();
     const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [cardToDelete, setCardToDelete] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formValues, setFormValues] = useState({
         name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705'
     });
-
-    useEffect(() => {
-        if (!isAuthReady || !userId) return;
-        const userCollectionPath = getUserCollectionPathSegments();
-        const basePath = [...userCollectionPath, userId];
-        
-        const unsubCards = onSnapshot(collection(db, ...basePath, 'cards'), (snapshot) => setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubLoans = onSnapshot(collection(db, ...basePath, 'loans'), (snapshot) => setAllLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubSubs = onSnapshot(collection(db, ...basePath, 'subscriptions'), (snapshot) => setAllSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubExpenses = onSnapshot(collection(db, ...basePath, 'expenses'), (snapshot) => setAllExpenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-        const unsubPaidSubs = onSnapshot(collection(db, ...basePath, 'paidSubscriptions'), (snapshot) => setPaidSubscriptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
-
-        return () => { unsubCards(); unsubLoans(); unsubSubs(); unsubExpenses(); unsubPaidSubs(); };
-    }, [userId, db, isAuthReady, getUserCollectionPathSegments]);
     
     const calculateInvoiceDetails = useCallback((card, selectedMonth) => {
         if (!card || !card.closingDay || !selectedMonth) return { total: 0, isPending: false };
@@ -73,17 +66,16 @@ export default function CardManagement() {
         allLoans.forEach(loan => {
             if (loan.cardId !== card.id) return;
             const processInstallments = (installments) => {
-                if (Array.isArray(installments)) {
-                    installments.forEach(inst => {
-                        const instDate = new Date(inst.dueDate + "T00:00:00Z");
-                        const invoiceDate = getInvoiceDueDate(instDate, card);
-                        if (invoiceDate.getUTCFullYear() === invoiceDateForPeriod.getUTCFullYear() && invoiceDate.getUTCMonth() === invoiceDateForPeriod.getUTCMonth()) {
-                            totalInvoice += (inst.value || 0);
-                            if (inst.status !== 'Paga') isInvoicePending = true;
-                        }
-                    });
-                }
+                if (!Array.isArray(installments)) return;
+                installments.forEach(inst => {
+                    const instDueDate = new Date(inst.dueDate + "T00:00:00Z");
+                    if (instDueDate.getUTCFullYear() === invoiceDateForPeriod.getUTCFullYear() && instDueDate.getUTCMonth() === invoiceDateForPeriod.getUTCMonth()) {
+                        totalInvoice += inst.value;
+                        if (inst.status !== 'Paga') isInvoicePending = true;
+                    }
+                });
             };
+
             if (loan.isShared && loan.sharedDetails) {
                 if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments);
                 if (loan.sharedDetails.person2) processInstallments(loan.sharedDetails.person2.installments);
@@ -93,62 +85,36 @@ export default function CardManagement() {
         });
 
         allExpenses.forEach(expense => {
-            if (expense.cardId === card.id) {
-                const expenseDate = expense.date?.toDate ? expense.date.toDate() : new Date(expense.date + "T00:00:00Z");
-                const invoiceDate = getInvoiceDueDate(expenseDate, card);
-                if (invoiceDate.getUTCFullYear() === invoiceDateForPeriod.getUTCFullYear() && invoiceDate.getUTCMonth() === invoiceDateForPeriod.getUTCMonth()) {
-                    totalInvoice += expense.value;
-                    if (expense.status !== 'Paga') isInvoicePending = true;
-                }
+            if (expense.cardId !== card.id) return;
+            const expenseDate = expense.date?.toDate ? expense.date.toDate() : new Date(expense.date + "T00:00:00Z");
+            if (expenseDate.getUTCFullYear() === year && expenseDate.getUTCMonth() === month - 1) {
+                totalInvoice += expense.value;
+                if (expense.status !== 'Paga') isInvoicePending = true;
             }
         });
         
-        const addedSubKeys = new Set();
         allSubscriptions.forEach(sub => {
-            if (sub.cardId === card.id && sub.isActive) {
-                 [-1, 0].forEach(monthOffset => {
-                    const chargeDate = new Date(Date.UTC(year, month - 1 + monthOffset, sub.dueDate));
-                    const invoiceDueDate = getInvoiceDueDate(chargeDate, card);
-                    if (invoiceDueDate.getUTCFullYear() === invoiceDateForPeriod.getUTCFullYear() && invoiceDueDate.getUTCMonth() === invoiceDateForPeriod.getUTCMonth()) {
-                        const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
-                        if (!addedSubKeys.has(uniqueKey)) {
-                            totalInvoice += sub.amount;
-                            const isPaid = paidSubscriptions.some(ps => ps.subscriptionId === sub.id && ps.month === selectedMonth);
-                            if (!isPaid) isInvoicePending = true;
-                            addedSubKeys.add(uniqueKey);
-                        }
-                    }
-                });
-            }
+            if (sub.cardId !== card.id || !sub.isActive) return;
+            totalInvoice += sub.amount;
+            const isPaid = paidSubscriptions.some(p => p.subscriptionId === sub.id && p.month === selectedMonth);
+            if (!isPaid) isInvoicePending = true;
         });
 
-        return { total: totalInvoice, isPending: totalInvoice > 0 && isInvoicePending };
+        return { total: totalInvoice, isPending: isInvoicePending };
     }, [allLoans, allExpenses, allSubscriptions, paidSubscriptions]);
     
-    const calculateTotalDebtForCard = (cardId) => {
-        const debtFromLoans = allLoans
-            .filter(loan => loan.cardId === cardId)
-            .reduce((sum, loan) => {
-                if (loan.isShared && loan.sharedDetails) {
-                    const person1Debt = loan.sharedDetails.person1?.balanceDue || 0;
-                    const person2Debt = loan.sharedDetails.person2?.balanceDue || 0;
-                    return sum + person1Debt + person2Debt;
-                }
-                return sum + (loan.balanceDueClient || 0);
-            }, 0);
-
-        const debtFromExpenses = allExpenses
-            .filter(expense => expense.cardId === cardId && expense.status !== 'Paga')
-            .reduce((sum, expense) => sum + (expense.value || 0), 0);
-
-        return debtFromLoans + debtFromExpenses;
-    };
-
     const handleOpenModal = (card = null) => {
-        setEditingCard(card);
         if (card) {
-            setFormValues({ name: card.name, limitInput: formatCurrencyForInput(card.limit), closingDay: card.closingDay, dueDay: card.dueDay, color: card.color || '#F2B705' });
+            setEditingCard(card);
+            setFormValues({
+                name: card.name,
+                limitInput: formatCurrencyForInput(card.limit),
+                closingDay: card.closingDay.toString(),
+                dueDay: card.dueDay.toString(),
+                color: card.color || '#F2B705'
+            });
         } else {
+            setEditingCard(null);
             setFormValues({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705' });
         }
         setIsModalOpen(true);
@@ -157,6 +123,8 @@ export default function CardManagement() {
     const handleCloseModal = () => { setIsModalOpen(false); setEditingCard(null); };
 
     const handleSaveCard = async () => {
+        if (isSubmitting) return;
+
         if (!formValues.name.trim() || !formValues.limitInput || !formValues.closingDay || !formValues.dueDay) {
             showToast('Todos os campos são obrigatórios.', 'warning');
             return;
@@ -166,16 +134,49 @@ export default function CardManagement() {
             showToast('O limite do cartão é inválido.', 'error');
             return;
         }
+
+        const closingDay = parseInt(formValues.closingDay, 10);
+        const dueDay = parseInt(formValues.dueDay, 10);
+
+        if (isNaN(closingDay) || closingDay < 1 || closingDay > 31) {
+            showToast('O dia de fechamento deve ser um número entre 1 e 31.', 'error');
+            return;
+        }
+
+        if (isNaN(dueDay) || dueDay < 1 || dueDay > 31) {
+            showToast('O dia de vencimento deve ser um número entre 1 e 31.', 'error');
+            return;
+        }
+
+        setIsSubmitting(true);
         const userCollectionPath = getUserCollectionPathSegments();
         const cardData = { 
-            name: formValues.name, 
+            name: formValues.name.trim(), 
             limit: cardLimit,
-            closingDay: parseInt(formValues.closingDay),
-            dueDay: parseInt(formValues.dueDay),
-            color: formValues.color,
+            closingDay: closingDay,
+            dueDay: dueDay,
+            color: formValues.color || '#F2B705',
         };
 
         try {
+            // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
+            if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+                if (editingCard) {
+                    const idx = (window.__FINCONTROL_E2E_MOCK_DATA__.cards || []).findIndex(c => c.id === editingCard.id);
+                    if (idx >= 0) {
+                        window.__FINCONTROL_E2E_MOCK_DATA__.cards[idx] = { ...window.__FINCONTROL_E2E_MOCK_DATA__.cards[idx], ...cardData };
+                    }
+                    showToast('Cartão atualizado com sucesso!', 'success');
+                } else {
+                    const newCard = { id: `card-e2e-${Date.now()}`, ...cardData, userId };
+                    window.__FINCONTROL_E2E_MOCK_DATA__.cards = [...(window.__FINCONTROL_E2E_MOCK_DATA__.cards || []), newCard];
+                    showToast('Cartão adicionado com sucesso!', 'success');
+                }
+                handleCloseModal();
+                setIsSubmitting(false);
+                return;
+            }
+
             if (editingCard) {
                 const cardDocRef = doc(db, ...userCollectionPath, userId, 'cards', editingCard.id);
                 await updateDoc(cardDocRef, cardData);
@@ -188,13 +189,16 @@ export default function CardManagement() {
             handleCloseModal();
         } catch (error) {
             showToast(`Erro ao salvar cartão: ${error.message}`, 'error');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     const confirmDeleteCard = (cardId) => { setCardToDelete(cardId); setIsConfirmationModalOpen(true); };
 
     const handleDeleteCardConfirmed = async () => {
-        if (!cardToDelete) return;
+        if (!cardToDelete || isSubmitting) return;
+        setIsSubmitting(true);
         const userCollectionPath = getUserCollectionPathSegments();
         try {
             await deleteDoc(doc(db, ...userCollectionPath, userId, 'cards', cardToDelete));
@@ -202,6 +206,7 @@ export default function CardManagement() {
         } catch (error) {
             showToast(`Erro ao excluir cartão: ${error.message}`, 'error');
         } finally {
+            setIsSubmitting(false);
             setIsConfirmationModalOpen(false);
             setCardToDelete(null);
         }
@@ -243,10 +248,11 @@ export default function CardManagement() {
                         </thead>
                         <tbody className="divide-y divide-carbon-800 text-sm">
                             {cards.length > 0 ? cards.map((card) => {
-                                const totalDebt = calculateTotalDebtForCard(card.id);
-                                const limit = card.limit || 0;
-                                const availableLimit = limit - totalDebt;
-                                const usedPercentage = limit > 0 ? (totalDebt / limit) * 100 : 0;
+                                const limitInfo = calculateCardLimitIntelligence({
+                                    card,
+                                    loans: allLoans,
+                                    expenses: allExpenses
+                                });
                                 const { total: invoiceValue, isPending: isInvoicePending } = calculateInvoiceDetails(card, filterMonth);
                                 
                                 return (
@@ -256,14 +262,31 @@ export default function CardManagement() {
                                             {card.name}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-gray-300">
-                                            <div className="font-bold text-gold-cream mb-1">{formatCurrencyDisplay(limit)}</div>
-                                            <div className="w-full bg-carbon-800 rounded-full h-2.5 my-1.5 overflow-hidden border border-carbon-700">
-                                                <div className="bg-gradient-to-r from-gold-light to-gold h-2.5 rounded-full transition-all duration-500" style={{ width: `${usedPercentage > 100 ? 100 : usedPercentage}%` }}></div>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-bold text-gold-cream">{formatCurrencyDisplay(limitInfo.registeredLimit)}</span>
+                                                <span className={`text-[11px] font-semibold ${limitInfo.isHighUtilization ? 'text-amber-300' : 'text-gray-400'}`}>
+                                                    {limitInfo.utilizationLabel} utilizado
+                                                </span>
                                             </div>
-                                            <div className="text-xs text-gray-400 flex gap-2">
-                                                <span>Usado: <strong className="text-gray-300">{formatCurrencyDisplay(totalDebt)}</strong></span> 
+                                            <div className="w-full bg-carbon-800 rounded-full h-2.5 my-1.5 overflow-hidden border border-carbon-700">
+                                                <div 
+                                                    className={`h-2.5 rounded-full transition-all duration-500 ${
+                                                        limitInfo.isHighUtilization
+                                                            ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                                                            : 'bg-gradient-to-r from-gold-light to-gold'
+                                                    }`} 
+                                                    style={{ width: `${limitInfo.utilizationPercentage > 100 ? 100 : limitInfo.utilizationPercentage}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="text-xs text-gray-400 flex flex-wrap items-center gap-2">
+                                                <span>Comprometido no app: <strong className="text-gray-300 font-mono">{formatCurrencyDisplay(limitInfo.committedAmount)}</strong></span> 
                                                 <span>•</span> 
-                                                <span>Disp: <strong className="text-emerald-400">{formatCurrencyDisplay(availableLimit)}</strong></span>
+                                                <span>Disp. estimado: <strong className="text-emerald-400 font-mono">{formatCurrencyDisplay(limitInfo.estimatedAvailable)}</strong></span>
+                                                {limitInfo.isHighUtilization && (
+                                                    <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                        85%+ no app
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-gray-300">
@@ -282,8 +305,24 @@ export default function CardManagement() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap font-medium">
                                             <div className="flex items-center gap-4">
-                                                <button onClick={() => handleOpenModal(card)} className="text-gold hover:text-gold-light transition cursor-pointer" title="Editar"><EditIcon /></button>
-                                                <button onClick={() => confirmDeleteCard(card.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Excluir"><DeleteIcon /></button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleOpenModal(card)} 
+                                                    aria-label={`Editar cartão ${card.name || ''}`.trim()}
+                                                    className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                                    title="Editar"
+                                                >
+                                                    <EditIcon />
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => confirmDeleteCard(card.id)} 
+                                                    aria-label={`Excluir cartão ${card.name || ''}`.trim()}
+                                                    className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                                    title="Excluir"
+                                                >
+                                                    <DeleteIcon />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -306,8 +345,8 @@ export default function CardManagement() {
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">R$</span>
-                            <input type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="pl-10" inputMode="decimal" placeholder="0,00" />
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 font-bold pointer-events-none z-10">R$</span>
+                            <input type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="w-full currency-input !pl-14" inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -327,20 +366,41 @@ export default function CardManagement() {
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleSaveCard} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20">Salvar Cartão</button>
+                    <button onClick={handleSaveCard} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50">
+                        {isSubmitting ? 'Salvando...' : editingCard ? 'Atualizar Cartão' : 'Salvar Cartão'}
+                    </button>
                 </div>
             </GenericModal>
 
-            {/* Modal de Confirmação de Exclusão */}
+            {/* Modal de Confirmação de Exclusão com Detecção de Vínculos */}
             <GenericModal
                 isOpen={isConfirmationModalOpen}
                 onClose={() => setIsConfirmationModalOpen(false)}
                 onConfirm={handleDeleteCardConfirmed}
-                title="Confirmar Exclusão"
+                title="Confirmar Exclusão do Cartão"
                 isConfirmation={true}
                 theme="dark"
             >
-                {`Tem certeza que deseja deletar o cartão "${cards.find(c => c.id === cardToDelete)?.name}"? Esta ação não pode ser desfeita.`}
+                <div className="space-y-3">
+                    <p className="text-sm text-gray-300">
+                        Tem certeza que deseja deletar o cartão <strong className="text-gold">{cards.find(c => c.id === cardToDelete)?.name}</strong>?
+                    </p>
+                    {(() => {
+                        const linkedLoans = allLoans.filter(l => l.cardId === cardToDelete).length;
+                        const linkedSubs = allSubscriptions.filter(s => s.cardId === cardToDelete).length;
+                        if (linkedLoans > 0 || linkedSubs > 0) {
+                            return (
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 space-y-1">
+                                    <p className="font-bold flex items-center gap-1.5">⚠️ Registros Financeiros Vinculados:</p>
+                                    <p className="text-gray-300">
+                                        Este cartão possui {linkedLoans > 0 ? `${linkedLoans} compra(s)` : ''}{linkedLoans > 0 && linkedSubs > 0 ? ' e ' : ''}{linkedSubs > 0 ? `${linkedSubs} assinatura(s)` : ''} associadas.
+                                    </p>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+                </div>
             </GenericModal>
         </div>
     );

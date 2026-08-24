@@ -1,10 +1,11 @@
 // src/features/dashboard/DashboardLayout.jsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { httpsCallable } from 'firebase/functions';
 import { useAppContext } from '../../context/AppContext';
-import { functions } from '../../utils/firebase';
 import WelcomeModal from '../../components/WelcomeModal'; 
+import GlobalSearchModal from '../../components/GlobalSearchModal';
+import NotificationCenterPopover from '../../components/NotificationCenterPopover';
+import AccountDeletionModal from '../../components/AccountDeletionModal';
 
 // Páginas do painel
 import Dashboard from './Dashboard';
@@ -36,8 +37,7 @@ const ZapIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height
 
 // --- Componente de Status do Usuário ---
 function UserStatusBadge({ isCollapsed }) {
-    const { isPro, isTrialActive, userProfile, showToast, activateFreeTrial, currentUser } = useAppContext();
-    const [isLoading, setIsLoading] = useState(false);
+    const { isPro, isTrialActive, userProfile, activateFreeTrial } = useAppContext();
 
     if (isCollapsed) return null;
 
@@ -70,6 +70,7 @@ export default function DashboardLayout() {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const profileRef = useRef(null);
     const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
@@ -89,8 +90,20 @@ export default function DashboardLayout() {
     const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
     const [selectedCardFilter, setSelectedCardFilter] = useState('');
     const [selectedClientFilter, setSelectedClientFilter] = useState('');
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     const handleLogout = () => logout();
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+                e.preventDefault();
+                setIsSearchOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -178,9 +191,11 @@ export default function DashboardLayout() {
                             </div>
                         )}
                         <button 
+                            type="button"
                             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                             className="p-1.5 rounded-xl bg-carbon-800 text-gray-400 hover:text-gold hover:bg-carbon-700 transition cursor-pointer"
                             title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
+                            aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
                         >
                             {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                         </button>
@@ -195,6 +210,7 @@ export default function DashboardLayout() {
                             return (
                                 <button
                                     key={link.id}
+                                    type="button"
                                     onClick={() => handleNavClick(link)}
                                     className={`w-full flex items-center justify-between px-3 py-3 rounded-2xl text-sm font-medium transition-all cursor-pointer ${
                                         isActive 
@@ -202,6 +218,7 @@ export default function DashboardLayout() {
                                         : 'text-gray-400 hover:bg-carbon-800 hover:text-gold-cream'
                                     }`}
                                     title={isSidebarCollapsed ? `${link.label} ${isLocked ? '(Bloqueado - Requer PRO)' : ''}` : ''}
+                                    aria-label={link.label}
                                 >
                                     <div className="flex items-center gap-3 overflow-hidden">
                                         <span className="flex-shrink-0">{link.icon}</span>
@@ -224,7 +241,10 @@ export default function DashboardLayout() {
 
                     <div className="relative" ref={profileRef}>
                         <button 
+                            type="button"
                             onClick={() => setIsProfileOpen(!isProfileOpen)} 
+                            aria-label="Abrir menu de perfil do usuário"
+                            aria-expanded={isProfileOpen}
                             className={`w-full flex items-center gap-3 p-2 rounded-2xl bg-carbon-800/60 hover:bg-carbon-800 transition cursor-pointer ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}
                         >
                             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-light to-gold flex items-center justify-center font-extrabold text-carbon-900 flex-shrink-0 shadow-md">
@@ -261,8 +281,19 @@ export default function DashboardLayout() {
 
                                     <button 
                                         type="button"
+                                        onClick={() => {
+                                            setIsProfileOpen(false);
+                                            setIsDeleteModalOpen(true);
+                                        }} 
+                                        className="flex w-full items-center gap-3 px-4 py-2 text-xs font-semibold transition text-rose-500 hover:bg-rose-500/20 rounded-2xl cursor-pointer"
+                                    >
+                                        <span>⚠️</span> Excluir conta
+                                    </button>
+
+                                    <button 
+                                        type="button"
                                         onClick={handleLogout} 
-                                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium transition text-rose-400 hover:bg-rose-500/20 rounded-2xl mt-1 cursor-pointer"
+                                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium transition text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-2xl mt-1 cursor-pointer"
                                     >
                                         <LogoutIcon /> Sair da conta
                                     </button>
@@ -275,10 +306,52 @@ export default function DashboardLayout() {
 
             {/* CONTEÚDO PRINCIPAL À DIREITA */}
             <main className="flex-1 flex flex-col h-screen overflow-y-auto">
+                {/* Topbar com Busca Global Rápida */}
+                <header className="sticky top-0 z-20 bg-carbon-900/90 backdrop-blur-md border-b border-carbon-800 px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+                    <button
+                        type="button"
+                        onClick={() => setIsSearchOpen(true)}
+                        aria-label="Abrir busca global de lançamentos"
+                        className="flex-1 max-w-md flex items-center justify-between gap-3 px-4 py-2 bg-carbon-800/80 hover:bg-carbon-800 border border-carbon-700 rounded-2xl text-xs sm:text-sm text-gray-400 hover:text-gold-cream transition cursor-pointer shadow-inner"
+                    >
+                        <div className="flex items-center gap-2.5 truncate">
+                            <span className="text-gold">🔎</span>
+                            <span className="truncate">Buscar compras, pessoas, despesas...</span>
+                        </div>
+                        <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono font-bold bg-carbon-900 border border-carbon-700 rounded-lg text-gold">
+                            Ctrl+K
+                        </kbd>
+                    </button>
+
+                    <div className="flex items-center gap-3">
+                        <NotificationCenterPopover />
+                        <button
+                            type="button"
+                            onClick={handleThemeToggle}
+                            aria-label="Alternar tema"
+                            className="p-2 rounded-xl bg-carbon-800 text-gray-300 hover:text-gold border border-carbon-700 transition cursor-pointer"
+                        >
+                            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+                        </button>
+                    </div>
+                </header>
+
                 <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
                     {renderActivePage()}
                 </div>
             </main>
+
+            {/* Modal de Busca Global */}
+            <GlobalSearchModal 
+                isOpen={isSearchOpen} 
+                onClose={() => setIsSearchOpen(false)} 
+            />
+
+            {/* Modal de Exclusão de Conta (LGPD / Privacy) */}
+            <AccountDeletionModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+            />
         </div>
     );
 }

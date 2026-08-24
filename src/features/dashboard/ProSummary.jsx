@@ -23,7 +23,10 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
         const [year, month] = selectedMonth.split('-').map(Number);
         const monthlyFilteredIncomes = incomes.filter(income => {
             const incomeDate = income.date;
-            return incomeDate && incomeDate.getFullYear() === year && incomeDate.getMonth() === month - 1;
+            if (!incomeDate) return false;
+            const incYear = typeof incomeDate.getUTCFullYear === 'function' ? incomeDate.getUTCFullYear() : incomeDate.getFullYear();
+            const incMonth = (typeof incomeDate.getUTCMonth === 'function' ? incomeDate.getUTCMonth() : incomeDate.getMonth()) + 1;
+            return incYear === year && incMonth === month;
         });
         
         const total = monthlyFilteredIncomes.reduce((acc, doc) => acc + (doc.value || 0), 0);

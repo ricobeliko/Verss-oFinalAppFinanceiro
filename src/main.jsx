@@ -2,16 +2,17 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// Importa o AppProvider do local correto
 import { AppProvider } from './context/AppContext'; 
+import ErrorBoundary from './components/ErrorBoundary';
 import App from './App';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* O AppProvider agora envolve o App, fornecendo o contexto para ele e todos os seus filhos */}
-    <AppProvider>
-      <App />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <App />
+      </AppProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

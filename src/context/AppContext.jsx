@@ -21,6 +21,30 @@ export function AppProvider({ children }) {
     const [toast, setToast] = useState({ message: '', type: 'info', visible: false });
 
     useEffect(() => {
+        // Suporte Seguro para Sessão de Testes E2E (Isolamento Estrito de Produção)
+        const e2eSession = typeof window !== 'undefined'
+            ? (window.__FINCONTROL_E2E_USER__ || JSON.parse(sessionStorage.getItem('fincontrol_e2e_user') || 'null'))
+            : null;
+
+        if (e2eSession && import.meta.env.DEV) {
+            setCurrentUser({
+                uid: e2eSession.uid || 'e2e-user-sintetico',
+                email: e2eSession.email || 'e2e-user@test.local',
+                emailVerified: true,
+                displayName: e2eSession.name || 'Usuário E2E'
+            });
+            setUserProfile({
+                name: e2eSession.name || 'Usuário E2E',
+                email: e2eSession.email || 'e2e-user@test.local',
+                plan: e2eSession.plan || 'pro',
+                budgets: e2eSession.budgets || { 'Alimentação': 1500, 'Transporte': 500 },
+                notificationSettings: e2eSession.notificationSettings || { cardDueEnabled: true, cardDueDays: 3, receivablesEnabled: true },
+                aiPreferences: e2eSession.aiPreferences || { optIn: false }
+            });
+            setIsAuthReady(true);
+            return;
+        }
+
         let unsubscribeFromUserProfile = () => {};
 
         const unsubscribeFromAuth = onAuthStateChanged(auth, (user) => {
@@ -90,6 +114,14 @@ export function AppProvider({ children }) {
 
     const logout = async () => {
         try {
+            if (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__) {
+                delete window.__FINCONTROL_E2E_USER__;
+                sessionStorage.removeItem('fincontrol_e2e_user');
+                setCurrentUser(null);
+                setUserProfile(null);
+                showToast('Você foi desconectado.', 'info');
+                return;
+            }
             await signOut(auth);
             sessionStorage.removeItem('hasSeenWelcomeModal');
             showToast('Você foi desconectado.', 'info');

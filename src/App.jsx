@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider, useAppContext } from './context/AppContext';
+import { useAppContext } from './context/AppContext';
 import AuthScreen from './features/auth/AuthScreen';
 import DashboardLayout from './features/dashboard/DashboardLayout';
 import LandingPage from './features/landing/LandingPage';
@@ -52,42 +52,40 @@ function PublicRoute({ children }) {
 
 function App() {
   return (
-    <AppProvider>
-      <Router>
-        <Routes>
-          {/* Rotas Públicas */}
-          <Route 
-            path="/" 
-            element={
-              <PublicRoute>
-                <LandingPage />
-              </PublicRoute>
-            } 
-          />
-          <Route 
-            path="/login" 
-            element={
-              <PublicRoute>
-                <AuthScreen />
-              </PublicRoute>
-            } 
-          />
+    <Router>
+      <Routes>
+        {/* Rotas Públicas */}
+        <Route 
+          path="/" 
+          element={
+            <PublicRoute>
+              <LandingPage />
+            </PublicRoute>
+          } 
+        />
+        <Route 
+          path="/login" 
+          element={
+            <PublicRoute>
+              <AuthScreen />
+            </PublicRoute>
+          } 
+        />
 
-          {/* Rota Protegida para o Dashboard */}
-          <Route 
-            path="/dashboard/*" 
-            element={
-              <ProtectedRoute>
-                <DashboardLayout />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Redirecionamento Padrão */}
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </Router>
-    </AppProvider>
+        {/* Rota Protegida para o Dashboard */}
+        <Route 
+          path="/dashboard/*" 
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Redirecionamento Padrão */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Router>
   );
 }
 

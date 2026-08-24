@@ -1,64 +1,47 @@
-// src/features/transactions/TransactionManagement.jsx
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import LoanManagement from '../loans/LoanManagement';
 import IncomeManagement from '../income/IncomeManagement';
 import ExpenseManagement from '../expenses/ExpenseManagement';
-import PdfImportModal from '../../components/PdfImportModal';
 import { useAppContext } from '../../context/AppContext';
+import { useCards } from '../../hooks/useCards';
+import { useClients } from '../../hooks/useClients';
+import { useLoans } from '../../hooks/useLoans';
+
+const PdfImportModal = lazy(() => import('../../components/PdfImportModal'));
 
 function UnifiedTransactionManagement() {
     const [transactionType, setTransactionType] = useState('loan');
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     
-    const { isPro, isTrialActive, db, userId, isAuthReady, getUserCollectionPathSegments, showToast } = useAppContext();
+    const { isPro, isTrialActive, db, userId, getUserCollectionPathSegments, showToast } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
-    const [cards, setCards] = useState([]);
-    const [clients, setClients] = useState([]);
-    const [existingLoans, setExistingLoans] = useState([]);
-
-    useEffect(() => {
-        if (!isAuthReady || !userId || !db) return;
-        const userCollectionPath = getUserCollectionPathSegments();
-        const basePath = [...userCollectionPath, userId];
-
-        const unsubCards = onSnapshot(collection(db, ...basePath, 'cards'), (snap) => {
-            setCards(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        const unsubClients = onSnapshot(collection(db, ...basePath, 'clients'), (snap) => {
-            setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        const unsubLoans = onSnapshot(collection(db, ...basePath, 'loans'), (snap) => {
-            setExistingLoans(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        return () => {
-            unsubCards();
-            unsubClients();
-            unsubLoans();
-        };
-    }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
+    const { cards } = useCards();
+    const { clients } = useClients();
+    const { loans: existingLoans } = useLoans();
 
     const IncomeFormComponent = useMemo(() => <IncomeManagement />, []);
     const ExpenseFormComponent = useMemo(() => <ExpenseManagement />, []);
 
     return (
         <div className="space-y-8 animate-fadeIn">
-            {/* Modal de Importação de Fatura PDF */}
-            <PdfImportModal 
-                isOpen={isPdfModalOpen}
-                onClose={() => setIsPdfModalOpen(false)}
-                cards={cards}
-                clients={clients}
-                existingLoans={existingLoans}
-                db={db}
-                userId={userId}
-                getUserCollectionPathSegments={getUserCollectionPathSegments}
-                showToast={showToast}
-                onSaveSuccess={() => {}}
-            />
+            {/* Modal de Importação de Fatura PDF (Carregamento Sob Demanda) */}
+            {isPdfModalOpen && (
+                <Suspense fallback={null}>
+                    <PdfImportModal 
+                        isOpen={isPdfModalOpen}
+                        onClose={() => setIsPdfModalOpen(false)}
+                        cards={cards}
+                        clients={clients}
+                        existingLoans={existingLoans}
+                        db={db}
+                        userId={userId}
+                        getUserCollectionPathSegments={getUserCollectionPathSegments}
+                        showToast={showToast}
+                        onSaveSuccess={() => {}}
+                    />
+                </Suspense>
+            )}
 
             {/* Header Carbono & Dourado */}
             <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">

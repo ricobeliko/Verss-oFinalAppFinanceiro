@@ -1,11 +1,21 @@
 // src/features/dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
+import { generateTransactionsCsv, generateAnnualReportCsv, downloadCsvFile } from '../../services/csvExportService';
+import { calculateMonthlyComparisonSummary, generateDeterministicFinancialInsights, generateFinancialAlerts } from '../../services/financialService';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
+import FutureCommitmentsCard from '../../components/FutureCommitmentsCard';
+import DeterministicInsightsWidget from '../../components/DeterministicInsightsWidget';
+import FinancialAlertsBanner from '../../components/FinancialAlertsBanner';
+import ExecutiveSummaryModal from '../../components/ExecutiveSummaryModal';
+import FinancialSandboxSimulatorModal from '../../components/FinancialSandboxSimulatorModal';
+import CategoryBudgetsWidget from '../../components/CategoryBudgetsWidget';
+import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
+import NotificationSettingsModal from '../../components/NotificationSettingsModal';
 import ProSummary from './ProSummary';
 import Spinner from '../../components/Spinner';
 
@@ -20,7 +30,7 @@ const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18"
 const TargetIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast } = useAppContext();
+    const { db, userId, isAuthReady, theme, userProfile, getUserCollectionPathSegments, showToast } = useAppContext();
 
     const [dashboardData, setDashboardData] = useState({
         loans: [],
@@ -35,13 +45,64 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
+    const [isExecutiveSummaryOpen, setIsExecutiveSummaryOpen] = useState(false);
+    const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+    const [isBudgetsModalOpen, setIsBudgetsModalOpen] = useState(false);
+    const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
+
+    const handleSaveBudgets = async (newBudgets) => {
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            const userDocRef = doc(db, ...userCollectionPath, userId);
+            await updateDoc(userDocRef, {
+                budgets: newBudgets,
+                updatedAt: serverTimestamp()
+            });
+            showToast('Metas de orçamento salvas com sucesso!', 'success');
+        } catch (err) {
+            console.error("Erro ao salvar metas:", err);
+            showToast('Falha ao salvar metas de orçamento.', 'error');
+        }
+    };
+
+    const handleSaveNotificationSettings = async (newSettings) => {
+        try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            const userDocRef = doc(db, ...userCollectionPath, userId);
+            await updateDoc(userDocRef, {
+                notificationSettings: newSettings,
+                updatedAt: serverTimestamp()
+            });
+            showToast('Preferências de alertas salvas com sucesso!', 'success');
+        } catch (err) {
+            console.error("Erro ao salvar alertas:", err);
+            showToast('Falha ao salvar preferências.', 'error');
+        }
+    };
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) {
             setIsLoading(false);
             return;
         }
+
+        // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
+        if (import.meta.env.DEV && (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_MOCK_DATA__ || sessionStorage.getItem('fincontrol_e2e_data')))) {
+            const mock = window.__FINCONTROL_E2E_MOCK_DATA__ || JSON.parse(sessionStorage.getItem('fincontrol_e2e_data'));
+            setDashboardData({
+                cards: mock.cards || [{ id: 'card-1', name: 'Cartão E2E Master', limit: 5000, color: '#C5A059' }],
+                loans: mock.loans || [{ id: 'loan-1', description: 'Compra E2E 12x', cardId: 'card-1', totalAmount: 1200, installmentsCount: 12, installmentValue: 100, currentInstallment: 1, startDate: `${selectedMonth}-05`, isMyDebt: true, category: 'Alimentação' }],
+                expenses: mock.expenses || [{ id: 'exp-1', description: 'Mercado E2E', cardId: 'card-1', value: 250, date: new Date(), category: 'Alimentação' }],
+                subscriptions: mock.subscriptions || [{ id: 'sub-1', name: 'Streaming E2E', value: 49.90, cardId: 'card-1', category: 'Lazer' }],
+                clients: mock.clients || [{ id: 'client-1', name: 'Pessoa E2E', phone: '11999999999' }],
+                incomes: mock.incomes || [],
+                paidSubscriptions: []
+            });
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
 
         const userCollectionPath = getUserCollectionPathSegments();
@@ -91,14 +152,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         const userCollectionPath = getUserCollectionPathSegments();
         try {
             switch (item.type) {
-                case 'Parcela':
+                case 'Parcela': {
                     await updateInstallmentStatus(item.loanId, item.personKey, item.number, newStatus);
                     break;
-                case 'Despesa':
+                }
+                case 'Despesa': {
                     const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
                     await updateDoc(expenseDocRef, { status: newStatus, userId: userId, updatedAt: serverTimestamp() });
                     break;
-                case 'Assinatura':
+                }
+                case 'Assinatura': {
                     const paidSubscriptionsRef = collection(db, ...userCollectionPath, userId, 'paidSubscriptions');
                     if (newStatus === 'Paga') {
                         await addDoc(paidSubscriptionsRef, {
@@ -116,6 +179,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         });
                     }
                     break;
+                }
                 default:
                     throw new Error("Tipo de item desconhecido.");
             }
@@ -189,6 +253,77 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         } catch (error) {
             console.error("Erro ao atualizar parcela:", error);
             showToast(`Erro ao atualizar parcela: ${error.message}`, "error");
+        }
+    };
+
+    const handlePrevMonth = () => {
+        if (!selectedMonth) return;
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const prevDate = new Date(Date.UTC(year, month - 2, 1));
+        const prevYear = prevDate.getUTCFullYear();
+        const prevMonthStr = String(prevDate.getUTCMonth() + 1).padStart(2, '0');
+        setSelectedMonth(`${prevYear}-${prevMonthStr}`);
+    };
+
+    const handleNextMonth = () => {
+        if (!selectedMonth) return;
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const nextDate = new Date(Date.UTC(year, month, 1));
+        const nextYear = nextDate.getUTCFullYear();
+        const nextMonthStr = String(nextDate.getUTCMonth() + 1).padStart(2, '0');
+        setSelectedMonth(`${nextYear}-${nextMonthStr}`);
+    };
+
+    const handleCurrentMonth = () => {
+        const now = new Date();
+        const curYear = now.getUTCFullYear();
+        const curMonthStr = String(now.getUTCMonth() + 1).padStart(2, '0');
+        setSelectedMonth(`${curYear}-${curMonthStr}`);
+    };
+
+    const handleExportMonthCsv = () => {
+        if (!displayableItems || displayableItems.length === 0) {
+            showToast('Nenhuma transação disponível para exportar no mês selecionado.', 'warning');
+            return;
+        }
+
+        const transactionsToExport = displayableItems.map(item => {
+            const clientObj = clients.find(c => c.id === item.clientId);
+            const cardObj = cards.find(c => c.id === item.cardId);
+            return {
+                type: item.type,
+                date: item.dueDate,
+                description: item.description,
+                category: item.category || (item.type === 'Assinatura' ? 'Assinaturas' : 'Outros'),
+                clientName: clientObj?.name || 'Titular',
+                cardName: cardObj?.name || 'Dinheiro/Pix',
+                installment: item.number ? `${item.number}/${item.totalInstallments || item.number}` : '-',
+                value: item.value || 0,
+                status: item.currentStatus || 'Pendente'
+            };
+        });
+
+        const csvContent = generateTransactionsCsv(transactionsToExport);
+        downloadCsvFile(csvContent, `fincontrol-extrato-${selectedMonth}.csv`);
+        showToast('Extrato CSV exportado com sucesso!', 'success');
+    };
+
+    const handleExportAnnualCsv = () => {
+        try {
+            const currentYear = selectedMonth.slice(0, 4);
+            const csv = generateAnnualReportCsv({
+                targetYear: currentYear,
+                loans,
+                expenses,
+                subscriptions,
+                incomes,
+                cards,
+                clients
+            });
+            downloadCsvFile(csv, `fincontrol-relatorio-anual-${currentYear}.csv`);
+            showToast(`Relatório Anual ${currentYear} CSV exportado com sucesso!`, 'success');
+        } catch (error) {
+            showToast('Erro ao exportar relatório anual CSV.', 'error');
         }
     };
 
@@ -400,6 +535,41 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         };
     }, [loans, subscriptions]);
 
+    const monthlyComparison = useMemo(() => {
+        return calculateMonthlyComparisonSummary({
+            selectedMonth,
+            loans,
+            expenses,
+            subscriptions,
+            incomes
+        });
+    }, [selectedMonth, loans, expenses, subscriptions, incomes]);
+
+    const deterministicInsights = useMemo(() => {
+        return generateDeterministicFinancialInsights({
+            selectedMonth,
+            loans,
+            expenses,
+            subscriptions,
+            incomes,
+            clients,
+            maxInsights: 3
+        });
+    }, [selectedMonth, loans, expenses, subscriptions, incomes, clients]);
+
+    const financialAlerts = useMemo(() => {
+        return generateFinancialAlerts({
+            selectedMonth,
+            loans,
+            expenses,
+            subscriptions,
+            cards,
+            clients,
+            notificationSettings: userProfile?.notificationSettings || {},
+            maxAlerts: 3
+        });
+    }, [selectedMonth, loans, expenses, subscriptions, cards, clients, userProfile?.notificationSettings]);
+
     const requestSort = (key) => {
         let direction = 'ascending';
         if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -421,36 +591,34 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             return;
         }
 
+        const updatedLoansMap = new Map();
+
         itemsToUpdate.forEach(item => {
             if (item.type === 'Parcela') {
-                 const loanToUpdate = loans.find(l => l.id === item.loanId);
-                 if (!loanToUpdate) return;
-                 const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', item.loanId);
-                 if (loanToUpdate.isShared && item.personKey) {
-                    const installments = [...loanToUpdate.sharedDetails[item.personKey].installments];
-                    const installmentIndex = installments.findIndex(inst => inst.number === item.number);
-                    if (installmentIndex > -1) {
-                        installments[installmentIndex].status = 'Paga';
-                        installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                        batch.update(loanDocRef, { 
-                            [`sharedDetails.${item.personKey}.installments`]: installments,
-                            userId: userId,
-                            updatedAt: serverTimestamp()
-                        });
-                        updatesMade++;
+                const loanId = item.loanId;
+                let loanData = updatedLoansMap.get(loanId);
+                if (!loanData) {
+                    const originalLoan = loans.find(l => l.id === loanId);
+                    if (!originalLoan) return;
+                    loanData = JSON.parse(JSON.stringify(originalLoan));
+                    updatedLoansMap.set(loanId, loanData);
+                }
+
+                if (loanData.isShared && item.personKey && loanData.sharedDetails?.[item.personKey]) {
+                    const personDetails = loanData.sharedDetails[item.personKey];
+                    const instList = personDetails.installments;
+                    if (Array.isArray(instList)) {
+                        const inst = instList.find(i => i.number === item.number);
+                        if (inst) {
+                            inst.status = 'Paga';
+                            inst.paidDate = new Date().toISOString().split('T')[0];
+                        }
                     }
-                } else if (!loanToUpdate.isShared) {
-                    const installments = [...loanToUpdate.installments];
-                    const installmentIndex = installments.findIndex(inst => inst.number === item.number);
-                    if (installmentIndex > -1) {
-                        installments[installmentIndex].status = 'Paga';
-                        installments[installmentIndex].paidDate = new Date().toISOString().split('T')[0];
-                        batch.update(loanDocRef, { 
-                            installments: installments,
-                            userId: userId,
-                            updatedAt: serverTimestamp()
-                        });
-                        updatesMade++;
+                } else if (!loanData.isShared && Array.isArray(loanData.installments)) {
+                    const inst = loanData.installments.find(i => i.number === item.number);
+                    if (inst) {
+                        inst.status = 'Paga';
+                        inst.paidDate = new Date().toISOString().split('T')[0];
                     }
                 }
             } else if (item.type === 'Despesa') {
@@ -476,6 +644,46 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     updatesMade++;
                 }
             }
+        });
+
+        // Atualiza os empréstimos recalculando saldos e status para manter sincronização total
+        updatedLoansMap.forEach((loanData, loanId) => {
+            const loanDocRef = doc(db, ...userCollectionPath, userId, 'loans', loanId);
+            const fieldsToUpdate = {
+                userId: userId,
+                updatedAt: serverTimestamp()
+            };
+
+            if (loanData.isShared && loanData.sharedDetails) {
+                ['person1', 'person2'].forEach(pKey => {
+                    if (loanData.sharedDetails[pKey]) {
+                        const insts = loanData.sharedDetails[pKey].installments || [];
+                        const origAmount = loanData.sharedDetails[pKey].shareAmount || 0;
+                        const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
+                        const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));
+                        const finalStatus = balDue <= 0.01 ? 'Pago Total' : (valPaid > 0 ? 'Pago Parcial' : 'Pendente');
+
+                        fieldsToUpdate[`sharedDetails.${pKey}.installments`] = insts;
+                        fieldsToUpdate[`sharedDetails.${pKey}.valuePaid`] = valPaid;
+                        fieldsToUpdate[`sharedDetails.${pKey}.balanceDue`] = balDue;
+                        fieldsToUpdate[`sharedDetails.${pKey}.statusPayment`] = finalStatus;
+                    }
+                });
+            } else if (!loanData.isShared) {
+                const insts = loanData.installments || [];
+                const origAmount = loanData.totalValue || 0;
+                const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
+                const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));
+                const finalStatus = balDue <= 0.01 ? 'Pago Total' : (valPaid > 0 ? 'Pago Parcial' : 'Pendente');
+
+                fieldsToUpdate.installments = insts;
+                fieldsToUpdate.valuePaidClient = valPaid;
+                fieldsToUpdate.balanceDueClient = balDue;
+                fieldsToUpdate.statusPaymentClient = finalStatus;
+            }
+
+            batch.update(loanDocRef, fieldsToUpdate);
+            updatesMade++;
         });
 
         try {
@@ -510,19 +718,95 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             Acompanhe suas faturas e o controle do seu cartão Black.
                         </p>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+                        <button
+                            type="button"
+                            onClick={handleCurrentMonth}
+                            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition cursor-pointer"
+                        >
+                            Mês Atual
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsExecutiveSummaryOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/15 text-gold border border-gold/40 hover:bg-gold/25 transition cursor-pointer"
+                            title="Abrir Resumo Executivo Semanal e Mensal"
+                        >
+                            <span>📋</span>
+                            <span>Resumo Executivo</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsSimulatorOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition cursor-pointer"
+                            title="Abrir Simulador Financeiro Sandbox (E se...?)"
+                        >
+                            <span>🧪</span>
+                            <span>Simulador</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsNotificationSettingsOpen(true)}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-carbon-800 text-gray-300 border border-carbon-700 hover:text-gold hover:bg-carbon-700 transition cursor-pointer"
+                            title="Configurar Preferências de Alertas"
+                        >
+                            <span>⚙️</span>
+                            <span>Alertas</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleExportMonthCsv}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-carbon-800 text-gold-cream border border-carbon-700 hover:bg-carbon-700 transition cursor-pointer"
+                            title="Exportar lançamentos do mês em CSV"
+                        >
+                            <span>📥</span>
+                            <span>CSV Mês</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleExportAnnualCsv}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/30 hover:bg-gold/20 transition cursor-pointer"
+                            title={`Exportar Relatório Anual Consolidado (${selectedMonth.slice(0, 4)})`}
+                        >
+                            <span>📊</span>
+                            <span>Relatório Anual {selectedMonth.slice(0, 4)}</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Filtros */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                    <input 
-                        type="month" 
-                        value={selectedMonth} 
-                        onChange={(e) => setSelectedMonth(e.target.value)} 
-                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition" 
-                    />
+                    <div className="flex items-center gap-2">
+                        <button 
+                            type="button"
+                            onClick={handlePrevMonth}
+                            aria-label="Mês anterior"
+                            title="Mês anterior"
+                            className="p-3 bg-carbon-800 hover:bg-carbon-700 text-gold-cream border border-carbon-700 rounded-2xl shadow-sm transition cursor-pointer flex-shrink-0"
+                        >
+                            ◀
+                        </button>
+                        <input 
+                            type="month" 
+                            value={selectedMonth} 
+                            onChange={(e) => setSelectedMonth(e.target.value)} 
+                            aria-label="Selecionar mês e ano de competência"
+                            className="w-full p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition" 
+                        />
+                        <button 
+                            type="button"
+                            onClick={handleNextMonth}
+                            aria-label="Próximo mês"
+                            title="Próximo mês"
+                            className="p-3 bg-carbon-800 hover:bg-carbon-700 text-gold-cream border border-carbon-700 rounded-2xl shadow-sm transition cursor-pointer flex-shrink-0"
+                        >
+                            ▶
+                        </button>
+                    </div>
                     <select 
                         value={selectedCardFilter} 
                         onChange={(e) => setSelectedCardFilter(e.target.value)} 
+                        aria-label="Filtrar por cartão"
                         className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
                     >
                         <option value="">Todos os Cartões</option>
@@ -531,6 +815,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     <select 
                         value={selectedClientFilter} 
                         onChange={(e) => setSelectedClientFilter(e.target.value)} 
+                        aria-label="Filtrar por pessoa"
                         className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
                     >
                         <option value="">Todas as Pessoas</option>
@@ -538,6 +823,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     </select>
                 </div>
             </div>
+
+            {/* Banner de Alertas Financeiros Internos */}
+            <FinancialAlertsBanner alerts={financialAlerts} />
 
             {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -553,6 +841,22 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         <p className="text-3xl font-extrabold tracking-tight text-gold-cream mt-4">
                             {formatCurrencyDisplay(summary.totalFatura)}
                         </p>
+                        <div className="mt-3 flex items-center gap-2">
+                            {monthlyComparison.previousInvoiceTotal > 0 ? (
+                                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-lg border ${
+                                    monthlyComparison.invoiceDelta.direction === 'up'
+                                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                        : (monthlyComparison.invoiceDelta.direction === 'down'
+                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                            : 'bg-carbon-800 text-gray-400 border-carbon-700')
+                                }`}>
+                                    <span>{monthlyComparison.invoiceDelta.direction === 'up' ? '▲' : (monthlyComparison.invoiceDelta.direction === 'down' ? '▼' : '•')}</span>
+                                    <span>{monthlyComparison.invoiceDelta.label} vs mês anterior</span>
+                                </span>
+                            ) : (
+                                <span className="text-[11px] text-gray-500 font-medium">Mês base de referência</span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Card Progresso de Pagamento */}
@@ -634,6 +938,25 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     </div>
                 </div>
             </div>
+
+            {/* Insights Financeiros Automáticos */}
+            <DeterministicInsightsWidget insights={deterministicInsights} />
+
+            {/* Projeção de Faturas e Descompressão Futura */}
+            <FutureCommitmentsCard 
+                loans={loans} 
+                subscriptions={subscriptions} 
+                selectedMonth={selectedMonth} 
+            />
+
+            {/* Metas de Orçamento por Categoria (Budgets) */}
+            <CategoryBudgetsWidget
+                budgets={userProfile?.budgets || {}}
+                expenses={expenses}
+                loans={loans}
+                selectedMonth={selectedMonth}
+                onOpenBudgetModal={() => setIsBudgetsModalOpen(true)}
+            />
 
             {/* Tabela de Itens da Fatura */}
             <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
@@ -732,6 +1055,39 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
                 isConfirmation={true} 
                 theme={theme} 
+            />
+
+            <ExecutiveSummaryModal
+                isOpen={isExecutiveSummaryOpen}
+                onClose={() => setIsExecutiveSummaryOpen(false)}
+                selectedMonth={selectedMonth}
+                loans={loans}
+                expenses={expenses}
+                subscriptions={subscriptions}
+                incomes={incomes}
+                clients={clients}
+            />
+
+            <FinancialSandboxSimulatorModal
+                isOpen={isSimulatorOpen}
+                onClose={() => setIsSimulatorOpen(false)}
+                loans={loans}
+                subscriptions={subscriptions}
+                selectedMonth={selectedMonth}
+            />
+
+            <CategoryBudgetsModal
+                isOpen={isBudgetsModalOpen}
+                onClose={() => setIsBudgetsModalOpen(false)}
+                currentBudgets={userProfile?.budgets || {}}
+                onSaveBudgets={handleSaveBudgets}
+            />
+
+            <NotificationSettingsModal
+                isOpen={isNotificationSettingsOpen}
+                onClose={() => setIsNotificationSettingsOpen(false)}
+                currentSettings={userProfile?.notificationSettings || {}}
+                onSaveSettings={handleSaveNotificationSettings}
             />
         </div>
     );

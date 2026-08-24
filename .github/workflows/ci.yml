@@ -1,0 +1,169 @@
+# .github/workflows/ci.yml
+# FinControl — Pipeline de Qualidade (CI)
+#
+# OBJETIVO: Garantir que nenhuma alteração chegue a produção sem passar por
+# lint, testes unitários, testes de regras, testes de functions e E2E real.
+#
+# IMPORTANTE: Este workflow NÃO faz deploy automático. O deploy permanece
+# manual e condicionado ao CI verde (ver docs/release-process.md).
+#
+# PROTEÇÃO: O pipeline falha imediatamente (fail-fast) se qualquer etapa falhar.
+
+name: CI — Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Cancela runs anteriores do mesmo branch para economizar minutos de CI
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================
+  # JOB 1: Qualidade Estática — Lint + Vitest + Build
+  # ===========================================================
+  quality-gate:
+    name: Lint · Unit Tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Instala dependências de forma determinística (sem alterar lockfile)
+      - name: Instalar dependências (npm ci)
+        run: npm ci
+
+      # Gate 1: Lint — falha com qualquer erro ESLint
+      - name: ESLint (zero erros obrigatório)
+        run: npm run lint
+
+      # Gate 2: Testes unitários e de integração com Vitest
+      - name: Vitest — Unit + Integration + Rules + Functions
+        run: npm test
+        env:
+          NODE_ENV: test
+
+      # Gate 3: Build de produção — falha se o build quebrar
+      - name: Build de produção
+        run: npm run build
+
+      # Preserva o dist para o job de E2E reutilizar (opcional)
+      - name: Upload do build (artefato)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-build
+          path: dist/
+          retention-days: 1
+
+  # ===========================================================
+  # JOB 2: E2E Real — Playwright + Firebase Emulators
+  # ===========================================================
+  e2e-playwright:
+    name: E2E Browser · Playwright · Emulators
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Só roda após o job de qualidade passar
+    needs: quality-gate
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências (npm ci)
+        run: npm ci
+
+      # Instala apenas Chromium (não baixa Firefox/WebKit desnecessariamente)
+      - name: Instalar Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      # Firebase CLI necessário para iniciar os emuladores
+      # Usa npx para garantir versão determinística sem instalação global
+      - name: Instalar Firebase CLI
+        run: npm install -g firebase-tools
+
+      # PROTEÇÃO: Verifica que o projectId configurado é o de testes, não produção
+      # O flag --project demo-fincontrol-e2e sobrescreve o .firebaserc na linha de comando
+      - name: Verificar configuração de emuladores
+        run: |
+          echo "ProjectId padrão no .firebaserc: $(node -e "const rc = require('./.firebaserc'); console.log(rc.projects.default)")"
+          echo "Os emuladores serão iniciados com --project demo-fincontrol-e2e (sintético)"
+          echo "Nenhuma credencial de produção é necessária para emuladores"
+
+      # Inicia os emuladores Firebase com projectId sintético (nunca toca produção)
+      # FIREBASE_CLI_PREVIEWS="" suprime avisos de preview sem bloquear a execução
+      - name: Iniciar Firebase Emulators (background)
+        run: |
+          firebase emulators:start \
+            --only auth,firestore,functions \
+            --project demo-fincontrol-e2e &
+          # Aguarda UI dos emuladores estar disponível (máx. 60s)
+          npx wait-on http://localhost:4000 --timeout 60000 --interval 2000
+
+      # Executa o servidor Vite em background (E2E precisa da UI)
+      - name: Iniciar servidor Vite (background)
+        run: npm run dev &
+        env:
+          VITE_FIREBASE_API_KEY: fake-key-ci-only
+          VITE_FIREBASE_AUTH_DOMAIN: demo-fincontrol-e2e.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: demo-fincontrol-e2e
+          VITE_FIREBASE_STORAGE_BUCKET: demo-fincontrol-e2e.appspot.com
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          VITE_FIREBASE_APP_ID: "1:000000000000:web:000000000000"
+
+      # Aguarda Vite estar pronto
+      - name: Aguardar Vite (:5173)
+        run: npx wait-on http://localhost:5173 --timeout 30000
+
+      # Gate E2E: Playwright contra emuladores reais
+      - name: Playwright E2E (Chromium + Emulators)
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_TIMEOUT: 30000
+          CI: true
+
+      # Preserva evidências de falha para diagnóstico
+      - name: Upload de relatório E2E (em caso de falha)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  # ===========================================================
+  # RESUMO DE STATUS
+  # ===========================================================
+  # Para deploy manual seguro, o operador deve verificar:
+  # ✅ quality-gate: passed
+  # ✅ e2e-playwright: passed
+  #
+  # Então executar localmente:
+  #   npm run build && firebase deploy --only hosting
+  # ou (para Functions):
+  #   firebase deploy --only functions
+  #
+  # Ver: docs/release-process.md
