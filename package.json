@@ -16,7 +16,7 @@
     "watch-css": "tailwindcss -i ./src/index.css -o ./src/tailwind-output.css --watch"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "firebase": "^10.12.2",
     "jspdf": "^3.0.1",
     "mercadopago": "^2.8.0",
