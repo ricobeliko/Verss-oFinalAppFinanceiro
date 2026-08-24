@@ -47,7 +47,7 @@ jobs:
 
       # Instala dependências de forma determinística (sem alterar lockfile)
       - name: Instalar dependências (npm ci)
-        run: npm ci
+        run: npm ci --verbose
 
       # Gate 1: Lint — falha com qualquer erro ESLint
       - name: ESLint (zero erros obrigatório)
