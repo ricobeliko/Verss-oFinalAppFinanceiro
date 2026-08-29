@@ -604,11 +604,19 @@ exports.deleteUserAccount = onCall(
 
             for (const subcol of subcollections) {
                 const subcolRef = db.collection("users_fallback").doc(userId).collection(subcol);
-                const snapshot = await subcolRef.limit(500).get();
-                if (!snapshot.empty) {
+                let hasMore = true;
+                while (hasMore) {
+                    const snapshot = await subcolRef.limit(500).get();
+                    if (snapshot.empty || !snapshot.docs || snapshot.docs.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
                     const batch = db.batch();
                     snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
                     await batch.commit();
+                    if (snapshot.docs.length < 500) {
+                        hasMore = false;
+                    }
                 }
             }
 

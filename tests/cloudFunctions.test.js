@@ -503,11 +503,19 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             for (const subcol of subcollections) {
                 const subcolRef = db.collection('users_fallback').doc(userId).collection(subcol);
-                const snapshot = await subcolRef.limit(500).get();
-                if (!snapshot.empty) {
+                let hasMore = true;
+                while (hasMore) {
+                    const snapshot = await subcolRef.limit(500).get();
+                    if (snapshot.empty || !snapshot.docs || snapshot.docs.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
                     const batch = db.batch();
                     snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
                     await batch.commit();
+                    if (snapshot.docs.length < 500) {
+                        hasMore = false;
+                    }
                 }
             }
 
@@ -597,6 +605,64 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             expect(deletedUids).toContain('USER_A');
             expect(deletedUids).not.toContain('USER_B');
+        });
+
+        it('deve iterar em múltiplos lotes e excluir completamente subcoleções com mais de 500 documentos', async () => {
+            const mockAuthAdmin = { deleteUser: vi.fn().mockResolvedValue(true) };
+            const batchDeleteMock = vi.fn();
+            const batchCommitMock = vi.fn().mockResolvedValue(true);
+            let callCount = 0;
+
+            const mockDb = {
+                collection: vi.fn().mockReturnValue({
+                    doc: vi.fn().mockReturnValue({
+                        collection: vi.fn().mockImplementation((subcolName) => {
+                            if (subcolName === 'expenses') {
+                                return {
+                                    limit: vi.fn().mockReturnValue({
+                                        get: vi.fn().mockImplementation(async () => {
+                                            callCount++;
+                                            if (callCount === 1) {
+                                                // Primeiro lote de 500 documentos
+                                                return {
+                                                    empty: false,
+                                                    size: 500,
+                                                    docs: Array.from({ length: 500 }, (_, i) => ({ ref: `exp-doc-${i}` }))
+                                                };
+                                            } else if (callCount === 2) {
+                                                // Segundo lote de 250 documentos
+                                                return {
+                                                    empty: false,
+                                                    size: 250,
+                                                    docs: Array.from({ length: 250 }, (_, i) => ({ ref: `exp-doc-${500 + i}` }))
+                                                };
+                                            }
+                                            return { empty: true, size: 0, docs: [] };
+                                        })
+                                    })
+                                };
+                            }
+                            return {
+                                limit: vi.fn().mockReturnValue({
+                                    get: vi.fn().mockResolvedValue({ empty: true, size: 0, docs: [] })
+                                })
+                            };
+                        }),
+                        delete: vi.fn().mockResolvedValue(true)
+                    })
+                }),
+                batch: vi.fn().mockReturnValue({
+                    delete: batchDeleteMock,
+                    commit: batchCommitMock
+                })
+            };
+
+            const result = await deleteAccountHandler({ auth: { uid: 'user-heavy-usage' } }, { db: mockDb, authAdmin: mockAuthAdmin });
+
+            expect(result.success).toBe(true);
+            expect(callCount).toBe(2);
+            expect(batchDeleteMock).toHaveBeenCalledTimes(750); // 500 + 250 docs
+            expect(batchCommitMock).toHaveBeenCalledTimes(2); // 2 batches
         });
     });
 
