@@ -94,32 +94,47 @@ jobs:
       - name: Instalar dependências (npm ci)
         run: npm ci
 
+      - name: Configurar Java 21 (necessário para Firebase Emulators)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Verificar versão do Java
+        run: java -version
+
       # Instala apenas Chromium (não baixa Firefox/WebKit desnecessariamente)
       - name: Instalar Playwright Chromium
         run: npx playwright install chromium --with-deps
 
-      # Firebase CLI necessário para iniciar os emuladores
-      # Usa npx para garantir versão determinística sem instalação global
-      - name: Instalar Firebase CLI
-        run: npm install -g firebase-tools
+      # Firebase CLI com versão determinística
+      - name: Instalar Firebase CLI (v15.28.2)
+        run: npm install -g firebase-tools@15.28.2
 
       # PROTEÇÃO: Verifica que o projectId configurado é o de testes, não produção
       # O flag --project demo-fincontrol-e2e sobrescreve o .firebaserc na linha de comando
       - name: Verificar configuração de emuladores
         run: |
-          echo "ProjectId padrão no .firebaserc: $(node -e "const rc = require('./.firebaserc'); console.log(rc.projects.default)")"
-          echo "Os emuladores serão iniciados com --project demo-fincontrol-e2e (sintético)"
-          echo "Nenhuma credencial de produção é necessária para emuladores"
+          node -e "
+            const fs = require('fs');
+            const rc = JSON.parse(fs.readFileSync('./.firebaserc', 'utf8'));
+            if (!rc.projects || !rc.projects.default) {
+              console.error('ERRO: .firebaserc invalido ou sem projeto default');
+              process.exit(1);
+            }
+            console.log('ProjectId padrao no .firebaserc:', rc.projects.default);
+          "
+          echo "Os emuladores serao iniciados com --project demo-fincontrol-e2e (sintetico)"
+          echo "Nenhuma credencial de producao e necessaria para emuladores"
 
       # Inicia os emuladores Firebase com projectId sintético (nunca toca produção)
-      # FIREBASE_CLI_PREVIEWS="" suprime avisos de preview sem bloquear a execução
       - name: Iniciar Firebase Emulators (background)
         run: |
           firebase emulators:start \
             --only auth,firestore,functions \
-            --project demo-fincontrol-e2e &
+            --project demo-fincontrol-e2e > emulator.log 2>&1 &
           # Aguarda UI dos emuladores estar disponível (máx. 60s)
-          npx wait-on http://localhost:4000 --timeout 60000 --interval 2000
+          npx wait-on http://localhost:4000 --timeout 60000 --interval 2000 || (cat emulator.log && exit 1)
 
       # Executa o servidor Vite em background (E2E precisa da UI)
       - name: Iniciar servidor Vite (background)
