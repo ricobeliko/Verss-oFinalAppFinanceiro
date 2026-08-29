@@ -39,15 +39,32 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 20
+      - name: Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+
+      - name: Confirmar Node.js 22
+        run: |
+          node -e "
+            const major = Number(process.versions.node.split('.')[0]);
+            if (major !== 22) {
+              console.error('ERRO: CI nao esta executando Node 22');
+              process.exit(1);
+            }
+            console.log('Node 22 confirmado:', process.version);
+          "
 
       # Instala dependências de forma determinística (sem alterar lockfile)
       - name: Instalar dependências (npm ci)
         run: npm ci --verbose
+
+      - name: Instalar dependências das Functions (npm ci)
+        run: npm ci --prefix functions
+
+      - name: Verificar versões do SDK no backend
+        run: npm ls --prefix functions firebase-functions firebase-admin mercadopago --depth=0
 
       # Gate 1: Lint — falha com qualquer erro ESLint
       - name: ESLint (zero erros obrigatório)
@@ -85,14 +102,28 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 20
+      - name: Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+
+      - name: Confirmar Node.js 22
+        run: |
+          node -e "
+            const major = Number(process.versions.node.split('.')[0]);
+            if (major !== 22) {
+              console.error('ERRO: CI nao esta executando Node 22');
+              process.exit(1);
+            }
+            console.log('Node 22 confirmado:', process.version);
+          "
 
       - name: Instalar dependências (npm ci)
         run: npm ci
+
+      - name: Instalar dependências das Functions (npm ci)
+        run: npm ci --prefix functions
 
       - name: Configurar Java 21 (necessário para Firebase Emulators)
         uses: actions/setup-java@v4
