@@ -1,0 +1,26 @@
+{
+  "displayName": "FinControl — Webhook Mercado Pago Errors (SEV-2)",
+  "conditions": [
+    {
+      "displayName": "Webhook Mercado Pago error log",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND jsonPayload.stage=\"paymentWebhookMercadoPago\""
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": [
+    "CHANNEL_RESOURCE_NAME"
+  ],
+  "documentation": {
+    "content": "Falha crítica no processamento de pagamento do Mercado Pago (paymentWebhookMercadoPago). Consulte o runbook em docs/incident-response.md e verifique os logs no Cloud Logging.",
+    "mimeType": "text/markdown"
+  },
+  "enabled": true
+}

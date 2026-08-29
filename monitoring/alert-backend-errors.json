@@ -1,0 +1,26 @@
+{
+  "displayName": "FinControl — Backend Functions Unhandled Errors (SEV-2)",
+  "conditions": [
+    {
+      "displayName": "Unhandled Cloud Function error log",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND resource.labels.service_name=~\"^(paymentwebhookmercadopago|createmercadopagopreference|generateaimonthlybriefing|deleteuseraccount|reportclienterror)$\""
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": [
+    "CHANNEL_RESOURCE_NAME"
+  ],
+  "documentation": {
+    "content": "Exceção não tratada ou crash de runtime em Cloud Functions do FinControl. Consulte o runbook em docs/incident-response.md e investigue a causa raiz no Cloud Logging.",
+    "mimeType": "text/markdown"
+  },
+  "enabled": true
+}

@@ -89,18 +89,18 @@ Todas as Cloud Functions usam campos padronizados nos logs:
 
 ---
 
-## 4. GCP Alerting — Configuração Manual
+## 4. GCP Alerting — Configuração Operacional (LogMatch)
 
 > [!WARNING]
 > **⚠️ PENDÊNCIA OPERACIONAL**
 >
-> O GCP Alerting não está configurado automaticamente. Siga os passos abaixo para configurar os alertas mínimos via Google Cloud Console.
+> O GCP Alerting deve ser provisionado no Google Cloud Monitoring utilizando políticas baseadas em logs (`conditionMatchedLog`) a partir dos templates JSON em `monitoring/`.
 
-### Acesso
+### Templates Versionados em `monitoring/`
 
-```
-https://console.cloud.google.com/monitoring/alerting?project=controle-de-cartao
-```
+- `monitoring/alert-webhook-mp-errors.json` (Alerta Webhook MP)
+- `monitoring/alert-preference-mp-errors.json` (Alerta Preferência MP)
+- `monitoring/alert-backend-errors.json` (Alerta Backend Functions)
 
 ---
 
@@ -117,9 +117,11 @@ severity="ERROR"
 jsonPayload.stage="paymentWebhookMercadoPago"
 ```
 
-**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
-**Canal:** E-mail da equipe técnica (Notification Channel)  
-**Severidade interna:** SEV-2 (pagamento crítico)
+**Condição:** Disparo em tempo real (LogMatch)  
+**Taxa de Notificação:** Máximo 1 a cada 300s (`notificationRateLimit`)  
+**Auto-close:** 1800s  
+**Severidade interna:** SEV-2 (pagamento crítico)  
+**Arquivo:** `monitoring/alert-webhook-mp-errors.json`
 
 ---
 
@@ -136,13 +138,15 @@ severity="ERROR"
 jsonPayload.stage="createMercadoPagoPreference"
 ```
 
-**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
-**Canal:** E-mail da equipe técnica (Notification Channel)  
-**Severidade interna:** SEV-2
+**Condição:** Disparo em tempo real (LogMatch)  
+**Taxa de Notificação:** Máximo 1 a cada 300s (`notificationRateLimit`)  
+**Auto-close:** 1800s  
+**Severidade interna:** SEV-2  
+**Arquivo:** `monitoring/alert-preference-mp-errors.json`
 
 ---
 
-### ALERTA 3 — Exceções não tratadas em qualquer Function
+### ALERTA 3 — Exceções não tratadas em Cloud Functions
 
 **Objetivo:** Detectar erros inesperados que escaparam dos catch blocks ou crashes de runtime nas Cloud Functions do FinControl.
 
@@ -152,12 +156,27 @@ jsonPayload.stage="createMercadoPagoPreference"
 ```
 resource.type="cloud_run_revision"
 severity="ERROR"
-resource.labels.service_name=~"^(paymentWebhookMercadoPago|createMercadoPagoPreference|generateAiMonthlyBriefing|deleteUserAccount|reportClientError)$"
+resource.labels.service_name=~"^(paymentwebhookmercadopago|createmercadopagopreference|generateaimonthlybriefing|deleteuseraccount|reportclienterror)$"
 ```
 
-**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
-**Canal:** E-mail da equipe técnica (Notification Channel)  
-**Severidade interna:** SEV-2
+**Condição:** Disparo em tempo real (LogMatch)  
+**Taxa de Notificação:** Máximo 1 a cada 300s (`notificationRateLimit`)  
+**Auto-close:** 1800s  
+**Severidade interna:** SEV-2  
+**Arquivo:** `monitoring/alert-backend-errors.json`  
+*Nota: Validar os service_name reais no Cloud Logging antes de implantar.*
+
+---
+
+### Procedimento para Teste de Entrega do Canal de E-mail
+
+Para comprovar a entrega sem provocar erros em produção financeira:
+1. Criar política temporária com filtro sintético:
+   `resource.type="global" jsonPayload.testEvent="FINCONTROL_ALERT_CHANNEL_TEST_2026"`
+2. Emitir log sintético via Cloud Shell:
+   `gcloud logging write fincontrol-ops-test '{"testEvent":"FINCONTROL_ALERT_CHANNEL_TEST_2026","message":"Synthetic alert delivery test"}' --payload-type=json --severity=ERROR --project=controle-de-cartao`
+3. Confirmar recebimento do e-mail na caixa de entrada.
+4. Excluir **somente** a política temporária de teste.
 
 ---
 
