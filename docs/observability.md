@@ -146,9 +146,9 @@ jsonPayload.stage="createMercadoPagoPreference"
 
 ---
 
-### ALERTA 3 — Exceções não tratadas em Cloud Functions
+### ALERTA 3 — Exceções Críticas de Backend (deleteUserAccount / reportClientError)
 
-**Objetivo:** Detectar erros inesperados que escaparam dos catch blocks ou crashes de runtime nas Cloud Functions do FinControl.
+**Objetivo:** Detectar falhas reais na exclusão de conta (`deleteUserAccount`) ou exceções inesperadas de runtime em `reportClientError`, excluindo a telemetria normal de frontend.
 
 **Tipo:** Log-based alert (LogMatch)  
 **Filtro:**
@@ -156,7 +156,11 @@ jsonPayload.stage="createMercadoPagoPreference"
 ```
 resource.type="cloud_run_revision"
 severity="ERROR"
-resource.labels.service_name=~"^(paymentwebhookmercadopago|createmercadopagopreference|generateaimonthlybriefing|deleteuseraccount|reportclienterror)$"
+resource.labels.service_name=~"^(deleteuseraccount|reportclienterror)$"
+NOT (
+  resource.labels.service_name="reportclienterror"
+  AND jsonPayload.event="FRONTEND_ERROR_REPORTED"
+)
 ```
 
 **Condição:** Disparo em tempo real (LogMatch)  
@@ -164,7 +168,10 @@ resource.labels.service_name=~"^(paymentwebhookmercadopago|createmercadopagopref
 **Auto-close:** 1800s  
 **Severidade interna:** SEV-2  
 **Arquivo:** `monitoring/alert-backend-errors.json`  
-*Nota: Validar os service_name reais no Cloud Logging antes de implantar.*
+**Status dos Serviços Cobertos:**
+- `deleteUserAccount`: **DEPLOYED ✅** (Cloud Run / Functions Gen2)
+- `reportClientError`: **DEPLOYED ✅** (Cloud Run / Functions Gen2)
+- `generateAiMonthlyBriefing`: **NOT DEPLOYED / PROVIDER DISABLED 🔒** (Gemini desligado)
 
 ---
 
