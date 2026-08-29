@@ -108,7 +108,7 @@ https://console.cloud.google.com/monitoring/alerting?project=controle-de-cartao
 
 **Objetivo:** Detectar falhas de processamento de pagamento imediatamente.
 
-**Tipo:** Log-based alert  
+**Tipo:** Log-based alert (LogMatch)  
 **Filtro de log:**
 
 ```
@@ -117,16 +117,9 @@ severity="ERROR"
 jsonPayload.stage="paymentWebhookMercadoPago"
 ```
 
-**Condição:** Qualquer ocorrência (contagem absoluta ≥ 1 em 5 minutos)  
-**Canal:** E-mail da equipe técnica  
+**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
+**Canal:** E-mail da equipe técnica (Notification Channel)  
 **Severidade interna:** SEV-2 (pagamento crítico)
-
-**Comando gcloud (referência):**
-```bash
-gcloud alpha monitoring policies create \
-  --policy-from-file=monitoring/alert-webhook-errors.json \
-  --project=controle-de-cartao
-```
 
 ---
 
@@ -134,7 +127,7 @@ gcloud alpha monitoring policies create \
 
 **Objetivo:** Detectar falhas na criação de preferência antes do checkout.
 
-**Tipo:** Log-based alert  
+**Tipo:** Log-based alert (LogMatch)  
 **Filtro:**
 
 ```
@@ -143,27 +136,27 @@ severity="ERROR"
 jsonPayload.stage="createMercadoPagoPreference"
 ```
 
-**Condição:** ≥ 3 ocorrências em 10 minutos  
-**Canal:** E-mail da equipe técnica  
+**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
+**Canal:** E-mail da equipe técnica (Notification Channel)  
 **Severidade interna:** SEV-2
 
 ---
 
 ### ALERTA 3 — Exceções não tratadas em qualquer Function
 
-**Objetivo:** Detectar erros inesperados que escaparam dos catch blocks.
+**Objetivo:** Detectar erros inesperados que escaparam dos catch blocks ou crashes de runtime nas Cloud Functions do FinControl.
 
-**Tipo:** Log-based alert  
+**Tipo:** Log-based alert (LogMatch)  
 **Filtro:**
 
 ```
 resource.type="cloud_run_revision"
 severity="ERROR"
--jsonPayload.stage:*
+resource.labels.service_name=~"^(paymentWebhookMercadoPago|createMercadoPagoPreference|generateAiMonthlyBriefing|deleteUserAccount|reportClientError)$"
 ```
 
-**Condição:** ≥ 1 ocorrência em 5 minutos  
-**Canal:** E-mail da equipe técnica  
+**Condição:** Qualquer ocorrência imediata (disparo em tempo real)  
+**Canal:** E-mail da equipe técnica (Notification Channel)  
 **Severidade interna:** SEV-2
 
 ---
@@ -214,24 +207,12 @@ jsonPayload.result="success"
 
 ## 6. Frontend Error Reporting
 
-> [!WARNING]
-> **⚠️ PENDÊNCIA OPERACIONAL**
->
-> O `ErrorBoundary` (`src/components/ErrorBoundary.jsx`) captura crashes de renderização React, mas em produção **apenas exibe fallback visual** — nenhuma telemetria é enviada.
->
-> Em modo DEV, o erro é logado via `console.error`.
->
-> **Impacto:** Falhas de UI em produção são invisíveis para a equipe técnica.
+O `ErrorBoundary` (`src/components/ErrorBoundary.jsx`) captura crashes de renderização React e emite telemetria anonimizada para a Cloud Function `reportClientError` (`functions/index.js`).
 
-### Opções para implementação futura (bloco 🟡)
-
-| Opção | Privacidade | Custo | Complexidade |
-|-------|:-----------:|:-----:|:------------:|
-| Endpoint próprio (Cloud Function que recebe stack anonimizado) | Alto | Zero | Médio |
-| Firebase Analytics custom event | Alto | Zero | Baixo |
-| Sentry free tier | Médio | Zero até limite | Baixo |
-
-**Recomendação:** Cloud Function própria com payload anonimizado (apenas componente, mensagem genérica, sem PII).
+**Garantias de Privacidade e Resiliência:**
+- Sanitização estrita contra tokens, e-mails ou PII (`sanitizeErrorMessage`).
+- Rate limiting no cliente e no servidor (máximo 10 requisições/minuto por IP/UID).
+- Exibição de UI de fallback graciosa no tema Carbon Black & Gold sem bloqueio da navegação.
 
 ---
 
