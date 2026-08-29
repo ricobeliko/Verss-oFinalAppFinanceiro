@@ -8,8 +8,20 @@ test.describe('E2E Real Browser - Isolamento Estrito entre Usuários (User A vs 
                 uid: 'e2e-user-alpha',
                 email: 'user-alpha@fincontrol.local',
                 name: 'Usuário Alfa',
-                plan: 'pro'
+                plan: 'pro',
+                budgets: {},
+                notificationSettings: {},
+                aiPreferences: { optIn: false }
             };
+            window.__FINCONTROL_E2E_MOCK_DATA__ = {
+                cards: [{ id: 'card-alpha', name: 'Cartão Alfa Pro', limit: 8000, color: '#C5A059', userId: 'e2e-user-alpha' }],
+                loans: [{ id: 'loan-alpha', description: 'Compra Alfa 12x', totalAmount: 1200, installmentsCount: 12, installmentValue: 100, currentInstallment: 1, cardId: 'card-alpha', isMyDebt: true, category: 'Alimentação' }],
+                expenses: [{ id: 'exp-alpha', description: 'Despesa Alfa', cardId: 'card-alpha', value: 150, date: new Date(), category: 'Alimentação' }],
+                subscriptions: [],
+                clients: [],
+                incomes: []
+            };
+            sessionStorage.setItem('hasSeenWelcomeModal', 'true');
         });
 
         await page.goto('/dashboard');
@@ -23,8 +35,20 @@ test.describe('E2E Real Browser - Isolamento Estrito entre Usuários (User A vs 
                 uid: 'e2e-user-beta',
                 email: 'user-beta@fincontrol.local',
                 name: 'Usuário Beta',
-                plan: 'free'
+                plan: 'free',
+                budgets: {},
+                notificationSettings: {},
+                aiPreferences: { optIn: false }
             };
+            window.__FINCONTROL_E2E_MOCK_DATA__ = {
+                cards: [{ id: 'card-beta', name: 'Cartão Beta Free', limit: 2000, color: '#4A4A4A', userId: 'e2e-user-beta' }],
+                loans: [],
+                expenses: [],
+                subscriptions: [],
+                clients: [],
+                incomes: []
+            };
+            sessionStorage.setItem('hasSeenWelcomeModal', 'true');
         });
 
         await page.goto('/dashboard');
