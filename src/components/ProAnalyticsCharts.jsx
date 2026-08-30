@@ -8,8 +8,6 @@ import {
 import { useAppContext } from '../context/AppContext';
 import UpgradePrompt from './UpgradePrompt';
 import { formatCurrencyDisplay } from '../utils/currency';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../utils/firebase';
 
 const formatYAxis = (tick) => {
     if (tick >= 1000) return `R$ ${(tick / 1000).toLocaleString('pt-BR')}k`;
@@ -41,6 +39,9 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
         }
         setIsLoading(true);
         try {
+            const { httpsCallable } = await import('firebase/functions');
+            const { getAppFunctions } = await import('../utils/firebase');
+            const functions = await getAppFunctions();
             const createMercadoPagoPreference = httpsCallable(functions, 'createMercadoPagoPreference');
             const result = await createMercadoPagoPreference();
             

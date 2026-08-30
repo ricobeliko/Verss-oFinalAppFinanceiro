@@ -1,11 +1,9 @@
 // src/features/dashboard/ProSummary.jsx
 
 import React, { useState, useEffect } from 'react';
-import { httpsCallable } from 'firebase/functions';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import UpgradePrompt from '../../components/UpgradePrompt';
-import { functions } from '../../utils/firebase';
 
 function ProSummary({ selectedMonth, totalExpenses, incomes }) {
     const { isPro, isTrialActive, currentUser, showToast } = useAppContext();
@@ -41,6 +39,9 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
         }
         setIsLoading(true);
         try {
+            const { httpsCallable } = await import('firebase/functions');
+            const { getAppFunctions } = await import('../../utils/firebase');
+            const functions = await getAppFunctions();
             const createMercadoPagoPreference = httpsCallable(functions, 'createMercadoPagoPreference');
             const result = await createMercadoPagoPreference();
             

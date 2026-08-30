@@ -3,7 +3,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db, functions } from '../utils/firebase';
+import { auth, db, getAppFunctions } from '../utils/firebase';
 import Toast from '../components/Toast';
 
 const getUserCollectionPathSegments = () => ['users_fallback'];
@@ -48,32 +48,29 @@ export function AppProvider({ children }) {
         let unsubscribeFromUserProfile = () => {};
 
         const unsubscribeFromAuth = onAuthStateChanged(auth, (user) => {
-            unsubscribeFromUserProfile();
-
-            if (!user) {
-                setCurrentUser(null);
-                setUserProfile(null);
-                setIsAuthReady(true);
-                return;
-            }
-
             setCurrentUser(user);
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, user.uid);
-
-            unsubscribeFromUserProfile = onSnapshot(userDocRef, (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    setUserProfile(docSnapshot.data());
-                } else {
-                    console.warn("Documento de usuário não encontrado para UID:", user.uid);
-                    setUserProfile(null);
-                }
-                setIsAuthReady(true);
-            }, (error) => {
-                console.error("Erro ao escutar o documento do usuário:", error);
+            if (user) {
+                const userCollectionPath = getUserCollectionPathSegments();
+                const userDocRef = doc(db, ...userCollectionPath, user.uid);
+                
+                unsubscribeFromUserProfile = onSnapshot(userDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setUserProfile(docSnap.data());
+                    } else {
+                        console.warn("Perfil de usuário não encontrado no Firestore para o UID:", user.uid);
+                        setUserProfile(null);
+                    }
+                    setIsAuthReady(true);
+                }, (error) => {
+                    console.error("Erro ao escutar o perfil do usuário:", error);
+                    showToast('Erro ao carregar dados do usuário.', 'error');
+                    setIsAuthReady(true);
+                });
+            } else {
+                unsubscribeFromUserProfile();
                 setUserProfile(null);
                 setIsAuthReady(true);
-            });
+            }
         });
 
         return () => {
@@ -81,6 +78,15 @@ export function AppProvider({ children }) {
             unsubscribeFromUserProfile();
         };
     }, []);
+
+    const showToast = (message, type = 'info') => {
+        setToast({ message, type, visible: true });
+        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+    };
+
+    const clearToast = () => {
+        setToast(prev => ({ ...prev, visible: false }));
+    };
 
     const activateFreeTrial = async () => {
         if (!currentUser || !currentUser.uid) {
@@ -93,28 +99,27 @@ export function AppProvider({ children }) {
             return;
         }
 
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
         try {
             const userCollectionPath = getUserCollectionPathSegments();
             const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
-
-            const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 30);
-
             await updateDoc(userDocRef, {
                 trialExpiresAt: trialEndDate,
+                plan: 'vip_trial',
                 updatedAt: serverTimestamp()
             });
-
-            showToast('Mês grátis ativado com sucesso!', 'success');
+            showToast("Período de teste VIP ativado com sucesso! Aproveite 30 dias de acesso.", "success");
         } catch (error) {
-            console.error("Erro ao ativar o período de teste:", error);
-            showToast('Não foi possível ativar o período de teste. Tente novamente.', 'error');
+            console.error("Erro ao ativar período de teste VIP:", error);
+            showToast("Não foi possível ativar o período de teste. Tente novamente mais tarde.", "error");
         }
     };
 
     const logout = async () => {
         try {
-            if (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__) {
+            if (typeof window !== 'undefined' && (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__)) {
                 delete window.__FINCONTROL_E2E_USER__;
                 sessionStorage.removeItem('fincontrol_e2e_user');
                 setCurrentUser(null);
@@ -124,20 +129,13 @@ export function AppProvider({ children }) {
             }
             await signOut(auth);
             sessionStorage.removeItem('hasSeenWelcomeModal');
-            showToast('Você foi desconectado.', 'info');
+            setCurrentUser(null);
+            setUserProfile(null);
+            showToast("Você foi desconectado.", "info");
         } catch (error) {
-            console.error('Erro ao fazer logout:', error);
-            showToast('Erro ao sair. Tente novamente.', 'error');
+            console.error("Erro ao fazer logout:", error);
+            showToast("Não foi possível fazer logout. Tente novamente.", "error");
         }
-    };
-
-    const showToast = (message, type = 'info') => {
-        setToast({ message, type, visible: true });
-        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
-    };
-
-    const clearToast = () => {
-        setToast(prev => ({ ...prev, visible: false }));
     };
 
     const value = {
@@ -152,7 +150,7 @@ export function AppProvider({ children }) {
         showToast,
         db,
         auth,
-        functions,
+        getAppFunctions,
         getUserCollectionPathSegments,
         activateFreeTrial,
         logout,

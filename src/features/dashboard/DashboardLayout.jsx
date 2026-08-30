@@ -1,19 +1,22 @@
 // src/features/dashboard/DashboardLayout.jsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import WelcomeModal from '../../components/WelcomeModal'; 
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import NotificationCenterPopover from '../../components/NotificationCenterPopover';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
+import Spinner from '../../components/Spinner';
 
-// Páginas do painel
+// Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
-import ClientManagement from '../clients/ClientManagement';
-import CardManagement from '../cards/CardManagement';
-import UnifiedTransactionManagement from '../transactions/TransactionManagement';
-import SubscriptionManagement from '../subscriptions/SubscriptionManagement';
-import CrisisMode from '../crisis/CrisisMode'; // 👈 Importação do Modo Crise
+
+// Páginas secundárias carregadas sob demanda (tab-level code splitting)
+const ClientManagement = lazy(() => import('../clients/ClientManagement'));
+const CardManagement = lazy(() => import('../cards/CardManagement'));
+const UnifiedTransactionManagement = lazy(() => import('../transactions/TransactionManagement'));
+const SubscriptionManagement = lazy(() => import('../subscriptions/SubscriptionManagement'));
+const CrisisMode = lazy(() => import('../crisis/CrisisMode'));
 
 // --- Ícones ---
 const FinControlLogo = ({ className }) => ( <svg className={className} width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/> <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/> <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/> </svg> );
@@ -132,15 +135,25 @@ export default function DashboardLayout() {
     };
 
     const renderActivePage = () => {
-        switch (activePage) {
-            case 'resumo': return <Dashboard {...pageProps} />;
-            case 'pessoas': return <ClientManagement />;
-            case 'cards': return <CardManagement />;
-            case 'transactions': return <UnifiedTransactionManagement />;
-            case 'subscriptions': return <SubscriptionManagement {...pageProps} />;
-            case 'crisis': return <CrisisMode selectedMonth={selectedMonth} />;
-            default: return <Dashboard {...pageProps} />;
-        }
+        return (
+            <Suspense fallback={
+                <div className="flex justify-center items-center py-24 min-h-[300px]">
+                    <Spinner />
+                </div>
+            }>
+                {(() => {
+                    switch (activePage) {
+                        case 'resumo': return <Dashboard {...pageProps} />;
+                        case 'pessoas': return <ClientManagement />;
+                        case 'cards': return <CardManagement />;
+                        case 'transactions': return <UnifiedTransactionManagement />;
+                        case 'subscriptions': return <SubscriptionManagement {...pageProps} />;
+                        case 'crisis': return <CrisisMode selectedMonth={selectedMonth} />;
+                        default: return <Dashboard {...pageProps} />;
+                    }
+                })()}
+            </Suspense>
+        );
     };
     
     const navLinks = [

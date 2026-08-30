@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Credenciais do Firebase
 const firebaseConfig = {
@@ -16,10 +15,9 @@ const firebaseConfig = {
 // Inicializar a aplicação Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar os serviços
+// Inicializar os serviços essenciais do client
 const db = getFirestore(app);
 const auth = getAuth(app);
-const functions = getFunctions(app, 'southamerica-east1');
 
 // Conectar aos Emuladores Locais quando a flag estiver habilitada
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
@@ -27,10 +25,23 @@ if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
   try {
     connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
     connectFirestoreEmulator(db, host, 8080);
-    connectFunctionsEmulator(functions, host, 5001);
   } catch (err) {
     console.warn("Emuladores Firebase já conectados ou indisponíveis:", err.message);
   }
 }
 
-export { db, auth, functions };
+// Helper para carregar instância de Cloud Functions sob demanda (code splitting de backend SDK)
+async function getAppFunctions() {
+  const { getFunctions, connectFunctionsEmulator } = await import('firebase/functions');
+  const functionsInstance = getFunctions(app, 'southamerica-east1');
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+    try {
+      connectFunctionsEmulator(functionsInstance, 'localhost', 5001);
+    } catch {
+      // Ignora se já conectado
+    }
+  }
+  return functionsInstance;
+}
+
+export { app, db, auth, getAppFunctions };
