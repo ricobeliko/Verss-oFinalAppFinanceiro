@@ -71,7 +71,13 @@ describe.runIf(isEmulatorHostDefined)('Account Operation Lock — Firestore Emul
         expect(data.leaseId).toBe(fulfilled[0].value.leaseId);
         expect(typeof data.startedAt).toBe('number');
         expect(typeof data.updatedAt).toBe('number');
-        expect(typeof data.expiresAt).toBe('number');
+        // expiresAt deve ser Firestore Timestamp válido
+        expect(data.expiresAt).toBeDefined();
+        const expiresAtMs = typeof data.expiresAt?.toMillis === 'function'
+            ? data.expiresAt.toMillis()
+            : (typeof data.expiresAt?.toDate === 'function' ? data.expiresAt.toDate().getTime() : data.expiresAt.seconds * 1000);
+        expect(typeof expiresAtMs).toBe('number');
+        expect(expiresAtMs).toBeGreaterThan(data.startedAt);
     });
 
     // Caso B: Different UIDs Isolation
@@ -109,7 +115,7 @@ describe.runIf(isEmulatorHostDefined)('Account Operation Lock — Firestore Emul
             status: 'deleting',
             startedAt: now - 80 * 1000,
             updatedAt: now - 80 * 1000,
-            expiresAt: now + 24 * 60 * 60 * 1000,
+            expiresAt: admin.firestore.Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
         });
 
         // Processo B tenta adquirir lock
@@ -348,8 +354,17 @@ describe.runIf(isEmulatorHostDefined)('Account Operation Lock — Firestore Emul
         expect(data.leaseId).toBe(leaseId);
         expect(typeof data.startedAt).toBe('number');
         expect(typeof data.updatedAt).toBe('number');
-        expect(typeof data.expiresAt).toBe('number');
-        expect(data.expiresAt).toBeGreaterThan(data.startedAt);
+        
+        // Validação estrita de Firestore Timestamp e horizonte TTL de 24h
+        expect(data.expiresAt).toBeDefined();
+        const expiresAtMs = typeof data.expiresAt?.toMillis === 'function'
+            ? data.expiresAt.toMillis()
+            : (typeof data.expiresAt?.toDate === 'function' ? data.expiresAt.toDate().getTime() : (typeof data.expiresAt?.seconds === 'number' ? data.expiresAt.seconds * 1000 : Number(data.expiresAt)));
+
+        expect(expiresAtMs).toBeGreaterThan(data.startedAt);
+        // Verifica que expiresAt está aproximadamente 24h no futuro (com tolerância razoável)
+        const diffHours = (expiresAtMs - data.startedAt) / (1000 * 60 * 60);
+        expect(diffHours).toBeCloseTo(24, 1);
 
         // Verificação estrita de Zero PII
         const keys = Object.keys(data);

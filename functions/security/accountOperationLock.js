@@ -6,6 +6,7 @@
  */
 
 const crypto = require("crypto");
+const admin = require("firebase-admin");
 
 /**
  * Adquire um lock persistente exclusivo para uma operação destrutiva de conta.
@@ -50,6 +51,12 @@ async function acquireAccountOperationLock(db, {
         }
 
         const startedAt = (exists && data && typeof data.startedAt === "number") ? data.startedAt : now;
+        let expiresAt;
+        try {
+            expiresAt = admin.firestore.Timestamp.fromMillis(now + ttlMs);
+        } catch {
+            expiresAt = new Date(now + ttlMs);
+        }
 
         transaction.set(operationRef, {
             operation,
@@ -57,7 +64,7 @@ async function acquireAccountOperationLock(db, {
             status: "deleting",
             startedAt,
             updatedAt: now,
-            expiresAt: now + ttlMs,
+            expiresAt,
         }, { merge: true });
     });
 
