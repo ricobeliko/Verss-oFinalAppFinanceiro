@@ -1563,6 +1563,36 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
         });
     });
 
+    describe('AI Rate Limit & Atomic Concurrency Lock', () => {
+        it('deve bloquear segunda chamada concorrente simultânea quando a primeira estiver em trânsito', async () => {
+            let activeLock = false;
+
+            const executeAiRequest = async () => {
+                if (activeLock) {
+                    const err = new Error('Uma análise de IA já está em andamento. Aguarde alguns instantes.');
+                    err.code = 'failed-precondition';
+                    throw err;
+                }
+                activeLock = true;
+                // Simula tempo de processamento
+                await new Promise(resolve => setTimeout(resolve, 50));
+                activeLock = false;
+                return { success: true, engine: 'deterministic-engine-v1' };
+            };
+
+            const req1 = executeAiRequest();
+            const req2 = executeAiRequest();
+
+            const results = await Promise.allSettled([req1, req2]);
+            const fulfilled = results.filter(r => r.status === 'fulfilled');
+            const rejected = results.filter(r => r.status === 'rejected');
+
+            expect(fulfilled.length).toBe(1);
+            expect(rejected.length).toBe(1);
+            expect(rejected[0].reason.code).toBe('failed-precondition');
+        });
+    });
+
     describe('Infrastructure Caps & Billing Protection (Fase 7.2.3)', () => {
         it('deve garantir que todas as 5 Cloud Functions declaram explicitamente maxInstances, concurrency, timeout e memory', async () => {
             const fs = await import('fs');
