@@ -184,7 +184,7 @@ jobs:
 
       # Gate de Concorrência Real: Testes de lease e anti-abuso no Firestore Emulator
       - name: Concorrência Real · Firestore Emulator Integration Tests
-        run: npx vitest run tests/rateLimitEmulator.test.js
+        run: npx vitest run tests/rateLimitEmulator.test.js tests/accountOperationLockEmulator.test.js
         env:
           FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
           GCLOUD_PROJECT: "demo-fincontrol-e2e"

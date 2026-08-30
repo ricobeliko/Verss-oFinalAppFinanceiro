@@ -54,5 +54,10 @@ service cloud.firestore {
     match /api_rate_limits/{documentId} {
       allow read, write: if false;
     }
+
+    // Coleção de controle de operações destrutivas e locks de conta (Exclusivo Cloud Functions / Admin SDK)
+    match /account_operations/{documentId} {
+      allow read, write: if false;
+    }
   }
 }

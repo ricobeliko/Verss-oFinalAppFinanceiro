@@ -101,6 +101,16 @@ class FirestoreRulesEvaluator {
         }
         return false;
     }
+
+    /**
+     * Avalia se uma requisição para /account_operations/{documentId} é permitida (sempre false para cliente).
+     */
+    evaluateAccountOperationsDoc({ operation }) {
+        if (operation === 'read' || operation === 'create' || operation === 'update' || operation === 'delete' || operation === 'write') {
+            return false; // Apenas Admin SDK / Cloud Functions
+        }
+        return false;
+    }
 }
 
 describe('Firestore Security Rules - Matriz de Segurança e Isolamento', () => {
@@ -117,6 +127,7 @@ describe('Firestore Security Rules - Matriz de Segurança e Isolamento', () => {
         expect(rulesContent).toContain("match /payments/{paymentId}");
         expect(rulesContent).toContain("allow write: if false;");
         expect(rulesContent).toContain("match /ai_rate_limits/{userId}");
+        expect(rulesContent).toContain("match /account_operations/{documentId}");
     });
 
     describe('Autenticação e Isolamento entre Usuários (User A vs User B)', () => {
@@ -430,6 +441,24 @@ describe('Firestore Security Rules - Matriz de Segurança e Isolamento', () => {
 
         it('deve NEGAR exclusão (delete) direta de /api_rate_limits pelo cliente autenticado', () => {
             expect(evaluator.evaluateApiRateLimitsDoc({ operation: 'delete' })).toBe(false);
+        });
+    });
+
+    describe('Proteção da Coleção de Locks de Operação de Conta (/account_operations)', () => {
+        it('deve NEGAR leitura (read) direta de /account_operations pelo cliente não-autenticado ou autenticado', () => {
+            expect(evaluator.evaluateAccountOperationsDoc({ operation: 'read' })).toBe(false);
+        });
+
+        it('deve NEGAR criação (create) direta de /account_operations pelo cliente autenticado', () => {
+            expect(evaluator.evaluateAccountOperationsDoc({ operation: 'create' })).toBe(false);
+        });
+
+        it('deve NEGAR atualização (update) direta de /account_operations pelo cliente autenticado', () => {
+            expect(evaluator.evaluateAccountOperationsDoc({ operation: 'update' })).toBe(false);
+        });
+
+        it('deve NEGAR exclusão (delete) direta de /account_operations pelo cliente autenticado', () => {
+            expect(evaluator.evaluateAccountOperationsDoc({ operation: 'delete' })).toBe(false);
         });
     });
 });

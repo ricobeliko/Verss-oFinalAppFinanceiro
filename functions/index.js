@@ -36,6 +36,7 @@ function sanitizeErrorMessage(str) {
 }
 
 const { reserveApiActionAttempt, releaseApiActionInFlight } = require("./security/rateLimit");
+const { acquireAccountOperationLock, updateAccountOperationStatus, releaseAccountOperationLock } = require("./security/accountOperationLock");
 
 // ============================================================
 // HELPERS DO WEBHOOK MERCADO PAGO
@@ -802,8 +803,10 @@ DIRETRIZES RÍGIDAS DE CONDUTA:
 
 // ============================================================
 // FUNÇÃO 4: deleteUserAccount
-// Exclusão completa, atômica e irreversível da conta de usuário (LGPD/GDPR).
-// Exclui subcoleções financeiras, documento raiz e Auth record.
+// Exclusão de conta de usuário (LGPD/GDPR): processo sequencial, paginado e idempotente
+// quando retomado; não constitui transação distribuída atômica.
+// Exclui subcoleções financeiras, documentos de rate limit, documento raiz e Auth record por último.
+// Protegida por lock persistente e distribuído em /account_operations/{uid}.
 // ============================================================
 exports.deleteUserAccount = onCall(
     {
@@ -828,13 +831,44 @@ exports.deleteUserAccount = onCall(
         const userLogHash = hashUid(userId);
         const db = admin.firestore();
 
-        logger.info(`[${stage}] Iniciando exclusão completa da conta do usuário.`, {
+        logger.info(`[${stage}] Iniciando exclusão de conta com verificação de lock persistente.`, {
             stage,
             userHash: userLogHash,
         });
 
+        // 1. Aquisição de Lock Persistente Distribuído (/account_operations/{uid})
+        let operationRef = null;
+        let leaseId = null;
+
         try {
-            // 1. Excluir documentos em TODAS as subcoleções conhecidas sob users_fallback/{userId}
+            const lockResult = await acquireAccountOperationLock(db, {
+                userId,
+                operation: "deleteUserAccount",
+                staleThresholdMs: 75 * 1000,
+            });
+            operationRef = lockResult.operationRef;
+            leaseId = lockResult.leaseId;
+        } catch (error) {
+            if (error.message === "OPERATION_IN_PROGRESS") {
+                logger.warn(`[${stage}] Exclusão de conta já em andamento para este usuário.`, {
+                    stage,
+                    userHash: userLogHash,
+                    event: "ACCOUNT_DELETION_LOCKED",
+                    result: "operation_in_progress",
+                });
+                throw new HttpsError("resource-exhausted", "Existe uma solicitação de exclusão de conta em andamento para este usuário. Aguarde a conclusão.");
+            }
+            logger.error(`[${stage}] Falha ao adquirir lock de operação de conta.`, {
+                stage,
+                userHash: userLogHash,
+                errorDetails: error.message,
+                result: "lock_acquisition_error",
+            });
+            throw new HttpsError("internal", "Não foi possível iniciar o processo de exclusão de conta.");
+        }
+
+        try {
+            // 2. Excluir documentos em TODAS as subcoleções conhecidas sob users_fallback/{userId}
             const subcollections = [
                 "cards",
                 "loans",
@@ -865,15 +899,18 @@ exports.deleteUserAccount = onCall(
                 }
             }
 
-            // 2. Excluir dados de rate limiting e preferências
+            // 3. Excluir dados de rate limiting e preferências
             await db.collection("ai_rate_limits").doc(userId).delete().catch(() => {});
             await db.collection("api_rate_limits").doc(`${userId}_createMercadoPagoPreference`).delete().catch(() => {});
 
-            // 3. Excluir documento principal de perfil
-            await db.collection("users_fallback").doc(userId).delete();
+            // 4. Excluir documento principal de perfil
+            await db.collection("users_fallback").doc(userId).delete().catch(() => {});
 
-            // 4. Excluir usuário no Firebase Authentication
+            // 5. Excluir usuário no Firebase Authentication (POR ÚLTIMO)
             await admin.auth().deleteUser(userId);
+
+            // 6. Marcar lock de operação de conta como concluído com Compare-and-Set
+            await updateAccountOperationStatus(db, operationRef, leaseId, "completed");
 
             logger.info(`[${stage}] Conta excluída com sucesso em todos os armazenamentos.`, {
                 stage,
@@ -887,7 +924,10 @@ exports.deleteUserAccount = onCall(
                 timestamp: new Date().toISOString(),
             };
         } catch (error) {
-            logger.error(`[${stage}] Erro ao excluir conta de usuário.`, {
+            if (operationRef && leaseId) {
+                await updateAccountOperationStatus(db, operationRef, leaseId, "failed").catch(() => {});
+            }
+            logger.error(`[${stage}] Erro ao processar exclusão de conta de usuário.`, {
                 stage,
                 userHash: userLogHash,
                 errorDetails: error.message,
@@ -978,6 +1018,9 @@ exports.hashUid = hashUid;
 exports.sanitizeErrorMessage = sanitizeErrorMessage;
 exports.reserveApiActionAttempt = reserveApiActionAttempt;
 exports.releaseApiActionInFlight = releaseApiActionInFlight;
+exports.acquireAccountOperationLock = acquireAccountOperationLock;
+exports.updateAccountOperationStatus = updateAccountOperationStatus;
+exports.releaseAccountOperationLock = releaseAccountOperationLock;
 exports.extractWebhookQueryDataId = extractWebhookQueryDataId;
 exports.parseXSignature = parseXSignature;
 exports.validateMercadoPagoWebhookSignature = validateMercadoPagoWebhookSignature;
