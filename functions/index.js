@@ -15,30 +15,46 @@ if (admin.apps.length === 0) {
 // ============================================================
 
 /**
- * Extrai o identificador de dados (dataId) do webhook oficial do Mercado Pago.
- * Suporta query params ('data.id', 'id') e body JSON ('data.id', 'id').
+ * Extrai o identificador canônico de dados da URL (query param 'data.id')
+ * utilizado como origem oficial e exclusiva da assinatura pelo Mercado Pago.
  */
-function extractWebhookDataId(req) {
+function extractWebhookQueryDataId(req) {
     if (req.query && req.query['data.id']) {
-        return String(req.query['data.id']);
-    }
-    if (req.query && req.query.id) {
-        return String(req.query.id);
-    }
-    if (req.body && req.body.data && req.body.data.id) {
-        return String(req.body.data.id);
-    }
-    if (req.body && req.body.id) {
-        return String(req.body.id);
+        return String(req.query['data.id']).trim();
     }
     return null;
 }
 
 /**
+ * Realiza o parsing seguro dos parâmetros do cabeçalho x-signature (ts=...,v1=...).
+ */
+function parseXSignature(xSignature) {
+    if (!xSignature || typeof xSignature !== "string") {
+        return null;
+    }
+    const parts = {};
+    for (const item of xSignature.split(",")) {
+        const eqIdx = item.indexOf("=");
+        if (eqIdx !== -1) {
+            const key = item.slice(0, eqIdx).trim();
+            const val = item.slice(eqIdx + 1).trim();
+            if (key && val) {
+                parts[key] = val;
+            }
+        }
+    }
+    if (!parts.ts || !parts.v1) {
+        return null;
+    }
+    return parts;
+}
+
+/**
  * Valida a assinatura criptográfica oficial (HMAC-SHA256) do Mercado Pago.
  * Especificação Oficial:
- * Manifest: "id:${dataId};request-id:${xRequestId};ts:${ts};"
- * Comparação em tempo constante (timingSafeEqual) para proteção contra timing attacks.
+ * - Manifest: "id:${normalizedDataId};request-id:${xRequestId};ts:${ts};"
+ * - Normalização: data.id em minúsculas (lowercase) para caracteres alfanuméricos.
+ * - Comparação em tempo constante (timingSafeEqual) para proteção contra timing attacks.
  */
 function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, dataId }) {
     if (!secret || !xSignature || !xRequestId || !dataId) {
@@ -46,27 +62,26 @@ function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, d
     }
 
     try {
-        const parts = String(xSignature).split(',').reduce((acc, part) => {
-            const [k, v] = part.trim().split('=');
-            if (k && v) acc[k] = v;
-            return acc;
-        }, {});
-
-        if (!parts.ts || !parts.v1) {
+        const parts = parseXSignature(xSignature);
+        if (!parts || !parts.ts || !parts.v1) {
             return false;
         }
 
-        const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${parts.ts.trim()};`;
-        const calculatedHmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+        const normalizedDataId = String(dataId).trim().toLowerCase();
+        const normalizedRequestId = String(xRequestId).trim();
+        const normalizedTs = String(parts.ts).trim();
 
-        if (calculatedHmac.length !== parts.v1.length) {
+        const manifest = `id:${normalizedDataId};request-id:${normalizedRequestId};ts:${normalizedTs};`;
+        const calculatedHmac = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
+
+        const hmacBuf = Buffer.from(calculatedHmac, "hex");
+        const v1Buf = Buffer.from(parts.v1, "hex");
+
+        if (hmacBuf.length === 0 || v1Buf.length === 0 || hmacBuf.length !== v1Buf.length) {
             return false;
         }
 
-        return crypto.timingSafeEqual(
-            Buffer.from(calculatedHmac, 'hex'),
-            Buffer.from(parts.v1, 'hex')
-        );
+        return crypto.timingSafeEqual(hmacBuf, v1Buf);
     } catch {
         return false;
     }
@@ -189,19 +204,19 @@ exports.paymentWebhookMercadoPago = onRequest(
             return;
         }
 
-        // 1. Extração segura de headers e dataId para validação da assinatura
+        // 1. Extração da query canônica e cabeçalhos para autenticação
+        const queryDataId = extractWebhookQueryDataId(req);
         const xSignature = req.headers['x-signature'];
         const xRequestId = req.headers['x-request-id'];
-        const dataId = extractWebhookDataId(req);
 
-        // 2. Fail Closed: Rejeição precoce se cabeçalhos ou dataId estiverem ausentes
-        if (!xSignature || !xRequestId || !dataId) {
-            logger.warn(`[${stage}] Webhook rejeitado: cabeçalhos ou identificador ausentes.`, {
+        // 2. Fail Closed: Rejeição precoce se query['data.id'] ou headers estiverem ausentes
+        if (!xSignature || !xRequestId || !queryDataId) {
+            logger.warn(`[${stage}] Webhook rejeitado: assinatura ou query['data.id'] ausente.`, {
                 stage,
                 event: "WEBHOOK_SIGNATURE_MISSING",
                 hasSignature: Boolean(xSignature),
                 hasRequestId: Boolean(xRequestId),
-                hasDataId: Boolean(dataId),
+                hasQueryDataId: Boolean(queryDataId),
                 result: "unauthorized_missing_headers",
             });
             res.status(401).send("Assinatura ou identificador ausente.");
@@ -224,7 +239,7 @@ exports.paymentWebhookMercadoPago = onRequest(
             secret: webhookSecret,
             xSignature,
             xRequestId,
-            dataId,
+            dataId: queryDataId,
         });
 
         if (!isValidSignature) {
@@ -243,7 +258,19 @@ exports.paymentWebhookMercadoPago = onRequest(
             xRequestId,
         });
 
-        // 5. Verificação do tipo de evento
+        // 5. Proteção contra Body / Query Mismatch
+        const bodyDataId = req.body?.data?.id ? String(req.body.data.id).trim() : null;
+        if (bodyDataId && bodyDataId !== queryDataId) {
+            logger.warn(`[${stage}] Webhook rejeitado: divergência entre body.data.id e query['data.id'].`, {
+                stage,
+                event: "WEBHOOK_BODY_QUERY_MISMATCH",
+                result: "bad_request_mismatched_id",
+            });
+            res.status(400).send("Identificador do corpo diverge da requisição assinada.");
+            return;
+        }
+
+        // 6. Verificação do tipo de evento
         const { type } = req.body || {};
         if (type && type !== "payment") {
             logger.info(`[${stage}] Evento ignorado (tipo não processado).`, {
@@ -255,7 +282,8 @@ exports.paymentWebhookMercadoPago = onRequest(
             return;
         }
 
-        const paymentId = String(dataId);
+        // Recurso bruto preservado para consulta de API e persistência
+        const paymentId = queryDataId;
 
         logger.info(`[${stage}] Webhook autenticado recebido para processamento.`, {
             stage,
@@ -839,5 +867,6 @@ exports.reportClientError = onCall(
 );
 
 // Exportações auxiliares para testes unitários e validação de segurança
-exports.extractWebhookDataId = extractWebhookDataId;
+exports.extractWebhookQueryDataId = extractWebhookQueryDataId;
+exports.parseXSignature = parseXSignature;
 exports.validateMercadoPagoWebhookSignature = validateMercadoPagoWebhookSignature;

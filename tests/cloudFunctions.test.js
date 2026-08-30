@@ -117,41 +117,67 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
     describe('paymentWebhookMercadoPago e Validação de Assinatura HMAC', () => {
         const TEST_WEBHOOK_SECRET = "test_webhook_secret_key_mock_12345";
 
-        function extractWebhookDataId(req) {
-            if (req.query && req.query['data.id']) return String(req.query['data.id']);
-            if (req.query && req.query.id) return String(req.query.id);
-            if (req.body && req.body.data && req.body.data.id) return String(req.body.data.id);
-            if (req.body && req.body.id) return String(req.body.id);
+        function extractWebhookQueryDataId(req) {
+            if (req.query && req.query['data.id']) {
+                return String(req.query['data.id']).trim();
+            }
             return null;
         }
 
+        function parseXSignature(xSignature) {
+            if (!xSignature || typeof xSignature !== "string") {
+                return null;
+            }
+            const parts = {};
+            for (const item of xSignature.split(",")) {
+                const eqIdx = item.indexOf("=");
+                if (eqIdx !== -1) {
+                    const key = item.slice(0, eqIdx).trim();
+                    const val = item.slice(eqIdx + 1).trim();
+                    if (key && val) {
+                        parts[key] = val;
+                    }
+                }
+            }
+            if (!parts.ts || !parts.v1) {
+                return null;
+            }
+            return parts;
+        }
+
         function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, dataId }) {
-            if (!secret || !xSignature || !xRequestId || !dataId) return false;
+            if (!secret || !xSignature || !xRequestId || !dataId) {
+                return false;
+            }
             try {
-                const parts = String(xSignature).split(',').reduce((acc, part) => {
-                    const [k, v] = part.trim().split('=');
-                    if (k && v) acc[k] = v;
-                    return acc;
-                }, {});
+                const parts = parseXSignature(xSignature);
+                if (!parts || !parts.ts || !parts.v1) {
+                    return false;
+                }
 
-                if (!parts.ts || !parts.v1) return false;
+                const normalizedDataId = String(dataId).trim().toLowerCase();
+                const normalizedRequestId = String(xRequestId).trim();
+                const normalizedTs = String(parts.ts).trim();
 
-                const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${parts.ts.trim()};`;
-                const calculatedHmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+                const manifest = `id:${normalizedDataId};request-id:${normalizedRequestId};ts:${normalizedTs};`;
+                const calculatedHmac = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
 
-                if (calculatedHmac.length !== parts.v1.length) return false;
+                const hmacBuf = Buffer.from(calculatedHmac, "hex");
+                const v1Buf = Buffer.from(parts.v1, "hex");
 
-                return crypto.timingSafeEqual(
-                    Buffer.from(calculatedHmac, 'hex'),
-                    Buffer.from(parts.v1, 'hex')
-                );
+                if (hmacBuf.length === 0 || v1Buf.length === 0 || hmacBuf.length !== v1Buf.length) {
+                    return false;
+                }
+
+                return crypto.timingSafeEqual(hmacBuf, v1Buf);
             } catch {
                 return false;
             }
         }
 
         function generateTestSignature({ secret, xRequestId, dataId, ts = '1700000000' }) {
-            const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${ts};`;
+            const normalizedDataId = String(dataId).trim().toLowerCase();
+            const manifest = `id:${normalizedDataId};request-id:${String(xRequestId).trim()};ts:${ts};`;
             const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
             return `ts=${ts},v1=${hmac}`;
         }
@@ -162,11 +188,11 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                 return;
             }
 
+            const queryDataId = extractWebhookQueryDataId(req);
             const xSignature = req.headers?.['x-signature'];
             const xRequestId = req.headers?.['x-request-id'];
-            const dataId = extractWebhookDataId(req);
 
-            if (!xSignature || !xRequestId || !dataId) {
+            if (!xSignature || !xRequestId || !queryDataId) {
                 res.status(401).send("Assinatura ou identificador ausente.");
                 return;
             }
@@ -180,11 +206,18 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                 secret: webhookSecret,
                 xSignature,
                 xRequestId,
-                dataId
+                dataId: queryDataId
             });
 
             if (!isValid) {
                 res.status(401).send("Assinatura inválida.");
+                return;
+            }
+
+            // Proteção contra Body / Query Mismatch
+            const bodyDataId = req.body?.data?.id ? String(req.body.data.id).trim() : null;
+            if (bodyDataId && bodyDataId !== queryDataId) {
+                res.status(400).send("Identificador do corpo diverge da requisição assinada.");
                 return;
             }
 
@@ -194,7 +227,7 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                 return;
             }
 
-            const paymentId = String(dataId);
+            const paymentId = queryDataId;
             try {
                 const payment = await paymentGetFn({ id: paymentId });
                 const paymentStatus = payment.status;
@@ -265,7 +298,7 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
         };
 
         it('deve retornar 405 Method Not Allowed para métodos diferentes de POST', async () => {
-            const req = { method: 'GET', headers: {}, body: {} };
+            const req = { method: 'GET', headers: {}, query: {}, body: {} };
             const res = {
                 statusCode: null,
                 body: null,
@@ -282,7 +315,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             const req = {
                 method: 'POST',
                 headers: { 'x-request-id': 'req-123' },
-                body: { type: 'payment', data: { id: 'pay-123' } }
+                query: { 'data.id': 'pay-123' },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -302,7 +336,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             const req = {
                 method: 'POST',
                 headers: { 'x-signature': 'ts=1700000000,v1=abcdef' },
-                body: { type: 'payment', data: { id: 'pay-123' } }
+                query: { 'data.id': 'pay-123' },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -318,13 +353,37 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
         });
 
-        it('deve retornar 401 e rejeitar requisição sem data.id ANTES de consultar a API externa', async () => {
+        it('deve retornar 401 e rejeitar requisição sem query[\'data.id\'] (mesmo se body.data.id estiver presente)', async () => {
             const req = {
                 method: 'POST',
                 headers: {
                     'x-signature': 'ts=1700000000,v1=abcdef',
                     'x-request-id': 'req-123'
                 },
+                query: {},
+                body: { type: 'payment', data: { id: 'pay-body-only' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(401);
+            expect(res.body).toBe("Assinatura ou identificador ausente.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+        });
+
+        it('deve retornar 401 e rejeitar requisição com apenas query.id (sem query[\'data.id\'])', async () => {
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': 'ts=1700000000,v1=abcdef',
+                    'x-request-id': 'req-123'
+                },
+                query: { id: 'pay-query-id-only' },
                 body: { type: 'payment' }
             };
             const res = {
@@ -336,6 +395,7 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
             expect(res.statusCode).toBe(401);
+            expect(res.body).toBe("Assinatura ou identificador ausente.");
             expect(mockPaymentGet).not.toHaveBeenCalled();
         });
 
@@ -346,7 +406,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': 'ts=1700000000,v1=0000000000000000000000000000000000000000000000000000000000000000',
                     'x-request-id': 'req-123'
                 },
-                body: { type: 'payment', data: { id: 'pay-123' } }
+                query: { 'data.id': 'pay-123' },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -362,6 +423,93 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
         });
 
+        it('deve retornar 400 Bad Request caso body.data.id divirja do query[\'data.id\'] assinado e NÃO chamar paymentClient.get', async () => {
+            const paymentId = 'pay-query-123';
+            const xRequestId = 'req-valid-1';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                query: { 'data.id': paymentId },
+                body: { type: 'payment', data: { id: 'pay-body-divergente-999' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(400);
+            expect(res.body).toBe("Identificador do corpo diverge da requisição assinada.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+            expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
+        });
+
+        it('deve processar com sucesso caso query[\'data.id\'] e body.data.id sejam coincidentes', async () => {
+            const paymentId = 'pay-match-123';
+            const xRequestId = 'req-valid-match';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
+            mockPaymentGet.mockResolvedValue({
+                id: paymentId,
+                status: 'approved',
+                external_reference: 'user-destinatario',
+                transaction_amount: 29.99,
+                currency_id: 'BRL'
+            });
+
+            const mockUserDoc = { exists: true, data: () => ({ plan: 'free' }) };
+            const mockPaymentDoc = { exists: false, data: () => ({}) };
+
+            let callCount = 0;
+            const customDb = {
+                collection: vi.fn().mockReturnThis(),
+                doc: vi.fn(() => ({
+                    collection: vi.fn().mockReturnThis(),
+                    doc: vi.fn().mockReturnThis(),
+                    get: vi.fn().mockImplementation(() => {
+                        callCount++;
+                        return Promise.resolve(callCount === 1 ? mockUserDoc : mockPaymentDoc);
+                    })
+                })),
+                batch: vi.fn().mockReturnValue(mockBatch)
+            };
+
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                query: { 'data.id': paymentId },
+                body: { type: 'payment', data: { id: paymentId } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: customDb });
+            expect(res.statusCode).toBe(200);
+            expect(mockPaymentGet).toHaveBeenCalledWith({ id: paymentId });
+        });
+
         it('deve retornar 500 se o secret do webhook não estiver configurado no backend', async () => {
             const req = {
                 method: 'POST',
@@ -369,7 +517,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': 'ts=1700000000,v1=abcdef123456',
                     'x-request-id': 'req-123'
                 },
-                body: { type: 'payment', data: { id: 'pay-123' } }
+                query: { 'data.id': 'pay-123' },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -384,54 +533,57 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             expect(mockPaymentGet).not.toHaveBeenCalled();
         });
 
-        it('deve validar determinística e criptograficamente a assinatura oficial HMAC-SHA256 (Passo 10)', () => {
-            const fixtureSecret = "deterministic_test_secret_xyz789";
-            const fixtureRequestId = "uuid-req-fixture-456";
-            const fixtureDataId = "pay-deterministic-789";
+        it('deve validar determinística e independentemente a assinatura oficial HMAC com fixture fixa hardcoded (Passo 10)', () => {
+            // FIXTURE DETERMINÍSTICA INDEPENDENTE:
+            const fixtureSecret = "mock_test_secret_for_webhook_signature_validation_98765";
+            const fixtureRequestId = "123e4567-e89b-12d3-a456-426614174000";
+            const fixtureDataId = "ORD01ABCXYZ";
             const fixtureTs = "1725000000";
 
-            const validSig = generateTestSignature({
-                secret: fixtureSecret,
-                xRequestId: fixtureRequestId,
-                dataId: fixtureDataId,
-                ts: fixtureTs
-            });
+            // EXPECTED HMAC HARDCODED FIXO (calculado segundo a especificação com data.id em lowercase: id:ord01abcxyz;request-id:...;ts:...)
+            const EXPECTED_HMAC_FIXED = "4cb3e9ee9e3597260afb7db8d4f1a8b6150ff18a1eaee35f617e916219320470";
+            const validSignatureHeader = `ts=${fixtureTs},v1=${EXPECTED_HMAC_FIXED}`;
 
-            // 1. Assinatura válida deve retornar true
+            // 1. Assinatura oficial com normalização lowercase deve retornar true
             const isValid = validateMercadoPagoWebhookSignature({
                 secret: fixtureSecret,
-                xSignature: validSig,
+                xSignature: validSignatureHeader,
                 xRequestId: fixtureRequestId,
                 dataId: fixtureDataId
             });
             expect(isValid).toBe(true);
 
-            // 2. Assinatura com secret divergente deve retornar false
-            const isInvalidSecret = validateMercadoPagoWebhookSignature({
-                secret: "wrong_secret_key",
-                xSignature: validSig,
+            // 2. Assinatura calculada com ID uppercase sem normalização deve FALHAR
+            const NON_NORMALIZED_UPPERCASE_HMAC = "c3e7ce3cb95efc1a0ad207747d7a500c10d43e9af58b5543d97d2c10a62702a3";
+            const isInvalidUppercaseSig = validateMercadoPagoWebhookSignature({
+                secret: fixtureSecret,
+                xSignature: `ts=${fixtureTs},v1=${NON_NORMALIZED_UPPERCASE_HMAC}`,
                 xRequestId: fixtureRequestId,
                 dataId: fixtureDataId
             });
-            expect(isInvalidSecret).toBe(false);
+            expect(isInvalidUppercaseSig).toBe(false);
 
-            // 3. Assinatura com dataId adulterado no payload deve retornar false
-            const isTamperedDataId = validateMercadoPagoWebhookSignature({
-                secret: fixtureSecret,
-                xSignature: validSig,
+            // 3. Assinatura com secret incorreto deve FALHAR
+            const isWrongSecret = validateMercadoPagoWebhookSignature({
+                secret: "wrong_secret_key_999",
+                xSignature: validSignatureHeader,
                 xRequestId: fixtureRequestId,
-                dataId: "pay-tampered-999"
-            });
-            expect(isTamperedDataId).toBe(false);
-
-            // 4. Assinatura com requestId adulterado no header deve retornar false
-            const isTamperedRequestId = validateMercadoPagoWebhookSignature({
-                secret: fixtureSecret,
-                xSignature: validSig,
-                xRequestId: "uuid-tampered-999",
                 dataId: fixtureDataId
             });
-            expect(isTamperedRequestId).toBe(false);
+            expect(isWrongSecret).toBe(false);
+        });
+
+        it('deve falhar fechado com false para cabeçalhos x-signature malformados sem crash', () => {
+            const secret = TEST_WEBHOOK_SECRET;
+            const xRequestId = "req-123";
+            const dataId = "12345";
+
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: "", xRequestId, dataId })).toBe(false);
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: null, xRequestId, dataId })).toBe(false);
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: "ts=123", xRequestId, dataId })).toBe(false);
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: "v1=abc", xRequestId, dataId })).toBe(false);
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: "invalid_format_no_equals", xRequestId, dataId })).toBe(false);
+            expect(validateMercadoPagoWebhookSignature({ secret, xSignature: "ts=123,v1=not_a_valid_hex_odd_len", xRequestId, dataId })).toBe(false);
         });
 
         it('deve processar pagamento aprovado com assinatura válida, promovendo usuário para PRO e gravando em /payments', async () => {
@@ -474,7 +626,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': validSignature,
                     'x-request-id': xRequestId
                 },
-                body: { type: 'payment', data: { id: paymentId } }
+                query: { 'data.id': paymentId },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -530,7 +683,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': validSignature,
                     'x-request-id': xRequestId
                 },
-                body: { type: 'payment', data: { id: paymentId } }
+                query: { 'data.id': paymentId },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -577,7 +731,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': validSignature,
                     'x-request-id': xRequestId
                 },
-                body: { type: 'payment', data: { id: paymentId } }
+                query: { 'data.id': paymentId },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
@@ -614,7 +769,8 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                     'x-signature': validSignature,
                     'x-request-id': xRequestId
                 },
-                body: { type: 'payment', data: { id: paymentId } }
+                query: { 'data.id': paymentId },
+                body: { type: 'payment' }
             };
             const res = {
                 statusCode: null,
