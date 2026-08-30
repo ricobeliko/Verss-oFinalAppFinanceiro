@@ -1,3 +1,4 @@
+/* global process */
 import crypto from 'crypto';
 import { Buffer } from 'buffer';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -1562,35 +1563,45 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
         });
     });
 
-    describe('AI Rate Limit & Atomic Concurrency Lock', () => {
-        it('deve bloquear segunda chamada concorrente simultânea quando a primeira estiver em trânsito', async () => {
-            let activeLock = false;
+    describe('Infrastructure Caps & Billing Protection (Fase 7.2.3)', () => {
+        it('deve garantir que todas as 5 Cloud Functions declaram explicitamente maxInstances, concurrency, timeout e memory', async () => {
+            const fs = await import('fs');
+            const path = await import('path');
+            const functionsIndexPath = path.resolve(process.cwd(), 'functions/index.js');
+            const content = fs.readFileSync(functionsIndexPath, 'utf8');
 
-            const executeAiRequest = async () => {
-                if (activeLock) {
-                    const err = new Error('Uma análise de IA já está em andamento. Aguarde alguns instantes.');
-                    err.code = 'failed-precondition';
-                    throw err;
-                }
-                activeLock = true;
-                // Simula tempo de processamento
-                await new Promise(resolve => setTimeout(resolve, 50));
-                activeLock = false;
-                return { success: true, engine: 'deterministic-engine-v1' };
-            };
+            // 1. createMercadoPagoPreference
+            expect(content).toMatch(/exports\.createMercadoPagoPreference\s*=\s*onCall\(\s*\{[\s\S]*?maxInstances:\s*3/);
+            expect(content).toMatch(/exports\.createMercadoPagoPreference\s*=\s*onCall\(\s*\{[\s\S]*?concurrency:\s*10/);
+            expect(content).toMatch(/exports\.createMercadoPagoPreference\s*=\s*onCall\(\s*\{[\s\S]*?timeoutSeconds:\s*60/);
+            expect(content).toMatch(/exports\.createMercadoPagoPreference\s*=\s*onCall\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
 
-            const req1 = executeAiRequest();
-            const req2 = executeAiRequest();
+            // 2. paymentWebhookMercadoPago
+            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?maxInstances:\s*5/);
+            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?concurrency:\s*20/);
+            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?timeoutSeconds:\s*60/);
+            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
 
-            const results = await Promise.allSettled([req1, req2]);
-            const fulfilled = results.filter(r => r.status === 'fulfilled');
-            const rejected = results.filter(r => r.status === 'rejected');
+            // 3. generateAiMonthlyBriefing
+            expect(content).toMatch(/exports\.generateAiMonthlyBriefing\s*=\s*onCall\(\s*\{[\s\S]*?maxInstances:\s*2/);
+            expect(content).toMatch(/exports\.generateAiMonthlyBriefing\s*=\s*onCall\(\s*\{[\s\S]*?concurrency:\s*5/);
+            expect(content).toMatch(/exports\.generateAiMonthlyBriefing\s*=\s*onCall\(\s*\{[\s\S]*?timeoutSeconds:\s*60/);
+            expect(content).toMatch(/exports\.generateAiMonthlyBriefing\s*=\s*onCall\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
 
-            expect(fulfilled.length).toBe(1);
-            expect(rejected.length).toBe(1);
-            expect(rejected[0].reason.code).toBe('failed-precondition');
+            // 4. deleteUserAccount
+            expect(content).toMatch(/exports\.deleteUserAccount\s*=\s*onCall\(\s*\{[\s\S]*?maxInstances:\s*2/);
+            expect(content).toMatch(/exports\.deleteUserAccount\s*=\s*onCall\(\s*\{[\s\S]*?concurrency:\s*2/);
+            expect(content).toMatch(/exports\.deleteUserAccount\s*=\s*onCall\(\s*\{[\s\S]*?timeoutSeconds:\s*60/);
+            expect(content).toMatch(/exports\.deleteUserAccount\s*=\s*onCall\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
+
+            // 5. reportClientError
+            expect(content).toMatch(/exports\.reportClientError\s*=\s*onCall\(\s*\{[\s\S]*?maxInstances:\s*2/);
+            expect(content).toMatch(/exports\.reportClientError\s*=\s*onCall\(\s*\{[\s\S]*?concurrency:\s*20/);
+            expect(content).toMatch(/exports\.reportClientError\s*=\s*onCall\(\s*\{[\s\S]*?timeoutSeconds:\s*30/);
+            expect(content).toMatch(/exports\.reportClientError\s*=\s*onCall\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
         });
     });
 });
+
 
 

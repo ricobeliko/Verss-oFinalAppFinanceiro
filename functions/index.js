@@ -124,6 +124,10 @@ function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, d
 exports.createMercadoPagoPreference = onCall(
     {
         region: "southamerica-east1",
+        maxInstances: 3,
+        concurrency: 10,
+        timeoutSeconds: 60,
+        memory: "256MiB",
         secrets: ["MERCADOPAGO_ACCESS_TOKEN"],
     },
     async (request) => {
@@ -297,6 +301,10 @@ exports.createMercadoPagoPreference = onCall(
 exports.paymentWebhookMercadoPago = onRequest(
     {
         region: "southamerica-east1",
+        maxInstances: 5,
+        concurrency: 20,
+        timeoutSeconds: 60,
+        memory: "256MiB",
         secrets: ["MERCADOPAGO_ACCESS_TOKEN", "MERCADOPAGO_WEBHOOK_SECRET"],
     },
     async (req, res) => {
@@ -551,6 +559,10 @@ exports.paymentWebhookMercadoPago = onRequest(
 exports.generateAiMonthlyBriefing = onCall(
     {
         region: "southamerica-east1",
+        maxInstances: 2,
+        concurrency: 5,
+        timeoutSeconds: 60,
+        memory: "256MiB",
         secrets: ["GEMINI_API_KEY"],
     },
     async (request) => {
@@ -796,6 +808,10 @@ DIRETRIZES RÍGIDAS DE CONDUTA:
 exports.deleteUserAccount = onCall(
     {
         region: "southamerica-east1",
+        maxInstances: 2,
+        concurrency: 2,
+        timeoutSeconds: 60,
+        memory: "256MiB",
     },
     async (request) => {
         const stage = "deleteUserAccount";
@@ -910,6 +926,10 @@ function isClientErrorReportAllowed(identifier) {
 exports.reportClientError = onCall(
     {
         region: "southamerica-east1",
+        maxInstances: 2,
+        concurrency: 20,
+        timeoutSeconds: 30,
+        memory: "256MiB",
     },
     async (request) => {
         const stage = "reportClientError";
