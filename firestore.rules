@@ -49,5 +49,10 @@ service cloud.firestore {
     match /ai_rate_limits/{userId} {
       allow read, write: if false;
     }
+
+    // Coleção de controle de taxa de APIs e anti-abuso (Exclusivo Cloud Functions / Admin SDK)
+    match /api_rate_limits/{documentId} {
+      allow read, write: if false;
+    }
   }
 }

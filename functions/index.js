@@ -11,6 +11,110 @@ if (admin.apps.length === 0) {
 }
 
 // ============================================================
+// HELPERS UNIVERSAIS DE SEGURANÇA E PRIVACIDADE
+// ============================================================
+
+/**
+ * Hash de UID para logs pseudônimos (Zero PII / Privacidade).
+ * Nota: Representa pseudonimização criptográfica, não anonimização absoluta.
+ */
+function hashUid(uid) {
+    if (!uid) return "anonymous";
+    return crypto.createHash("sha256").update(String(uid)).digest("hex").slice(0, 12);
+}
+
+/**
+ * Sanitiza strings de erro para evitar vazamento de credenciais, cartões ou PII.
+ */
+function sanitizeErrorMessage(str) {
+    if (!str || typeof str !== "string") return "";
+    return str
+        .replace(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g, "[EMAIL_REDACTED]")
+        .replace(/\b(?:\d[ -]*?){13,19}\b/g, "[CARD_REDACTED]")
+        .replace(/(bearer\s+)[a-zA-Z0-9_.-]+/gi, "$1[TOKEN_REDACTED]")
+        .slice(0, 500);
+}
+
+// ============================================================
+// HELPERS DE ANTI-ABUSO E RATE LIMITING DISTRIBUÍDO
+// ============================================================
+
+/**
+ * Reserva atomicamente uma tentativa de ação de API com controle de taxa distribuído (Firestore Transaction).
+ * Aplica:
+ * 1. In-Flight Lock (proteção contra concorrência e rajadas simultâneas)
+ * 2. Cooldown (intervalo mínimo entre requisições consecutivas)
+ * 3. Sliding Window Quota (limite máximo de requisições por hora)
+ * 4. Stale Lock Recovery (recuperação automática de locks abandonados após timeout defensivo)
+ * 5. Fail Closed (rejeição segura caso o Firestore esteja indisponível)
+ */
+async function reserveApiActionAttempt(db, {
+    userId,
+    action = "createMercadoPagoPreference",
+    cooldownMs = 15 * 1000,
+    hourlyLimit = 5,
+    staleInFlightMs = 30 * 1000,
+    now = Date.now(),
+}) {
+    const rateLimitRef = db.collection("api_rate_limits").doc(`${userId}_${action}`);
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+
+    await db.runTransaction(async (transaction) => {
+        const limitDoc = await transaction.get(rateLimitRef);
+        const limitData = limitDoc.exists ? limitDoc.data() : { requestTimestamps: [], inFlight: false };
+
+        const lastRequestAt = limitData.lastRequestAt || 0;
+        const inFlightSince = limitData.inFlightSince || lastRequestAt;
+        const isInFlight = Boolean(limitData.inFlight);
+
+        // 1. Bloqueio de concorrência ativa (InFlight) com tolerância a lock stale
+        if (isInFlight && (now - inFlightSince) < staleInFlightMs) {
+            throw new Error("INFLIGHT_ACTIVE");
+        }
+
+        // 2. Cooldown individual entre tentativas consecutivas
+        if (lastRequestAt && (now - lastRequestAt) < cooldownMs) {
+            throw new Error("COOLDOWN_ACTIVE");
+        }
+
+        // 3. Janela deslizante de 1 hora
+        const recentRequests = (limitData.requestTimestamps || []).filter(t => (now - t) < ONE_HOUR_MS);
+        if (recentRequests.length >= hourlyLimit) {
+            throw new Error("HOURLY_LIMIT_EXCEEDED");
+        }
+
+        // 4. Gravação atômica da reserva
+        transaction.set(rateLimitRef, {
+            action,
+            userId,
+            lastRequestAt: now,
+            inFlight: true,
+            inFlightSince: now,
+            requestTimestamps: [...recentRequests, now],
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    });
+
+    return rateLimitRef;
+}
+
+/**
+ * Libera a flag inFlight após a conclusão (sucesso ou erro) da chamada externa.
+ * Preserva o histórico de tentativas computado na reserva.
+ */
+async function releaseApiActionInFlight(db, rateLimitRef) {
+    try {
+        await rateLimitRef.set({
+            inFlight: false,
+            inFlightSince: null,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    } catch {
+        // Silencioso em caso de falha transitória de liberação de lock
+    }
+}
+
+// ============================================================
 // HELPERS DO WEBHOOK MERCADO PAGO
 // ============================================================
 
@@ -90,7 +194,9 @@ function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, d
 // ============================================================
 // FUNÇÃO 1: createMercadoPagoPreference
 // Cria preferência de pagamento no Mercado Pago para upgrade Pro.
-// Auth obrigatória. Secret: MERCADOPAGO_ACCESS_TOKEN via GCP Secret Manager.
+// Auth obrigatória. Email verificado obrigatório.
+// Anti-Abuso: Rate Limit Compartilhado + Cooldown + InFlight Lock via Firestore Transaction.
+// Secret: MERCADOPAGO_ACCESS_TOKEN via GCP Secret Manager.
 // ============================================================
 exports.createMercadoPagoPreference = onCall(
     {
@@ -100,6 +206,7 @@ exports.createMercadoPagoPreference = onCall(
     async (request) => {
         const stage = "createMercadoPagoPreference";
 
+        // 1. Validação de Autenticação
         if (!request.auth) {
             logger.warn(`[${stage}] Tentativa não autenticada rejeitada.`, {
                 stage,
@@ -109,20 +216,83 @@ exports.createMercadoPagoPreference = onCall(
         }
 
         const userId = request.auth.uid;
+        const userLogHash = hashUid(userId);
 
-        // Valida email do token (nunca logar o valor do email)
+        // 2. Validação de E-mail do Token
         if (!request.auth.token.email) {
             logger.error(`[${stage}] Usuário sem e-mail tentou iniciar pagamento.`, {
                 stage,
-                userId,
+                userHash: userLogHash,
                 result: "invalid_argument",
             });
             throw new HttpsError("invalid-argument", "O e-mail do usuário é obrigatório para o pagamento.");
         }
 
-        logger.info(`[${stage}] Iniciando criação de preferência.`, {
+        // 3. Validação de E-mail Verificado (Server-Side)
+        if (request.auth.token.email_verified !== true) {
+            logger.warn(`[${stage}] Usuário com e-mail não verificado tentou iniciar pagamento.`, {
+                stage,
+                userHash: userLogHash,
+                event: "MP_PREFERENCE_EMAIL_UNVERIFIED",
+                result: "failed_precondition_email_unverified",
+            });
+            throw new HttpsError("failed-precondition", "Você precisa confirmar seu endereço de e-mail antes de realizar pagamentos.");
+        }
+
+        // 4. Rate Limiting Compartilhado & Anti-Abuso (Firestore Transaction)
+        const db = admin.firestore();
+        let rateLimitRef = null;
+
+        try {
+            rateLimitRef = await reserveApiActionAttempt(db, {
+                userId,
+                action: "createMercadoPagoPreference",
+                cooldownMs: 15 * 1000,
+                hourlyLimit: 5,
+                staleInFlightMs: 30 * 1000,
+            });
+        } catch (error) {
+            if (error.message === "INFLIGHT_ACTIVE") {
+                logger.warn(`[${stage}] Chamada simultânea bloqueada por concorrência ativa.`, {
+                    stage,
+                    userHash: userLogHash,
+                    event: "MP_PREFERENCE_INFLIGHT_BLOCKED",
+                    result: "rate_limited_inflight",
+                });
+                throw new HttpsError("resource-exhausted", "Existe uma solicitação de pagamento em andamento. Aguarde alguns instantes.");
+            }
+            if (error.message === "COOLDOWN_ACTIVE") {
+                logger.warn(`[${stage}] Chamada bloqueada por cooldown ativo.`, {
+                    stage,
+                    userHash: userLogHash,
+                    event: "MP_PREFERENCE_COOLDOWN",
+                    result: "rate_limited_cooldown",
+                });
+                throw new HttpsError("resource-exhausted", "Aguarde alguns instantes antes de gerar uma nova preferência de pagamento.");
+            }
+            if (error.message === "HOURLY_LIMIT_EXCEEDED") {
+                logger.warn(`[${stage}] Limite horário de criação de preferências atingido.`, {
+                    stage,
+                    userHash: userLogHash,
+                    event: "MP_PREFERENCE_RATE_LIMITED",
+                    result: "rate_limited_hourly",
+                });
+                throw new HttpsError("resource-exhausted", "Limite de tentativas de pagamento atingido para esta hora. Tente novamente mais tarde.");
+            }
+
+            // Fail Closed em caso de erro inesperado no Firestore
+            logger.error(`[${stage}] Falha de infraestrutura ao validar rate limit. Fail Closed acionado.`, {
+                stage,
+                userHash: userLogHash,
+                errorDetails: error.message,
+                result: "fail_closed_error",
+            });
+            throw new HttpsError("internal", "Não foi possível validar as cotas de segurança para esta operação.");
+        }
+
+        logger.info(`[${stage}] Reserva de cota autorizada. Iniciando chamada ao Mercado Pago.`, {
             stage,
-            userId,
+            userHash: userLogHash,
         });
 
         const client = new MercadoPagoConfig({
@@ -156,7 +326,7 @@ exports.createMercadoPagoPreference = onCall(
 
             logger.info(`[${stage}] Preferência criada com sucesso.`, {
                 stage,
-                userId,
+                userHash: userLogHash,
                 preferenceId: result.id,
                 latencyMs,
                 result: "success",
@@ -169,12 +339,16 @@ exports.createMercadoPagoPreference = onCall(
         } catch (error) {
             logger.error(`[${stage}] Falha ao criar preferência no Mercado Pago.`, {
                 stage,
-                userId,
+                userHash: userLogHash,
                 errorCode: error.status || error.code || "unknown",
                 errorType: error.constructor?.name || "Error",
                 result: "error",
             });
             throw new HttpsError("internal", "Falha ao criar a preferência de pagamento.");
+        } finally {
+            if (rateLimitRef) {
+                await releaseApiActionInFlight(db, rateLimitRef);
+            }
         }
     }
 );
@@ -427,28 +601,6 @@ exports.paymentWebhookMercadoPago = onRequest(
         res.status(200).send("Webhook recebido.");
     }
 );
-
-// ============================================================
-// FUNÇÃO 3: generateAiMonthlyBriefing
-// Gera síntese mensal via IA (Gemini) ou fallback determinístico.
-// Auth obrigatória. Opt-in explícito verificado no Firestore.
-// ============================================================
-// HELPER: Hash de UID para logs pseudônimos (Zero PII / Privacidade)
-// ============================================================
-function hashUid(uid) {
-    if (!uid) return "anonymous";
-    return crypto.createHash("sha256").update(String(uid)).digest("hex").slice(0, 12);
-}
-
-// Sanitiza strings de erro para evitar vazamento de credenciais, cartões ou PII
-function sanitizeErrorMessage(str) {
-    if (!str || typeof str !== "string") return "";
-    return str
-        .replace(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g, "[EMAIL_REDACTED]")
-        .replace(/\b(?:\d[ -]*?){13,19}\b/g, "[CARD_REDACTED]")
-        .replace(/(bearer\s+)[a-zA-Z0-9_.-]+/gi, "$1[TOKEN_REDACTED]")
-        .slice(0, 500);
-}
 
 // ============================================================
 // FUNÇÃO 3: generateAiMonthlyBriefing
@@ -765,6 +917,7 @@ exports.deleteUserAccount = onCall(
 
             // 2. Excluir dados de rate limiting e preferências
             await db.collection("ai_rate_limits").doc(userId).delete().catch(() => {});
+            await db.collection("api_rate_limits").doc(`${userId}_createMercadoPagoPreference`).delete().catch(() => {});
 
             // 3. Excluir documento principal de perfil
             await db.collection("users_fallback").doc(userId).delete();
@@ -867,6 +1020,10 @@ exports.reportClientError = onCall(
 );
 
 // Exportações auxiliares para testes unitários e validação de segurança
+exports.hashUid = hashUid;
+exports.sanitizeErrorMessage = sanitizeErrorMessage;
+exports.reserveApiActionAttempt = reserveApiActionAttempt;
+exports.releaseApiActionInFlight = releaseApiActionInFlight;
 exports.extractWebhookQueryDataId = extractWebhookQueryDataId;
 exports.parseXSignature = parseXSignature;
 exports.validateMercadoPagoWebhookSignature = validateMercadoPagoWebhookSignature;

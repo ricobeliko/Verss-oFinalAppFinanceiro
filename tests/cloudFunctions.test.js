@@ -27,8 +27,106 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
         mockPreferenceCreate = vi.fn();
     });
 
-    describe('createMercadoPagoPreference', () => {
-        const handler = async (request, preferenceCreateFn) => {
+    describe('createMercadoPagoPreference & Anti-Abuso Distributed Rate Limiting', () => {
+        // Simulador de Banco em Memória com suporte a transações atômicas do Firestore
+        function createInMemoryRateLimitDb() {
+            const storage = new Map();
+
+            return {
+                storage,
+                collection: (colName) => ({
+                    doc: (docId) => ({
+                        get: async () => {
+                            const key = `${colName}/${docId}`;
+                            const data = storage.get(key);
+                            return {
+                                exists: Boolean(data),
+                                data: () => (data ? JSON.parse(JSON.stringify(data)) : undefined),
+                            };
+                        },
+                        set: async (val, options = {}) => {
+                            const key = `${colName}/${docId}`;
+                            const existing = options.merge && storage.get(key) ? storage.get(key) : {};
+                            storage.set(key, { ...existing, ...JSON.parse(JSON.stringify(val)) });
+                        },
+                        delete: async () => {
+                            const key = `${colName}/${docId}`;
+                            storage.delete(key);
+                        }
+                    })
+                }),
+                runTransaction: async (updateFn) => {
+                    const transaction = {
+                        get: async (docRef) => docRef.get(),
+                        set: async (docRef, data, options) => docRef.set(data, options),
+                    };
+                    return await updateFn(transaction);
+                }
+            };
+        }
+
+        async function reserveApiActionAttempt(db, {
+            userId,
+            action = "createMercadoPagoPreference",
+            cooldownMs = 15 * 1000,
+            hourlyLimit = 5,
+            staleInFlightMs = 30 * 1000,
+            now = Date.now(),
+        }) {
+            const rateLimitRef = db.collection("api_rate_limits").doc(`${userId}_${action}`);
+            const ONE_HOUR_MS = 60 * 60 * 1000;
+
+            await db.runTransaction(async (transaction) => {
+                const limitDoc = await transaction.get(rateLimitRef);
+                const limitData = limitDoc.exists ? limitDoc.data() : { requestTimestamps: [], inFlight: false };
+
+                const lastRequestAt = limitData.lastRequestAt || 0;
+                const inFlightSince = limitData.inFlightSince || lastRequestAt;
+                const isInFlight = Boolean(limitData.inFlight);
+
+                // 1. Bloqueio de concorrência ativa (InFlight) com tolerância a lock stale
+                if (isInFlight && (now - inFlightSince) < staleInFlightMs) {
+                    throw new Error("INFLIGHT_ACTIVE");
+                }
+
+                // 2. Cooldown individual entre tentativas consecutivas
+                if (lastRequestAt && (now - lastRequestAt) < cooldownMs) {
+                    throw new Error("COOLDOWN_ACTIVE");
+                }
+
+                // 3. Janela deslizante de 1 hora
+                const recentRequests = (limitData.requestTimestamps || []).filter(t => (now - t) < ONE_HOUR_MS);
+                if (recentRequests.length >= hourlyLimit) {
+                    throw new Error("HOURLY_LIMIT_EXCEEDED");
+                }
+
+                // 4. Gravação atômica da reserva
+                transaction.set(rateLimitRef, {
+                    action,
+                    userId,
+                    lastRequestAt: now,
+                    inFlight: true,
+                    inFlightSince: now,
+                    requestTimestamps: [...recentRequests, now],
+                    updatedAt: new Date(now).toISOString(),
+                }, { merge: true });
+            });
+
+            return rateLimitRef;
+        }
+
+        async function releaseApiActionInFlight(db, rateLimitRef) {
+            try {
+                await rateLimitRef.set({
+                    inFlight: false,
+                    inFlightSince: null,
+                }, { merge: true });
+            } catch {
+                // Silencioso em caso de falha de liberação
+            }
+        }
+
+        const createPreferenceHandler = async (request, { db, preferenceCreateFn, now = Date.now() }) => {
             if (!request.auth) {
                 const err = new Error("Você precisa estar logado para realizar esta ação.");
                 err.code = "unauthenticated";
@@ -39,6 +137,34 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             if (!userEmail) {
                 const err = new Error("O e-mail do usuário é obrigatório para o pagamento.");
                 err.code = "invalid-argument";
+                throw err;
+            }
+
+            if (request.auth.token?.email_verified !== true) {
+                const err = new Error("Você precisa confirmar seu endereço de e-mail antes de realizar pagamentos.");
+                err.code = "failed-precondition";
+                throw err;
+            }
+
+            let rateLimitRef = null;
+            try {
+                rateLimitRef = await reserveApiActionAttempt(db, {
+                    userId,
+                    action: "createMercadoPagoPreference",
+                    cooldownMs: 15 * 1000,
+                    hourlyLimit: 5,
+                    staleInFlightMs: 30 * 1000,
+                    now
+                });
+            } catch (error) {
+                if (error.message === "INFLIGHT_ACTIVE" || error.message === "COOLDOWN_ACTIVE" || error.message === "HOURLY_LIMIT_EXCEEDED") {
+                    const err = new Error("Limite de requisições excedido ou chamada em andamento.");
+                    err.code = "resource-exhausted";
+                    err.originalReason = error.message;
+                    throw err;
+                }
+                const err = new Error("Não foi possível validar as cotas de segurança para esta operação.");
+                err.code = "internal";
                 throw err;
             }
 
@@ -70,47 +196,317 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
                 const err = new Error("Falha ao criar a preferência de pagamento.");
                 err.code = "internal";
                 throw err;
+            } finally {
+                if (rateLimitRef) {
+                    await releaseApiActionInFlight(db, rateLimitRef);
+                }
             }
         };
 
-        it('deve rejeitar chamada de usuário não autenticado', async () => {
-            await expect(handler({ auth: null }, mockPreferenceCreate)).rejects.toMatchObject({
-                code: 'unauthenticated'
-            });
+        it('TEST 1: deve rejeitar chamada de usuário não autenticado e NÃO consultar rate limit ou Mercado Pago', async () => {
+            const db = createInMemoryRateLimitDb();
+            await expect(createPreferenceHandler({ auth: null }, { db, preferenceCreateFn: mockPreferenceCreate }))
+                .rejects.toMatchObject({ code: 'unauthenticated' });
             expect(mockPreferenceCreate).not.toHaveBeenCalled();
+            expect(db.storage.size).toBe(0);
         });
 
-        it('deve rejeitar chamada de usuário sem e-mail cadastrado', async () => {
+        it('TEST 2: deve rejeitar chamada de usuário sem e-mail cadastrado', async () => {
+            const db = createInMemoryRateLimitDb();
             const request = { auth: { uid: 'user-123', token: {} } };
-            await expect(handler(request, mockPreferenceCreate)).rejects.toMatchObject({
-                code: 'invalid-argument'
+            await expect(createPreferenceHandler(request, { db, preferenceCreateFn: mockPreferenceCreate }))
+                .rejects.toMatchObject({ code: 'invalid-argument' });
+            expect(mockPreferenceCreate).not.toHaveBeenCalled();
+            expect(db.storage.size).toBe(0);
+        });
+
+        it('TEST 2 (Email Verified): deve rejeitar com failed-precondition se email_verified for falso ou ausente (Server-Side)', async () => {
+            const db = createInMemoryRateLimitDb();
+            const request = {
+                auth: {
+                    uid: 'user-unverified',
+                    token: { email: 'unverified@fincontrol.com', email_verified: false }
+                }
+            };
+            await expect(createPreferenceHandler(request, { db, preferenceCreateFn: mockPreferenceCreate }))
+                .rejects.toMatchObject({ code: 'failed-precondition' });
+            expect(mockPreferenceCreate).not.toHaveBeenCalled();
+            expect(db.storage.size).toBe(0); // Zero consumo de quota
+        });
+
+        it('TEST 3: deve permitir primeira chamada válida (email_verified=true) e acionar Mercado Pago exatamente 1 vez', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({
+                id: 'pref-001',
+                init_point: 'https://mercadopago.com/checkout/pref-001'
             });
+
+            const request = {
+                auth: {
+                    uid: 'user-valid-1',
+                    token: { email: 'cliente@fincontrol.com', email_verified: true }
+                }
+            };
+            const res = await createPreferenceHandler(request, { db, preferenceCreateFn: mockPreferenceCreate });
+
+            expect(res.preferenceId).toBe('pref-001');
+            expect(res.init_point).toBe('https://mercadopago.com/checkout/pref-001');
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(1);
+
+            // Verifica persistência do rate limit
+            const stored = db.storage.get('api_rate_limits/user-valid-1_createMercadoPagoPreference');
+            expect(stored).toBeDefined();
+            expect(stored.requestTimestamps.length).toBe(1);
+            expect(stored.inFlight).toBe(false); // Liberado no finally
+        });
+
+        it('TEST 4: deve bloquear segunda chamada dentro de 15s com resource-exhausted por Cooldown', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-1', init_point: 'https://mp.com/1' });
+            const startTime = 1725000000000;
+
+            const request = {
+                auth: {
+                    uid: 'user-cooldown-test',
+                    token: { email: 'cooldown@test.com', email_verified: true }
+                }
+            };
+
+            // 1ª chamada: OK
+            await createPreferenceHandler(request, { db, preferenceCreateFn: mockPreferenceCreate, now: startTime });
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(1);
+
+            // 2ª chamada: 5 segundos depois (dentro do cooldown de 15s) -> BLOQUEADA
+            await expect(createPreferenceHandler(request, {
+                db,
+                preferenceCreateFn: mockPreferenceCreate,
+                now: startTime + 5000
+            })).rejects.toMatchObject({
+                code: 'resource-exhausted',
+                originalReason: 'COOLDOWN_ACTIVE'
+            });
+
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(1); // Não aumentou
+        });
+
+        it('TEST 5 & 6: deve permitir chamadas após cooldown respeitando o limite de 5 tentativas na janela horária', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-ok', init_point: 'https://mp.com/ok' });
+            const baseTime = 1725000000000;
+
+            const request = {
+                auth: {
+                    uid: 'user-quota-5',
+                    token: { email: 'quota@test.com', email_verified: true }
+                }
+            };
+
+            // Executa 5 tentativas espaçadas de 20s (respeitando cooldown de 15s)
+            for (let i = 0; i < 5; i++) {
+                const now = baseTime + (i * 20000);
+                const res = await createPreferenceHandler(request, { db, preferenceCreateFn: mockPreferenceCreate, now });
+                expect(res.preferenceId).toBe('pref-ok');
+            }
+
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(5);
+        });
+
+        it('TEST 7: deve rejeitar a 6ª tentativa na mesma janela horária com resource-exhausted (Hard Limit = 5/h)', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-ok', init_point: 'https://mp.com/ok' });
+            const baseTime = 1725000000000;
+
+            const request = {
+                auth: {
+                    uid: 'user-quota-exceeded',
+                    token: { email: 'quota5@test.com', email_verified: true }
+                }
+            };
+
+            // 5 tentativas permitidas
+            for (let i = 0; i < 5; i++) {
+                await createPreferenceHandler(request, {
+                    db,
+                    preferenceCreateFn: mockPreferenceCreate,
+                    now: baseTime + (i * 20000)
+                });
+            }
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(5);
+
+            // 6ª tentativa aos 120s (fora do cooldown individual mas dentro da janela de 1h) -> BLOQUEADA
+            await expect(createPreferenceHandler(request, {
+                db,
+                preferenceCreateFn: mockPreferenceCreate,
+                now: baseTime + 120000
+            })).rejects.toMatchObject({
+                code: 'resource-exhausted',
+                originalReason: 'HOURLY_LIMIT_EXCEEDED'
+            });
+
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(5); // Mantém exatamente 5 chamadas externas
+        });
+
+        it('TEST 8: deve isolar quotas por UID: bloqueio de UID A não interfere em UID B', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-ok', init_point: 'https://mp.com/ok' });
+            const now = 1725000000000;
+
+            const userA = { auth: { uid: 'USER_A', token: { email: 'a@test.com', email_verified: true } } };
+            const userB = { auth: { uid: 'USER_B', token: { email: 'b@test.com', email_verified: true } } };
+
+            // Esgota quota de User A
+            for (let i = 0; i < 5; i++) {
+                await createPreferenceHandler(userA, { db, preferenceCreateFn: mockPreferenceCreate, now: now + (i * 20000) });
+            }
+            // User A bloqueado
+            await expect(createPreferenceHandler(userA, { db, preferenceCreateFn: mockPreferenceCreate, now: now + 120000 }))
+                .rejects.toMatchObject({ code: 'resource-exhausted' });
+
+            // User B deve ser permitido normalmente
+            const resB = await createPreferenceHandler(userB, { db, preferenceCreateFn: mockPreferenceCreate, now: now + 120000 });
+            expect(resB.preferenceId).toBe('pref-ok');
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(6); // 5 de A + 1 de B
+        });
+
+        it('TEST 9: deve bloquear concorrência ativa (InFlight lock) quando duas requisições simultâneas ocorrem', async () => {
+            const db = createInMemoryRateLimitDb();
+            const now = 1725000000000;
+            const request = { auth: { uid: 'user-concurrent', token: { email: 'c@test.com', email_verified: true } } };
+
+            // Simula um lock inFlight ativo (como uma requisição que acabou de iniciar e ainda não terminou)
+            db.storage.set('api_rate_limits/user-concurrent_createMercadoPagoPreference', {
+                action: 'createMercadoPagoPreference',
+                userId: 'user-concurrent',
+                lastRequestAt: now,
+                inFlight: true,
+                inFlightSince: now,
+                requestTimestamps: [now],
+            });
+
+            // Segunda chamada simultânea tenta entrar
+            await expect(createPreferenceHandler(request, {
+                db,
+                preferenceCreateFn: mockPreferenceCreate,
+                now: now + 500
+            })).rejects.toMatchObject({
+                code: 'resource-exhausted',
+                originalReason: 'INFLIGHT_ACTIVE'
+            });
+
             expect(mockPreferenceCreate).not.toHaveBeenCalled();
         });
 
-        it('deve criar preferência com parâmetros corretos para usuário válido', async () => {
-            mockPreferenceCreate.mockResolvedValue({
-                id: 'pref-999',
-                init_point: 'https://mercadopago.com/checkout/pref-999'
+        it('TEST 10: deve manter tentativa contabilizada na quota quando o Mercado Pago falha, mas liberar o lock inFlight', async () => {
+            const db = createInMemoryRateLimitDb();
+            const now = 1725000000000;
+            const request = { auth: { uid: 'user-mp-failure', token: { email: 'fail@test.com', email_verified: true } } };
+
+            mockPreferenceCreate.mockRejectedValue(new Error("Mercado Pago Outage 500"));
+
+            await expect(createPreferenceHandler(request, {
+                db,
+                preferenceCreateFn: mockPreferenceCreate,
+                now
+            })).rejects.toMatchObject({ code: 'internal' });
+
+            // InFlight deve ter sido liberado no finally
+            const stored = db.storage.get('api_rate_limits/user-mp-failure_createMercadoPagoPreference');
+            expect(stored.inFlight).toBe(false);
+            expect(stored.requestTimestamps.length).toBe(1); // Tentativa consumida
+        });
+
+        it('TEST 11: deve recuperar automaticamente lock inFlight abandonado (stale > 30s)', async () => {
+            const db = createInMemoryRateLimitDb();
+            const staleTime = 1725000000000;
+            const recoverTime = staleTime + 35000; // 35s depois (> 30s)
+            const request = { auth: { uid: 'user-stale-lock', token: { email: 'stale@test.com', email_verified: true } } };
+
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-recovered', init_point: 'https://mp.com/rec' });
+
+            // Simula container que caiu e deixou inFlight: true
+            db.storage.set('api_rate_limits/user-stale-lock_createMercadoPagoPreference', {
+                action: 'createMercadoPagoPreference',
+                userId: 'user-stale-lock',
+                lastRequestAt: staleTime,
+                inFlight: true,
+                inFlightSince: staleTime,
+                requestTimestamps: [staleTime],
             });
 
-            const request = { auth: { uid: 'user-vip-1', token: { email: 'cliente@fincontrol.com' } } };
-            const res = await handler(request, mockPreferenceCreate);
+            // Nova requisição legítima após o stale timeout deve conseguir recuperar
+            const res = await createPreferenceHandler(request, {
+                db,
+                preferenceCreateFn: mockPreferenceCreate,
+                now: recoverTime
+            });
 
-            expect(res.preferenceId).toBe('pref-999');
-            expect(res.init_point).toBe('https://mercadopago.com/checkout/pref-999');
-            expect(mockPreferenceCreate).toHaveBeenCalledWith(expect.objectContaining({
-                body: expect.objectContaining({
-                    payer: { email: 'cliente@fincontrol.com' },
-                    external_reference: 'user-vip-1',
-                    items: expect.arrayContaining([
-                        expect.objectContaining({
-                            id: 'PRO-LIFETIME-01',
-                            unit_price: 29.99
-                        })
-                    ])
-                })
-            }));
+            expect(res.preferenceId).toBe('pref-recovered');
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(1);
+        });
+
+        it('TEST 12: deve acionar FAIL CLOSED se a transação do Firestore falhar, bloqueando chamada ao Mercado Pago', async () => {
+            const brokenDb = {
+                collection: vi.fn().mockReturnThis(),
+                doc: vi.fn().mockReturnThis(),
+                runTransaction: vi.fn().mockRejectedValue(new Error("Firestore UNAVAILABLE 503"))
+            };
+            const request = { auth: { uid: 'user-db-down', token: { email: 'down@test.com', email_verified: true } } };
+
+            await expect(createPreferenceHandler(request, {
+                db: brokenDb,
+                preferenceCreateFn: mockPreferenceCreate
+            })).rejects.toMatchObject({ code: 'internal' });
+
+            expect(mockPreferenceCreate).not.toHaveBeenCalled(); // Fail Closed
+        });
+
+        it('TEST 13 (Burst Test): 100 requisições disparadas em rajada para o mesmo UID resultam em no máximo 5 chamadas externas', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-burst', init_point: 'https://mp.com/burst' });
+            const startTime = 1725000000000;
+            const request = { auth: { uid: 'user-burst-100', token: { email: 'burst@test.com', email_verified: true } } };
+
+            let allowed = 0;
+            let blocked = 0;
+            const ATTEMPTS = 100;
+
+            for (let i = 0; i < ATTEMPTS; i++) {
+                // Intervalo de 1 segundo entre rajadas
+                const now = startTime + (i * 1000);
+                try {
+                    await createPreferenceHandler(request, {
+                        db,
+                        preferenceCreateFn: mockPreferenceCreate,
+                        now
+                    });
+                    allowed++;
+                } catch {
+                    blocked++;
+                }
+            }
+
+            const externalMpCalls = mockPreferenceCreate.mock.calls.length;
+
+            expect(allowed + blocked).toBe(100);
+            expect(externalMpCalls).toBeLessThanOrEqual(5);
+            expect(blocked).toBeGreaterThanOrEqual(95);
+            expect(externalMpCalls).toBe(allowed);
+        });
+
+        it('TEST 14 (Multi-UID Concurrency): 5 usuários distintos executando requisições em paralelo não interferem entre si', async () => {
+            const db = createInMemoryRateLimitDb();
+            mockPreferenceCreate.mockResolvedValue({ id: 'pref-multi', init_point: 'https://mp.com/multi' });
+            const now = 1725000000000;
+
+            const uids = ['UID_1', 'UID_2', 'UID_3', 'UID_4', 'UID_5'];
+            const promises = uids.map(uid => createPreferenceHandler(
+                { auth: { uid, token: { email: `${uid}@test.com`, email_verified: true } } },
+                { db, preferenceCreateFn: mockPreferenceCreate, now }
+            ));
+
+            const results = await Promise.all(promises);
+            expect(results.length).toBe(5);
+            expect(mockPreferenceCreate).toHaveBeenCalledTimes(5);
         });
     });
 
@@ -966,6 +1362,7 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             }
 
             await db.collection('ai_rate_limits').doc(userId).delete().catch(() => {});
+            await db.collection('api_rate_limits').doc(`${userId}_createMercadoPagoPreference`).delete().catch(() => {});
             await db.collection('users_fallback').doc(userId).delete();
 
             if (authAdmin) {

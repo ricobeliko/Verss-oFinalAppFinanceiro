@@ -91,6 +91,16 @@ class FirestoreRulesEvaluator {
         }
         return false;
     }
+
+    /**
+     * Avalia se uma requisição para /api_rate_limits/{documentId} é permitida (sempre false para cliente).
+     */
+    evaluateApiRateLimitsDoc({ operation }) {
+        if (operation === 'read' || operation === 'create' || operation === 'update' || operation === 'delete' || operation === 'write') {
+            return false; // Apenas Admin SDK / Cloud Functions
+        }
+        return false;
+    }
 }
 
 describe('Firestore Security Rules - Matriz de Segurança e Isolamento', () => {
@@ -402,6 +412,24 @@ describe('Firestore Security Rules - Matriz de Segurança e Isolamento', () => {
 
         it('deve NEGAR exclusão (delete) direta de /ai_rate_limits pelo cliente autenticado', () => {
             expect(evaluator.evaluateAiRateLimitsDoc({ operation: 'delete' })).toBe(false);
+        });
+    });
+
+    describe('Proteção da Coleção de Anti-Abuso e Rate Limit de APIs (/api_rate_limits)', () => {
+        it('deve NEGAR leitura (read) direta de /api_rate_limits pelo cliente não-autenticado ou autenticado', () => {
+            expect(evaluator.evaluateApiRateLimitsDoc({ operation: 'read' })).toBe(false);
+        });
+
+        it('deve NEGAR criação (create) direta de /api_rate_limits pelo cliente autenticado', () => {
+            expect(evaluator.evaluateApiRateLimitsDoc({ operation: 'create' })).toBe(false);
+        });
+
+        it('deve NEGAR atualização (update) direta de /api_rate_limits pelo cliente autenticado', () => {
+            expect(evaluator.evaluateApiRateLimitsDoc({ operation: 'update' })).toBe(false);
+        });
+
+        it('deve NEGAR exclusão (delete) direta de /api_rate_limits pelo cliente autenticado', () => {
+            expect(evaluator.evaluateApiRateLimitsDoc({ operation: 'delete' })).toBe(false);
         });
     });
 });
