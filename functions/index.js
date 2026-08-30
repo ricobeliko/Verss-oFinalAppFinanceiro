@@ -301,7 +301,7 @@ exports.createMercadoPagoPreference = onCall(
 exports.paymentWebhookMercadoPago = onRequest(
     {
         region: "southamerica-east1",
-        maxInstances: 5,
+        maxInstances: 3,
         concurrency: 20,
         timeoutSeconds: 60,
         memory: "256MiB",

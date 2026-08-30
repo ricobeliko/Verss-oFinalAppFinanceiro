@@ -1607,7 +1607,7 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             expect(content).toMatch(/exports\.createMercadoPagoPreference\s*=\s*onCall\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
 
             // 2. paymentWebhookMercadoPago
-            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?maxInstances:\s*5/);
+            expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?maxInstances:\s*3/);
             expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?concurrency:\s*20/);
             expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?timeoutSeconds:\s*60/);
             expect(content).toMatch(/exports\.paymentWebhookMercadoPago\s*=\s*onRequest\(\s*\{[\s\S]*?memory:\s*["']256MiB["']/);
