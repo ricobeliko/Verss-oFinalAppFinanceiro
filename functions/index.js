@@ -1,5 +1,6 @@
 // functions/index.js
 
+const crypto = require("crypto");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -7,6 +8,68 @@ const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 
 if (admin.apps.length === 0) {
     admin.initializeApp();
+}
+
+// ============================================================
+// HELPERS DO WEBHOOK MERCADO PAGO
+// ============================================================
+
+/**
+ * Extrai o identificador de dados (dataId) do webhook oficial do Mercado Pago.
+ * Suporta query params ('data.id', 'id') e body JSON ('data.id', 'id').
+ */
+function extractWebhookDataId(req) {
+    if (req.query && req.query['data.id']) {
+        return String(req.query['data.id']);
+    }
+    if (req.query && req.query.id) {
+        return String(req.query.id);
+    }
+    if (req.body && req.body.data && req.body.data.id) {
+        return String(req.body.data.id);
+    }
+    if (req.body && req.body.id) {
+        return String(req.body.id);
+    }
+    return null;
+}
+
+/**
+ * Valida a assinatura criptográfica oficial (HMAC-SHA256) do Mercado Pago.
+ * Especificação Oficial:
+ * Manifest: "id:${dataId};request-id:${xRequestId};ts:${ts};"
+ * Comparação em tempo constante (timingSafeEqual) para proteção contra timing attacks.
+ */
+function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, dataId }) {
+    if (!secret || !xSignature || !xRequestId || !dataId) {
+        return false;
+    }
+
+    try {
+        const parts = String(xSignature).split(',').reduce((acc, part) => {
+            const [k, v] = part.trim().split('=');
+            if (k && v) acc[k] = v;
+            return acc;
+        }, {});
+
+        if (!parts.ts || !parts.v1) {
+            return false;
+        }
+
+        const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${parts.ts.trim()};`;
+        const calculatedHmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+
+        if (calculatedHmac.length !== parts.v1.length) {
+            return false;
+        }
+
+        return crypto.timingSafeEqual(
+            Buffer.from(calculatedHmac, 'hex'),
+            Buffer.from(parts.v1, 'hex')
+        );
+    } catch {
+        return false;
+    }
 }
 
 // ============================================================
@@ -103,14 +166,15 @@ exports.createMercadoPagoPreference = onCall(
 
 // ============================================================
 // FUNÇÃO 2: paymentWebhookMercadoPago
-// Processa notificações IPN do Mercado Pago.
+// Processa notificações IPN/Webhook do Mercado Pago com validação HMAC de assinatura.
 // Idempotente: ignora eventos já processados.
-// Auth: não aplicável (webhook público com validação de payload).
+// Auth: Validação criptográfica de origem (x-signature / x-request-id) via HMAC-SHA256.
+// Secret: MERCADOPAGO_ACCESS_TOKEN e MERCADOPAGO_WEBHOOK_SECRET via GCP Secret Manager.
 // ============================================================
 exports.paymentWebhookMercadoPago = onRequest(
     {
         region: "southamerica-east1",
-        secrets: ["MERCADOPAGO_ACCESS_TOKEN"],
+        secrets: ["MERCADOPAGO_ACCESS_TOKEN", "MERCADOPAGO_WEBHOOK_SECRET"],
     },
     async (req, res) => {
         const stage = "paymentWebhookMercadoPago";
@@ -125,25 +189,78 @@ exports.paymentWebhookMercadoPago = onRequest(
             return;
         }
 
-        const { type, data } = req.body;
+        // 1. Extração segura de headers e dataId para validação da assinatura
+        const xSignature = req.headers['x-signature'];
+        const xRequestId = req.headers['x-request-id'];
+        const dataId = extractWebhookDataId(req);
 
-        // Ignora eventos que não sejam de pagamento
-        if (type !== "payment" || !data || !data.id) {
+        // 2. Fail Closed: Rejeição precoce se cabeçalhos ou dataId estiverem ausentes
+        if (!xSignature || !xRequestId || !dataId) {
+            logger.warn(`[${stage}] Webhook rejeitado: cabeçalhos ou identificador ausentes.`, {
+                stage,
+                event: "WEBHOOK_SIGNATURE_MISSING",
+                hasSignature: Boolean(xSignature),
+                hasRequestId: Boolean(xRequestId),
+                hasDataId: Boolean(dataId),
+                result: "unauthorized_missing_headers",
+            });
+            res.status(401).send("Assinatura ou identificador ausente.");
+            return;
+        }
+
+        // 3. Verificação do segredo de validação
+        const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+            logger.error(`[${stage}] Configuração incompleta: MERCADOPAGO_WEBHOOK_SECRET ausente.`, {
+                stage,
+                result: "secret_missing_config_error",
+            });
+            res.status(500).send("Erro interno de configuração de segurança.");
+            return;
+        }
+
+        // 4. Validação criptográfica HMAC-SHA256 da assinatura oficial
+        const isValidSignature = validateMercadoPagoWebhookSignature({
+            secret: webhookSecret,
+            xSignature,
+            xRequestId,
+            dataId,
+        });
+
+        if (!isValidSignature) {
+            logger.warn(`[${stage}] Webhook rejeitado: assinatura criptográfica inválida.`, {
+                stage,
+                event: "WEBHOOK_SIGNATURE_INVALID",
+                result: "unauthorized_invalid_signature",
+            });
+            res.status(401).send("Assinatura inválida.");
+            return;
+        }
+
+        logger.info(`[${stage}] Assinatura do webhook validada com sucesso.`, {
+            stage,
+            event: "WEBHOOK_SIGNATURE_VALID",
+            xRequestId,
+        });
+
+        // 5. Verificação do tipo de evento
+        const { type } = req.body || {};
+        if (type && type !== "payment") {
             logger.info(`[${stage}] Evento ignorado (tipo não processado).`, {
                 stage,
-                eventType: type || "unknown",
+                eventType: type,
                 result: "ignored",
             });
             res.status(200).send("Evento ignorado.");
             return;
         }
 
-        const paymentId = String(data.id);
+        const paymentId = String(dataId);
 
-        logger.info(`[${stage}] Webhook recebido para processamento.`, {
+        logger.info(`[${stage}] Webhook autenticado recebido para processamento.`, {
             stage,
             paymentId,
-            eventType: type,
+            eventType: type || "payment",
         });
 
         try {
@@ -290,8 +407,6 @@ exports.paymentWebhookMercadoPago = onRequest(
 // ============================================================
 // HELPER: Hash de UID para logs pseudônimos (Zero PII / Privacidade)
 // ============================================================
-const crypto = require("crypto");
-
 function hashUid(uid) {
     if (!uid) return "anonymous";
     return crypto.createHash("sha256").update(String(uid)).digest("hex").slice(0, 12);
@@ -722,3 +837,7 @@ exports.reportClientError = onCall(
         return { received: true };
     }
 );
+
+// Exportações auxiliares para testes unitários e validação de segurança
+exports.extractWebhookDataId = extractWebhookDataId;
+exports.validateMercadoPagoWebhookSignature = validateMercadoPagoWebhookSignature;

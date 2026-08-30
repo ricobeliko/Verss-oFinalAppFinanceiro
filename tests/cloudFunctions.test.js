@@ -1,4 +1,5 @@
-// tests/cloudFunctions.test.js
+import crypto from 'crypto';
+import { Buffer } from 'buffer';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('Cloud Functions - Mercado Pago & Idempotência', () => {
@@ -113,89 +114,158 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
         });
     });
 
-    describe('paymentWebhookMercadoPago e Idempotência', () => {
-        const webhookHandler = async (req, res, { paymentGetFn, db }) => {
+    describe('paymentWebhookMercadoPago e Validação de Assinatura HMAC', () => {
+        const TEST_WEBHOOK_SECRET = "test_webhook_secret_key_mock_12345";
+
+        function extractWebhookDataId(req) {
+            if (req.query && req.query['data.id']) return String(req.query['data.id']);
+            if (req.query && req.query.id) return String(req.query.id);
+            if (req.body && req.body.data && req.body.data.id) return String(req.body.data.id);
+            if (req.body && req.body.id) return String(req.body.id);
+            return null;
+        }
+
+        function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, dataId }) {
+            if (!secret || !xSignature || !xRequestId || !dataId) return false;
+            try {
+                const parts = String(xSignature).split(',').reduce((acc, part) => {
+                    const [k, v] = part.trim().split('=');
+                    if (k && v) acc[k] = v;
+                    return acc;
+                }, {});
+
+                if (!parts.ts || !parts.v1) return false;
+
+                const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${parts.ts.trim()};`;
+                const calculatedHmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+
+                if (calculatedHmac.length !== parts.v1.length) return false;
+
+                return crypto.timingSafeEqual(
+                    Buffer.from(calculatedHmac, 'hex'),
+                    Buffer.from(parts.v1, 'hex')
+                );
+            } catch {
+                return false;
+            }
+        }
+
+        function generateTestSignature({ secret, xRequestId, dataId, ts = '1700000000' }) {
+            const manifest = `id:${String(dataId).trim()};request-id:${String(xRequestId).trim()};ts:${ts};`;
+            const hmac = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+            return `ts=${ts},v1=${hmac}`;
+        }
+
+        const webhookHandler = async (req, res, { paymentGetFn, db, webhookSecret = TEST_WEBHOOK_SECRET }) => {
             if (req.method !== 'POST') {
                 res.status(405).send('Method Not Allowed');
                 return;
             }
 
-            const { type, data } = req.body || {};
+            const xSignature = req.headers?.['x-signature'];
+            const xRequestId = req.headers?.['x-request-id'];
+            const dataId = extractWebhookDataId(req);
 
-            if (type === "payment" && data && data.id) {
-                const paymentId = String(data.id);
-                try {
-                    const payment = await paymentGetFn({ id: paymentId });
-                    const paymentStatus = payment.status;
-                    const userId = payment.external_reference;
+            if (!xSignature || !xRequestId || !dataId) {
+                res.status(401).send("Assinatura ou identificador ausente.");
+                return;
+            }
 
-                    if (userId) {
-                        const userRef = db.collection("users_fallback").doc(userId);
-                        const paymentDocRef = userRef.collection("payments").doc(paymentId);
+            if (!webhookSecret) {
+                res.status(500).send("Erro interno de configuração de segurança.");
+                return;
+            }
 
-                        const [userDoc, paymentDoc] = await Promise.all([
-                            userRef.get(),
-                            paymentDocRef.get()
-                        ]);
+            const isValid = validateMercadoPagoWebhookSignature({
+                secret: webhookSecret,
+                xSignature,
+                xRequestId,
+                dataId
+            });
 
-                        switch (paymentStatus) {
-                            case 'approved': {
-                                if (paymentDoc.exists && paymentDoc.data().status === 'approved' && userDoc.exists && userDoc.data().plan === 'pro') {
-                                    res.status(200).send("Pagamento já processado.");
-                                    return;
-                                }
+            if (!isValid) {
+                res.status(401).send("Assinatura inválida.");
+                return;
+            }
 
-                                const batch = db.batch();
-                                const updatePayload = { plan: "pro" };
-                                if (!userDoc.exists || userDoc.data().plan !== 'pro' || !userDoc.data().proSince) {
-                                    updatePayload.proSince = 'TIMESTAMP_NEW';
-                                }
+            const { type } = req.body || {};
+            if (type && type !== "payment") {
+                res.status(200).send("Evento ignorado.");
+                return;
+            }
 
-                                batch.set(userRef, updatePayload, { merge: true });
-                                batch.set(paymentDocRef, {
-                                    paymentId: paymentId,
-                                    status: 'approved',
-                                    transactionAmount: payment.transaction_amount || 29.99,
-                                    currencyId: payment.currency_id || 'BRL',
-                                    processedAt: 'TIMESTAMP_PROCESSED'
-                                }, { merge: true });
+            const paymentId = String(dataId);
+            try {
+                const payment = await paymentGetFn({ id: paymentId });
+                const paymentStatus = payment.status;
+                const userId = payment.external_reference;
 
-                                await batch.commit();
-                                break;
+                if (userId) {
+                    const userRef = db.collection("users_fallback").doc(userId);
+                    const paymentDocRef = userRef.collection("payments").doc(paymentId);
+
+                    const [userDoc, paymentDoc] = await Promise.all([
+                        userRef.get(),
+                        paymentDocRef.get()
+                    ]);
+
+                    switch (paymentStatus) {
+                        case 'approved': {
+                            if (paymentDoc.exists && paymentDoc.data().status === 'approved' && userDoc.exists && userDoc.data().plan === 'pro') {
+                                res.status(200).send("Pagamento já processado.");
+                                return;
                             }
 
-                            case 'refunded':
-                            case 'charged_back':
-                            case 'cancelled': {
-                                const batch = db.batch();
-                                batch.set(userRef, {
-                                    plan: "free",
-                                    proSince: null,
-                                    lastStatus: `payment_${paymentStatus}`
-                                }, { merge: true });
-
-                                batch.set(paymentDocRef, {
-                                    paymentId: paymentId,
-                                    status: paymentStatus,
-                                    processedAt: 'TIMESTAMP_PROCESSED'
-                                }, { merge: true });
-
-                                await batch.commit();
-                                break;
+                            const batch = db.batch();
+                            const updatePayload = { plan: "pro" };
+                            if (!userDoc.exists || userDoc.data().plan !== 'pro' || !userDoc.data().proSince) {
+                                updatePayload.proSince = 'TIMESTAMP_NEW';
                             }
+
+                            batch.set(userRef, updatePayload, { merge: true });
+                            batch.set(paymentDocRef, {
+                                paymentId: paymentId,
+                                status: 'approved',
+                                transactionAmount: payment.transaction_amount || 29.99,
+                                currencyId: payment.currency_id || 'BRL',
+                                processedAt: 'TIMESTAMP_PROCESSED'
+                            }, { merge: true });
+
+                            await batch.commit();
+                            break;
+                        }
+
+                        case 'refunded':
+                        case 'charged_back':
+                        case 'cancelled': {
+                            const batch = db.batch();
+                            batch.set(userRef, {
+                                plan: "free",
+                                proSince: null,
+                                lastStatus: `payment_${paymentStatus}`
+                            }, { merge: true });
+
+                            batch.set(paymentDocRef, {
+                                paymentId: paymentId,
+                                status: paymentStatus,
+                                processedAt: 'TIMESTAMP_PROCESSED'
+                            }, { merge: true });
+
+                            await batch.commit();
+                            break;
                         }
                     }
-                } catch (error) {
-                    res.status(500).send("Erro interno ao processar webhook.");
-                    return;
                 }
+            } catch (error) {
+                res.status(500).send("Erro interno ao processar webhook.");
+                return;
             }
 
             res.status(200).send("Webhook recebido.");
         };
 
         it('deve retornar 405 Method Not Allowed para métodos diferentes de POST', async () => {
-            const req = { method: 'GET', body: {} };
+            const req = { method: 'GET', headers: {}, body: {} };
             const res = {
                 statusCode: null,
                 body: null,
@@ -205,11 +275,176 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
             expect(res.statusCode).toBe(405);
+            expect(mockPaymentGet).not.toHaveBeenCalled();
         });
 
-        it('deve processar pagamento aprovado, promover usuário para PRO e gravar em /payments', async () => {
+        it('deve retornar 401 e rejeitar requisição sem x-signature ANTES de consultar a API externa ou Firestore', async () => {
+            const req = {
+                method: 'POST',
+                headers: { 'x-request-id': 'req-123' },
+                body: { type: 'payment', data: { id: 'pay-123' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(401);
+            expect(res.body).toBe("Assinatura ou identificador ausente.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+            expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
+        });
+
+        it('deve retornar 401 e rejeitar requisição sem x-request-id ANTES de consultar a API externa ou Firestore', async () => {
+            const req = {
+                method: 'POST',
+                headers: { 'x-signature': 'ts=1700000000,v1=abcdef' },
+                body: { type: 'payment', data: { id: 'pay-123' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(401);
+            expect(res.body).toBe("Assinatura ou identificador ausente.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+            expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
+        });
+
+        it('deve retornar 401 e rejeitar requisição sem data.id ANTES de consultar a API externa', async () => {
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': 'ts=1700000000,v1=abcdef',
+                    'x-request-id': 'req-123'
+                },
+                body: { type: 'payment' }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(401);
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+        });
+
+        it('deve retornar 401 e rejeitar requisição com assinatura criptográfica inválida/adulterada', async () => {
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': 'ts=1700000000,v1=0000000000000000000000000000000000000000000000000000000000000000',
+                    'x-request-id': 'req-123'
+                },
+                body: { type: 'payment', data: { id: 'pay-123' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+            expect(res.statusCode).toBe(401);
+            expect(res.body).toBe("Assinatura inválida.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+            expect(mockFirestoreDb.collection).not.toHaveBeenCalled();
+        });
+
+        it('deve retornar 500 se o secret do webhook não estiver configurado no backend', async () => {
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': 'ts=1700000000,v1=abcdef123456',
+                    'x-request-id': 'req-123'
+                },
+                body: { type: 'payment', data: { id: 'pay-123' } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb, webhookSecret: null });
+            expect(res.statusCode).toBe(500);
+            expect(res.body).toBe("Erro interno de configuração de segurança.");
+            expect(mockPaymentGet).not.toHaveBeenCalled();
+        });
+
+        it('deve validar determinística e criptograficamente a assinatura oficial HMAC-SHA256 (Passo 10)', () => {
+            const fixtureSecret = "deterministic_test_secret_xyz789";
+            const fixtureRequestId = "uuid-req-fixture-456";
+            const fixtureDataId = "pay-deterministic-789";
+            const fixtureTs = "1725000000";
+
+            const validSig = generateTestSignature({
+                secret: fixtureSecret,
+                xRequestId: fixtureRequestId,
+                dataId: fixtureDataId,
+                ts: fixtureTs
+            });
+
+            // 1. Assinatura válida deve retornar true
+            const isValid = validateMercadoPagoWebhookSignature({
+                secret: fixtureSecret,
+                xSignature: validSig,
+                xRequestId: fixtureRequestId,
+                dataId: fixtureDataId
+            });
+            expect(isValid).toBe(true);
+
+            // 2. Assinatura com secret divergente deve retornar false
+            const isInvalidSecret = validateMercadoPagoWebhookSignature({
+                secret: "wrong_secret_key",
+                xSignature: validSig,
+                xRequestId: fixtureRequestId,
+                dataId: fixtureDataId
+            });
+            expect(isInvalidSecret).toBe(false);
+
+            // 3. Assinatura com dataId adulterado no payload deve retornar false
+            const isTamperedDataId = validateMercadoPagoWebhookSignature({
+                secret: fixtureSecret,
+                xSignature: validSig,
+                xRequestId: fixtureRequestId,
+                dataId: "pay-tampered-999"
+            });
+            expect(isTamperedDataId).toBe(false);
+
+            // 4. Assinatura com requestId adulterado no header deve retornar false
+            const isTamperedRequestId = validateMercadoPagoWebhookSignature({
+                secret: fixtureSecret,
+                xSignature: validSig,
+                xRequestId: "uuid-tampered-999",
+                dataId: fixtureDataId
+            });
+            expect(isTamperedRequestId).toBe(false);
+        });
+
+        it('deve processar pagamento aprovado com assinatura válida, promovendo usuário para PRO e gravando em /payments', async () => {
+            const paymentId = 'pay-12345';
+            const xRequestId = 'req-valid-1';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
             mockPaymentGet.mockResolvedValue({
-                id: 'pay-12345',
+                id: paymentId,
                 status: 'approved',
                 external_reference: 'user-destinatario',
                 transaction_amount: 29.99,
@@ -219,11 +454,6 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             const mockUserDoc = { exists: true, data: () => ({ plan: 'free' }) };
             const mockPaymentDoc = { exists: false, data: () => ({}) };
 
-            mockFirestoreDb.get.mockImplementation(function() {
-                return Promise.resolve(mockUserDoc);
-            });
-
-            // Configurar retorno de doc().get()
             let callCount = 0;
             const customDb = {
                 collection: vi.fn().mockReturnThis(),
@@ -240,7 +470,11 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             const req = {
                 method: 'POST',
-                body: { type: 'payment', data: { id: 'pay-12345' } }
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                body: { type: 'payment', data: { id: paymentId } }
             };
             const res = {
                 statusCode: null,
@@ -251,15 +485,24 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: customDb });
 
+            expect(mockPaymentGet).toHaveBeenCalledWith({ id: paymentId });
             expect(mockBatch.set).toHaveBeenCalledTimes(2);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             expect(res.statusCode).toBe(200);
             expect(res.body).toBe("Webhook recebido.");
         });
 
-        it('deve garantir IDEMPOTÊNCIA completa caso o mesmo paymentId aprovado seja reenviado', async () => {
+        it('deve garantir IDEMPOTÊNCIA completa caso webhook autenticado válido seja reenviado', async () => {
+            const paymentId = 'pay-idempotent-1';
+            const xRequestId = 'req-valid-idem';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
             mockPaymentGet.mockResolvedValue({
-                id: 'pay-12345',
+                id: paymentId,
                 status: 'approved',
                 external_reference: 'user-destinatario'
             });
@@ -283,7 +526,11 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             const req = {
                 method: 'POST',
-                body: { type: 'payment', data: { id: 'pay-12345' } }
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                body: { type: 'payment', data: { id: paymentId } }
             };
             const res = {
                 statusCode: null,
@@ -296,13 +543,20 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             expect(res.statusCode).toBe(200);
             expect(res.body).toBe("Pagamento já processado.");
-            // Idempotência: Não deve ter chamado o batch para gravar novamente
             expect(mockBatch.commit).not.toHaveBeenCalled();
         });
 
-        it('deve revogar plano Pro em caso de reembolso ou cancelamento', async () => {
+        it('deve revogar plano Pro em caso de reembolso ou cancelamento com assinatura válida', async () => {
+            const paymentId = 'pay-refund-1';
+            const xRequestId = 'req-valid-refund';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
             mockPaymentGet.mockResolvedValue({
-                id: 'pay-refund-1',
+                id: paymentId,
                 status: 'refunded',
                 external_reference: 'user-reembolsado'
             });
@@ -319,7 +573,11 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
 
             const req = {
                 method: 'POST',
-                body: { type: 'payment', data: { id: 'pay-refund-1' } }
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                body: { type: 'payment', data: { id: paymentId } }
             };
             const res = {
                 statusCode: null,
@@ -337,6 +595,38 @@ describe('Cloud Functions - Mercado Pago & Idempotência', () => {
             );
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             expect(res.statusCode).toBe(200);
+        });
+
+        it('deve preservar tratamento de erro 500 caso a API do Mercado Pago falhe em requisição autenticada', async () => {
+            const paymentId = 'pay-err-1';
+            const xRequestId = 'req-valid-err';
+            const validSignature = generateTestSignature({
+                secret: TEST_WEBHOOK_SECRET,
+                xRequestId,
+                dataId: paymentId
+            });
+
+            mockPaymentGet.mockRejectedValue(new Error("Mercado Pago API Down"));
+
+            const req = {
+                method: 'POST',
+                headers: {
+                    'x-signature': validSignature,
+                    'x-request-id': xRequestId
+                },
+                body: { type: 'payment', data: { id: paymentId } }
+            };
+            const res = {
+                statusCode: null,
+                body: null,
+                status(code) { this.statusCode = code; return this; },
+                send(msg) { this.body = msg; return this; }
+            };
+
+            await webhookHandler(req, res, { paymentGetFn: mockPaymentGet, db: mockFirestoreDb });
+
+            expect(res.statusCode).toBe(500);
+            expect(res.body).toBe("Erro interno ao processar webhook.");
         });
     });
 
