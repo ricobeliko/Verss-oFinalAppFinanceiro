@@ -35,84 +35,7 @@ function sanitizeErrorMessage(str) {
         .slice(0, 500);
 }
 
-// ============================================================
-// HELPERS DE ANTI-ABUSO E RATE LIMITING DISTRIBUÍDO
-// ============================================================
-
-/**
- * Reserva atomicamente uma tentativa de ação de API com controle de taxa distribuído (Firestore Transaction).
- * Aplica:
- * 1. In-Flight Lock (proteção contra concorrência e rajadas simultâneas)
- * 2. Cooldown (intervalo mínimo entre requisições consecutivas)
- * 3. Sliding Window Quota (limite máximo de requisições por hora)
- * 4. Stale Lock Recovery (recuperação automática de locks abandonados após timeout defensivo)
- * 5. Fail Closed (rejeição segura caso o Firestore esteja indisponível)
- */
-async function reserveApiActionAttempt(db, {
-    userId,
-    action = "createMercadoPagoPreference",
-    cooldownMs = 15 * 1000,
-    hourlyLimit = 5,
-    staleInFlightMs = 30 * 1000,
-    now = Date.now(),
-}) {
-    const rateLimitRef = db.collection("api_rate_limits").doc(`${userId}_${action}`);
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-
-    await db.runTransaction(async (transaction) => {
-        const limitDoc = await transaction.get(rateLimitRef);
-        const limitData = limitDoc.exists ? limitDoc.data() : { requestTimestamps: [], inFlight: false };
-
-        const lastRequestAt = limitData.lastRequestAt || 0;
-        const inFlightSince = limitData.inFlightSince || lastRequestAt;
-        const isInFlight = Boolean(limitData.inFlight);
-
-        // 1. Bloqueio de concorrência ativa (InFlight) com tolerância a lock stale
-        if (isInFlight && (now - inFlightSince) < staleInFlightMs) {
-            throw new Error("INFLIGHT_ACTIVE");
-        }
-
-        // 2. Cooldown individual entre tentativas consecutivas
-        if (lastRequestAt && (now - lastRequestAt) < cooldownMs) {
-            throw new Error("COOLDOWN_ACTIVE");
-        }
-
-        // 3. Janela deslizante de 1 hora
-        const recentRequests = (limitData.requestTimestamps || []).filter(t => (now - t) < ONE_HOUR_MS);
-        if (recentRequests.length >= hourlyLimit) {
-            throw new Error("HOURLY_LIMIT_EXCEEDED");
-        }
-
-        // 4. Gravação atômica da reserva
-        transaction.set(rateLimitRef, {
-            action,
-            userId,
-            lastRequestAt: now,
-            inFlight: true,
-            inFlightSince: now,
-            requestTimestamps: [...recentRequests, now],
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-    });
-
-    return rateLimitRef;
-}
-
-/**
- * Libera a flag inFlight após a conclusão (sucesso ou erro) da chamada externa.
- * Preserva o histórico de tentativas computado na reserva.
- */
-async function releaseApiActionInFlight(db, rateLimitRef) {
-    try {
-        await rateLimitRef.set({
-            inFlight: false,
-            inFlightSince: null,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-    } catch {
-        // Silencioso em caso de falha transitória de liberação de lock
-    }
-}
+const { reserveApiActionAttempt, releaseApiActionInFlight } = require("./security/rateLimit");
 
 // ============================================================
 // HELPERS DO WEBHOOK MERCADO PAGO
@@ -195,7 +118,7 @@ function validateMercadoPagoWebhookSignature({ secret, xSignature, xRequestId, d
 // FUNÇÃO 1: createMercadoPagoPreference
 // Cria preferência de pagamento no Mercado Pago para upgrade Pro.
 // Auth obrigatória. Email verificado obrigatório.
-// Anti-Abuso: Rate Limit Compartilhado + Cooldown + InFlight Lock via Firestore Transaction.
+// Anti-Abuso: Rate Limit Compartilhado + Cooldown + Lease Ownership Lock via Firestore Transaction.
 // Secret: MERCADOPAGO_ACCESS_TOKEN via GCP Secret Manager.
 // ============================================================
 exports.createMercadoPagoPreference = onCall(
@@ -239,18 +162,21 @@ exports.createMercadoPagoPreference = onCall(
             throw new HttpsError("failed-precondition", "Você precisa confirmar seu endereço de e-mail antes de realizar pagamentos.");
         }
 
-        // 4. Rate Limiting Compartilhado & Anti-Abuso (Firestore Transaction)
+        // 4. Rate Limiting Compartilhado & Anti-Abuso (Firestore Transaction com Lease Token)
         const db = admin.firestore();
         let rateLimitRef = null;
+        let leaseId = null;
 
         try {
-            rateLimitRef = await reserveApiActionAttempt(db, {
+            const reservation = await reserveApiActionAttempt(db, {
                 userId,
                 action: "createMercadoPagoPreference",
                 cooldownMs: 15 * 1000,
                 hourlyLimit: 5,
-                staleInFlightMs: 30 * 1000,
+                staleInFlightMs: 75 * 1000,
             });
+            rateLimitRef = reservation.rateLimitRef;
+            leaseId = reservation.leaseId;
         } catch (error) {
             if (error.message === "INFLIGHT_ACTIVE") {
                 logger.warn(`[${stage}] Chamada simultânea bloqueada por concorrência ativa.`, {
@@ -290,7 +216,7 @@ exports.createMercadoPagoPreference = onCall(
             throw new HttpsError("internal", "Não foi possível validar as cotas de segurança para esta operação.");
         }
 
-        logger.info(`[${stage}] Reserva de cota autorizada. Iniciando chamada ao Mercado Pago.`, {
+        logger.info(`[${stage}] Reserva de cota e lease autorizadas. Iniciando chamada ao Mercado Pago.`, {
             stage,
             userHash: userLogHash,
         });
@@ -346,8 +272,16 @@ exports.createMercadoPagoPreference = onCall(
             });
             throw new HttpsError("internal", "Falha ao criar a preferência de pagamento.");
         } finally {
-            if (rateLimitRef) {
-                await releaseApiActionInFlight(db, rateLimitRef);
+            if (rateLimitRef && leaseId) {
+                const releaseResult = await releaseApiActionInFlight(db, rateLimitRef, leaseId);
+                if (!releaseResult.released && releaseResult.reason) {
+                    logger.warn(`[${stage}] Liberação de lease falhou ou foi suplantada.`, {
+                        stage,
+                        userHash: userLogHash,
+                        event: "MP_PREFERENCE_LEASE_RELEASE_FAILED",
+                        reason: releaseResult.reason,
+                    });
+                }
             }
         }
     }
