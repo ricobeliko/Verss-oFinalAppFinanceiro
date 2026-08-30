@@ -182,6 +182,14 @@ jobs:
       - name: Aguardar Vite (:5173)
         run: npx wait-on http://localhost:5173 --timeout 30000
 
+      # Gate de Concorrência Real: Testes de lease e anti-abuso no Firestore Emulator
+      - name: Concorrência Real · Firestore Emulator Integration Tests
+        run: npx vitest run tests/rateLimitEmulator.test.js
+        env:
+          FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
+          GCLOUD_PROJECT: "demo-fincontrol-e2e"
+          FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"
+
       # Gate E2E: Playwright contra emuladores reais
       - name: Playwright E2E (Chromium + Emulators)
         run: npm run test:e2e
