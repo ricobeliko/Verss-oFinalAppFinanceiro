@@ -39,7 +39,7 @@ O **Release Manifest** é o documento estruturado e determinístico que deve ser
     "hostingOnly": { "type": "boolean", "enum": [true] },
     "indexHtmlSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
     "firebaseProjectId": { "type": "string", "enum": ["controle-de-cartao"] },
-    "firebaseAppId": { "type": "string" },
+    "firebaseAppId": { "type": "string", "enum": ["1:364725310124:web:0786258bdcb752d5d70509"] },
     "hostingSite": { "type": "string", "enum": ["controle-de-cartao"] },
     "previousHostingVersion": { "type": "string" },
     "newHostingVersion": { "type": "string" },
