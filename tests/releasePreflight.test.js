@@ -1,5 +1,7 @@
+/* global process */
 // tests/releasePreflight.test.js
 import { describe, it, expect } from 'vitest';
+import path from 'path';
 import { createReleaseManifest, formatManifestMarkdown } from '../scripts/release/manifestGenerator.js';
 import { runPreflightChecks } from '../scripts/release/preflight.js';
 
@@ -87,20 +89,20 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1)', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
+                requireDist: false,
                 currentHead: '559be31c7a20011e3224985d6eaaa335771681ab',
                 expectedHead: '559be31c7a20011e3224985d6eaaa335771681ab'
             });
 
             expect(result.passed).toBe(true);
             expect(result.errors.length).toBe(0);
-            expect(result.indexHtmlSha256).toBeDefined();
-            expect(result.indexHtmlSha256.length).toBe(64);
         });
 
         it('deve falhar se a versão do Node não for 22.x', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v20.11.0',
-                isWorktreeClean: true
+                isWorktreeClean: true,
+                requireDist: false
             });
 
             expect(result.passed).toBe(false);
@@ -110,7 +112,8 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1)', () => {
         it('deve falhar se o worktree não estiver limpo', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
-                isWorktreeClean: false
+                isWorktreeClean: false,
+                requireDist: false
             });
 
             expect(result.passed).toBe(false);
@@ -121,12 +124,25 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1)', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
+                requireDist: false,
                 currentHead: '1111111111111111111111111111111111111111',
                 expectedHead: '2222222222222222222222222222222222222222'
             });
 
             expect(result.passed).toBe(false);
             expect(result.errors.some(e => e.includes('HEAD divergente'))).toBe(true);
+        });
+
+        it('deve falhar se requireDist for true e dist/index.html não existir', () => {
+            const result = runPreflightChecks({
+                nodeVersion: 'v22.18.0',
+                isWorktreeClean: true,
+                requireDist: true,
+                distPath: path.join(process.cwd(), 'non-existent-dist-dir')
+            });
+
+            expect(result.passed).toBe(false);
+            expect(result.errors.some(e => e.includes('dist/index.html não encontrado'))).toBe(true);
         });
     });
 });

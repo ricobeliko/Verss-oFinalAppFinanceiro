@@ -55,16 +55,19 @@ export function runPreflightChecks(options = {}) {
     }
 
     // 4. Verificação de Artefatos de Build (dist/index.html)
-    const distPath = path.join(rootDir, 'dist');
+    const requireDist = options.requireDist !== undefined ? options.requireDist : true;
+    const distPath = options.distPath || path.join(rootDir, 'dist');
     const indexHtmlPath = path.join(distPath, 'index.html');
     const distExists = fs.existsSync(distPath);
     const indexHtmlExists = fs.existsSync(indexHtmlPath);
 
-    addCheck(
-        'Build Artifact (dist/index.html) Gate',
-        distExists && indexHtmlExists,
-        indexHtmlExists ? `dist/index.html presente (${fs.statSync(indexHtmlPath).size} bytes).` : 'dist/index.html não encontrado. Execute npm run build antes do preflight.'
-    );
+    if (requireDist) {
+        addCheck(
+            'Build Artifact (dist/index.html) Gate',
+            distExists && indexHtmlExists,
+            indexHtmlExists ? `dist/index.html presente (${fs.statSync(indexHtmlPath).size} bytes).` : 'dist/index.html não encontrado. Execute npm run build antes do preflight.'
+        );
+    }
 
     let indexSha256 = null;
     if (indexHtmlExists) {
