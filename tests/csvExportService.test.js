@@ -110,6 +110,68 @@ describe('csvExportService', () => {
             expect(csv).not.toContain('"Compra de 2025 (Ignorar)"');
         });
 
+        it('A. paymentMethod continua sendo exportado quando cardName não existe', () => {
+            const csv = generateTransactionsCsv([{ paymentMethod: 'Boleto' }]);
+            expect(csv).toContain('"Boleto"');
+        });
+
+        it('B. t.installment continua sendo respeitado', () => {
+            const csv = generateTransactionsCsv([{ installment: '3/12' }]);
+            expect(csv).toContain('"3/12"');
+        });
+
+        it('C. installmentNumber/totalInstallments continua funcionando', () => {
+            const csv = generateTransactionsCsv([{ installmentNumber: 2, totalInstallments: 5 }]);
+            expect(csv).toContain('"2/5"');
+        });
+
+        it('D. t.date continua tendo prioridade sobre dueDate', () => {
+            const csv = generateTransactionsCsv([{ date: '2026-08-01', dueDate: '2026-08-10' }]);
+            expect(csv).toContain('"2026-08-01"');
+            expect(csv).not.toContain('"2026-08-10"');
+        });
+
+        it('E. t.person continua sendo fallback válido quando clientName não existe', () => {
+            const csv = generateTransactionsCsv([{ person: 'Carlos Silva' }]);
+            expect(csv).toContain('"Carlos Silva"');
+        });
+
+        it('F. t.status continua sendo a fonte primária do status', () => {
+            const csv = generateTransactionsCsv([{ status: 'Liquidado' }]);
+            expect(csv).toContain('"Liquidado"');
+        });
+
+        it('G. defaults continuam exatamente: Movimentação, "", -, Dinheiro/Pix, -, 0,00, Pendente', () => {
+            const csv = generateTransactionsCsv([{}]);
+            expect(csv).toContain('"Movimentação";"";"";"-";"-";"Dinheiro/Pix";"-";"0,00";"Pendente"');
+        });
+
+        it('H. input válido conhecido gera exatamente a mesma string CSV do baseline 9b237a3', () => {
+            const fixture = [
+                {
+                    type: 'Despesa',
+                    date: '2026-08-15',
+                    description: 'Almoço Restaurante',
+                    category: 'Alimentação',
+                    clientName: 'João Silva',
+                    cardName: 'Black Card',
+                    installment: '-',
+                    value: 85.50,
+                    status: 'Pago'
+                }
+            ];
+            const expectedCsv = '\uFEFF"Tipo";"Data";"Descrição";"Categoria";"Pessoa/Cliente";"Forma de Pagamento";"Parcela";"Valor (R$)";"Status"\r\n"Despesa";"2026-08-15";"Almoço Restaurante";"Alimentação";"João Silva";"Black Card";"-";"85,50";"Pago"';
+            expect(generateTransactionsCsv(fixture)).toBe(expectedCsv);
+        });
+
+        it('I. input não-array não lança e produz apenas header seguro', () => {
+            const expectedHeaderOnly = '\uFEFF"Tipo";"Data";"Descrição";"Categoria";"Pessoa/Cliente";"Forma de Pagamento";"Parcela";"Valor (R$)";"Status"';
+            expect(generateTransactionsCsv(null)).toBe(expectedHeaderOnly);
+            expect(generateTransactionsCsv({})).toBe(expectedHeaderOnly);
+            expect(generateTransactionsCsv("invalid")).toBe(expectedHeaderOnly);
+            expect(generateTransactionsCsv(123)).toBe(expectedHeaderOnly);
+        });
+
         it('deve tolerar shapes legados corrompidos em loans e installments sem lançar TypeError', () => {
             const malformedLoans = [
                 { description: 'Legado 1', installments: {} },

@@ -1,6 +1,5 @@
-import { asArray } from './financialService';
-
 // src/services/csvExportService.js
+import { asArray } from './financialService';
 
 /**
  * Utilitário de Exportação de Dados Financeiros em formato CSV Brasileiro (Compatível com Excel/LibreOffice).
@@ -57,32 +56,35 @@ export function generateTransactionsCsv(transactions = []) {
         'Status'
     ];
 
-    const rows = safeTransactions.map(item => {
-        if (!item) return '';
-        const itemType = item.type || (item.installmentsCount ? 'Compra Parcelada' : (item.amount !== undefined ? 'Assinatura' : 'Despesa'));
-        const itemDate = item.dueDate || (item.date instanceof Date ? item.date.toISOString().slice(0, 10) : (item.date || ''));
-        const itemDesc = item.description || item.name || 'Sem Descrição';
-        const itemCat = item.category || 'Geral';
-        const itemPerson = item.personName || item.clientName || '-';
-        const itemPayment = item.cardName || 'Dinheiro/Pix';
-        const itemInstallment = item.currentInstallment ? `${item.currentInstallment}/${item.totalInstallments}` : '-';
-        const itemVal = item.value !== undefined ? item.value : (item.amount !== undefined ? item.amount : 0);
-        const itemStatus = item.currentStatus || item.status || 'Pendente';
+    const headerLine = headers.map(escapeCsvField).join(';');
+
+    const rows = safeTransactions.map(t => {
+        if (!t) return '';
+        const type = t.type || 'Movimentação';
+        const date = t.date || t.dueDate || '';
+        const description = t.description || t.name || '';
+        const category = t.category || '-';
+        const client = t.clientName || t.person || '-';
+        const card = t.cardName || t.paymentMethod || 'Dinheiro/Pix';
+        const installment = t.installment || (t.totalInstallments ? `${t.installmentNumber || 1}/${t.totalInstallments}` : '-');
+        const value = formatCsvCurrency(t.value !== undefined ? t.value : t.amount);
+        const status = t.status || 'Pendente';
 
         return [
-            escapeCsvField(itemType),
-            escapeCsvField(itemDate),
-            escapeCsvField(itemDesc),
-            escapeCsvField(itemCat),
-            escapeCsvField(itemPerson),
-            escapeCsvField(itemPayment),
-            escapeCsvField(itemInstallment),
-            escapeCsvField(formatCsvCurrency(itemVal)),
-            escapeCsvField(itemStatus)
+            escapeCsvField(type),
+            escapeCsvField(date),
+            escapeCsvField(description),
+            escapeCsvField(category),
+            escapeCsvField(client),
+            escapeCsvField(card),
+            escapeCsvField(installment),
+            escapeCsvField(value),
+            escapeCsvField(status)
         ].join(';');
     });
 
-    return '\uFEFF' + [headers.map(escapeCsvField).join(';'), ...rows].join('\r\n');
+    // UTF-8 BOM + Cabeçalho + Linhas
+    return '\uFEFF' + [headerLine, ...rows].join('\r\n');
 }
 
 /**
@@ -107,17 +109,17 @@ export function downloadCsvFile(csvContent, filename = 'fincontrol-extrato.csv')
 }
 
 /**
- * Gera o relatório anual financeiro em CSV consolidando todas as receitas, despesas, parcelas e assinaturas.
+ * Gera um relatório CSV anual consolidado com resumo financeiro e detalhamento de todos os lançamentos do ano.
  * 
  * @param {Object} params
- * @param {number|string} params.targetYear - Ano de competência (ex: 2026)
+ * @param {string|number} params.targetYear - Ano de referência (ex: '2026' ou 2026)
  * @param {Array<Object>} [params.loans=[]] - Compras parceladas
  * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
  * @param {Array<Object>} [params.subscriptions=[]] - Assinaturas
- * @param {Array<Object>} [params.incomes=[]] - Receitas
- * @param {Array<Object>} [params.cards=[]] - Cartões de crédito
+ * @param {Array<Object>} [params.incomes=[]] - Receitas cadastradas
+ * @param {Array<Object>} [params.cards=[]] - Cartões cadastrados
  * @param {Array<Object>} [params.clients=[]] - Pessoas cadastradas
- * @returns {string} Conteúdo do arquivo CSV com BOM UTF-8
+ * @returns {string} Conteúdo CSV completo formatado no padrão brasileiro com UTF-8 BOM
  */
 export function generateAnnualReportCsv({
     targetYear,
@@ -190,11 +192,11 @@ export function generateAnnualReportCsv({
         }
     });
 
-    // 3. Processar Parcelas de Compras no Ano
+    // 3. Processar Parcelas de Compras que vencem no Ano
     safeLoans.forEach(loan => {
         if (!loan) return;
-        const clientName = loan.clientId ? clientMap.get(loan.clientId) : 'Titular';
         const cardName = cardMap.get(loan.cardId) || 'Cartão';
+        const clientName = clientMap.get(loan.clientId) || '-';
 
         const processInst = (inst, pClientName) => {
             if (!inst || !inst.dueDate || !inst.dueDate.startsWith(yearStr)) return;
