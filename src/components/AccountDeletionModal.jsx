@@ -66,8 +66,8 @@ export default function AccountDeletionModal({ isOpen, onClose }) {
             maxWidth="max-w-md"
         >
             <form onSubmit={handleDeleteAccount} className="space-y-4">
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start gap-3 text-rose-300 text-xs">
-                    <span className="text-base leading-none">⚠️</span>
+                <div id="deletion-warning-desc" className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start gap-3 text-rose-300 text-xs">
+                    <span className="text-base leading-none" aria-hidden="true">⚠️</span>
                     <div className="space-y-1">
                         <p className="font-bold text-rose-200">Ação permanente e irreversível!</p>
                         <p className="text-[11px] text-rose-300/80">
@@ -87,6 +87,7 @@ export default function AccountDeletionModal({ isOpen, onClose }) {
                         onChange={(e) => setConfirmationText(e.target.value)}
                         placeholder="EXCLUIR"
                         disabled={isDeleting}
+                        aria-describedby="deletion-warning-desc"
                         className="w-full p-2.5 bg-carbon-800 border border-carbon-700 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 rounded-xl text-sm font-mono text-white placeholder-gray-600 outline-none transition"
                         autoComplete="off"
                     />

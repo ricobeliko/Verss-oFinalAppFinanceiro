@@ -66,21 +66,27 @@ export default function CategoryBudgetsModal({
                 </p>
 
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                    {Object.keys(budgetMap).map(cat => (
-                        <div key={cat} className="flex items-center justify-between gap-4 p-2.5 rounded-2xl bg-carbon-800 border border-carbon-700">
-                            <label className="text-xs font-bold text-gold-cream truncate max-w-[150px]">{cat}</label>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400 font-semibold">R$</span>
-                                <input
-                                    type="text"
-                                    value={formatCurrencyForInput(budgetMap[cat])}
-                                    onChange={(e) => handleChange(cat, e.target.value)}
-                                    placeholder="Sem meta"
-                                    className="w-28 p-2 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-xs font-bold focus:outline-none focus:border-gold text-right"
-                                />
+                    {Object.keys(budgetMap).map(cat => {
+                        const normalizedCat = cat.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+                        const inputId = `budget-${normalizedCat}`;
+                        return (
+                            <div key={cat} className="flex items-center justify-between gap-4 p-2.5 rounded-2xl bg-carbon-800 border border-carbon-700">
+                                <label htmlFor={inputId} className="text-xs font-bold text-gold-cream truncate max-w-[150px] cursor-pointer">{cat}</label>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400 font-semibold" aria-hidden="true">R$</span>
+                                    <input
+                                        id={inputId}
+                                        type="text"
+                                        value={formatCurrencyForInput(budgetMap[cat])}
+                                        onChange={(e) => handleChange(cat, e.target.value)}
+                                        placeholder="Sem meta"
+                                        aria-label={`Meta de orçamento para ${cat}`}
+                                        className="w-28 p-2 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-xs font-bold focus:outline-none focus:border-gold text-right"
+                                    />
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-carbon-800">

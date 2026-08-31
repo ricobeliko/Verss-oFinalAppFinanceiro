@@ -240,10 +240,10 @@ export default function CardManagement() {
                     <table className="min-w-full border-collapse">
                         <thead>
                             <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
-                                <th className="px-6 py-4">Nome do Cartão</th>
-                                <th className="px-6 py-4">Limite Utilizado & Disponível</th>
-                                <th className="px-6 py-4">Fatura ({new Date(filterMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })})</th>
-                                <th className="px-6 py-4">Ações</th>
+                                <th scope="col" className="px-6 py-4">Nome do Cartão</th>
+                                <th scope="col" className="px-6 py-4">Limite Utilizado & Disponível</th>
+                                <th scope="col" className="px-6 py-4">Fatura ({new Date(filterMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })})</th>
+                                <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-carbon-800 text-sm">
@@ -339,34 +339,34 @@ export default function CardManagement() {
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingCard ? 'Editar Cartão' : 'Adicionar Cartão'} theme="dark" maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
-                        <input type="text" value={formValues.name} onChange={(e) => setFormValues({...formValues, name: e.target.value})} placeholder="Ex: Nubank Black" />
+                        <label htmlFor="cardNameInput" className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
+                        <input id="cardNameInput" type="text" value={formValues.name} onChange={(e) => setFormValues({...formValues, name: e.target.value})} placeholder="Ex: Nubank Black" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
+                        <label htmlFor="cardLimitInput" className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 font-bold pointer-events-none z-10">R$</span>
-                            <input type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="w-full currency-input !pl-14" inputMode="decimal" placeholder="0,00" />
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 font-bold pointer-events-none z-10" aria-hidden="true">R$</span>
+                            <input id="cardLimitInput" type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="w-full currency-input !pl-14" inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
-                            <input type="number" value={formValues.closingDay} onChange={(e) => setFormValues({...formValues, closingDay: e.target.value})} min="1" max="31" placeholder="Ex: 5" />
+                            <label htmlFor="cardClosingDayInput" className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
+                            <input id="cardClosingDayInput" type="number" value={formValues.closingDay} onChange={(e) => setFormValues({...formValues, closingDay: e.target.value})} min="1" max="31" placeholder="Ex: 5" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
-                            <input type="number" value={formValues.dueDay} onChange={(e) => setFormValues({...formValues, dueDay: e.target.value})} min="1" max="31" placeholder="Ex: 12" />
+                            <label htmlFor="cardDueDayInput" className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
+                            <input id="cardDueDayInput" type="number" value={formValues.dueDay} onChange={(e) => setFormValues({...formValues, dueDay: e.target.value})} min="1" max="31" placeholder="Ex: 12" />
                         </div>
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Cor do Identificador</label>
-                        <input type="color" value={formValues.color} onChange={(e) => setFormValues({...formValues, color: e.target.value})} className="w-full h-12 p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl cursor-pointer" />
+                        <label htmlFor="cardColorInput" className="block text-sm font-medium text-gray-300 mb-1">Cor do Identificador</label>
+                        <input id="cardColorInput" type="color" value={formValues.color} onChange={(e) => setFormValues({...formValues, color: e.target.value})} className="w-full h-12 p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl cursor-pointer" />
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleSaveCard} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50">
+                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium focus:outline-none focus:ring-2 focus:ring-gold/50">Cancelar</button>
+                    <button onClick={handleSaveCard} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gold/50">
                         {isSubmitting ? 'Salvando...' : editingCard ? 'Atualizar Cartão' : 'Salvar Cartão'}
                     </button>
                 </div>

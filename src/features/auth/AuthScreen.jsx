@@ -16,7 +16,7 @@ import Spinner from '/src/components/Spinner';
 
 // --- Ícones ---
 const FinControlLogo = ({ className }) => (
-    <svg className={className} width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden="true" className={className} width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -24,7 +24,7 @@ const FinControlLogo = ({ className }) => (
 );
 
 const MailIcon = ({ className }) => (
-    <svg className={className} width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden="true" className={className} width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
         <polyline points="22,6 12,13 2,6"></polyline>
     </svg>
@@ -71,6 +71,19 @@ function AuthScreen() {
         }
         return () => clearTimeout(timer);
     }, [showVerification, countdown]);
+
+    // Fechar modal de recuperação com Escape
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isResetModalOpen) {
+                setIsResetModalOpen(false);
+            }
+        };
+        if (isResetModalOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isResetModalOpen]);
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -313,15 +326,22 @@ function AuthScreen() {
 
             {/* Modal de Recuperação de Senha */}
             {isResetModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="reset-password-title"
+                >
                     <div className="relative w-full max-w-md bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl p-6 sm:p-8 text-gray-200 animate-scaleUp">
                         <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#2A2A2A]">
-                            <h3 className="text-xl font-bold text-[#FFF3D6] tracking-tight">Recuperar Senha</h3>
+                            <h3 id="reset-password-title" className="text-xl font-bold text-[#FFF3D6] tracking-tight">Recuperar Senha</h3>
                             <button 
+                                type="button"
                                 onClick={() => setIsResetModalOpen(false)}
-                                className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                                aria-label="Fechar modal de recuperação de senha"
+                                className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/50"
                             >
-                                ✕
+                                <span aria-hidden="true">✕</span>
                             </button>
                         </div>
 
@@ -337,7 +357,7 @@ function AuthScreen() {
                                     value={resetEmail} 
                                     onChange={(e) => setResetEmail(e.target.value)} 
                                     placeholder="seu@email.com" 
-                                    className="w-full"
+                                    className="w-full px-4 py-3 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream placeholder:text-gray-500 focus:ring-2 focus:ring-gold focus:outline-none transition-all text-sm font-medium"
                                     required 
                                 />
                             </div>

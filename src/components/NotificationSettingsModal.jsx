@@ -58,14 +58,16 @@ export default function NotificationSettingsModal({
                     {/* 1. Vencimento de Cartão */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-gold-cream block">Vencimento de Fatura</label>
+                            <label htmlFor="cardDueCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Vencimento de Fatura</label>
                             <span className="text-xs text-gray-400">Notificar quando a fatura estiver perto de fechar</span>
                         </div>
                         <div className="flex items-center gap-3">
                             {cardDueEnabled && (
                                 <select
+                                    id="cardDueDaysSelect"
                                     value={cardDueDays}
                                     onChange={(e) => setCardDueDays(e.target.value)}
+                                    aria-label="Dias de antecedência para vencimento de fatura"
                                     className="p-1.5 bg-carbon-800 border border-carbon-700 rounded-xl text-xs text-gold font-bold focus:outline-none"
                                 >
                                     <option value="1">1 dia antes</option>
@@ -76,9 +78,11 @@ export default function NotificationSettingsModal({
                                 </select>
                             )}
                             <input
+                                id="cardDueCheckbox"
                                 type="checkbox"
                                 checked={cardDueEnabled}
                                 onChange={(e) => setCardDueEnabled(e.target.checked)}
+                                aria-label="Ativar notificação de vencimento de fatura"
                                 className="w-5 h-5 accent-gold rounded cursor-pointer"
                             />
                         </div>
@@ -87,13 +91,15 @@ export default function NotificationSettingsModal({
                     {/* 2. Repasses de Terceiros */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-gold-cream block">Repasses de Terceiros</label>
+                            <label htmlFor="receivablesCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Repasses de Terceiros</label>
                             <span className="text-xs text-gray-400">Alertar sobre valores pendentes de cobrança</span>
                         </div>
                         <input
+                            id="receivablesCheckbox"
                             type="checkbox"
                             checked={receivablesEnabled}
                             onChange={(e) => setReceivablesEnabled(e.target.checked)}
+                            aria-label="Ativar alerta de repasses de terceiros pendentes"
                             className="w-5 h-5 accent-gold rounded cursor-pointer"
                         />
                     </div>
@@ -101,14 +107,16 @@ export default function NotificationSettingsModal({
                     {/* 3. Limite Alto de Cartão */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-gold-cream block">Comprometimento de Limite</label>
+                            <label htmlFor="highLimitCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Comprometimento de Limite</label>
                             <span className="text-xs text-gray-400">Avisar quando faturas superarem o limite cadastrado</span>
                         </div>
                         <div className="flex items-center gap-3">
                             {highLimitEnabled && (
                                 <select
+                                    id="highLimitSelect"
                                     value={highLimitThreshold}
                                     onChange={(e) => setHighLimitThreshold(e.target.value)}
+                                    aria-label="Limiar percentual de comprometimento de limite"
                                     className="p-1.5 bg-carbon-800 border border-carbon-700 rounded-xl text-xs text-gold font-bold focus:outline-none"
                                 >
                                     <option value="70">&ge; 70%</option>
@@ -118,9 +126,11 @@ export default function NotificationSettingsModal({
                                 </select>
                             )}
                             <input
+                                id="highLimitCheckbox"
                                 type="checkbox"
                                 checked={highLimitEnabled}
                                 onChange={(e) => setHighLimitEnabled(e.target.checked)}
+                                aria-label="Ativar alerta de alto comprometimento de limite"
                                 className="w-5 h-5 accent-gold rounded cursor-pointer"
                             />
                         </div>
@@ -129,13 +139,15 @@ export default function NotificationSettingsModal({
                     {/* 4. Assinaturas Recorrentes */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-gold-cream block">Assinaturas Recorrentes</label>
+                            <label htmlFor="subscriptionsCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Assinaturas Recorrentes</label>
                             <span className="text-xs text-gray-400">Avisar sobre cobranças programadas nos próximos 2 dias</span>
                         </div>
                         <input
+                            id="subscriptionsCheckbox"
                             type="checkbox"
                             checked={subscriptionsEnabled}
                             onChange={(e) => setSubscriptionsEnabled(e.target.checked)}
+                            aria-label="Ativar notificação de assinaturas recorrentes próximas"
                             className="w-5 h-5 accent-gold rounded cursor-pointer"
                         />
                     </div>
@@ -143,13 +155,15 @@ export default function NotificationSettingsModal({
                     {/* 5. Anomalias de Gastos */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-gold-cream block">Anomalias de Gastos</label>
+                            <label htmlFor="anomaliesCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Anomalias de Gastos</label>
                             <span className="text-xs text-gray-400">Detectar aumentos repentinos &gt; 50% vs média trimestral</span>
                         </div>
                         <input
+                            id="anomaliesCheckbox"
                             type="checkbox"
                             checked={anomaliesEnabled}
                             onChange={(e) => setAnomaliesEnabled(e.target.checked)}
+                            aria-label="Ativar detecção de anomalias de gastos"
                             className="w-5 h-5 accent-gold rounded cursor-pointer"
                         />
                     </div>

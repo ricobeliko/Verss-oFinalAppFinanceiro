@@ -71,7 +71,7 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
             <div className="bg-carbon-900 border border-carbon-700 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                 {/* Search Bar Input */}
                 <div className="p-4 sm:p-5 border-b border-carbon-800 flex items-center gap-3 bg-carbon-800/40">
-                    <span className="text-xl text-gold">🔎</span>
+                    <span className="text-xl text-gold" aria-hidden="true">🔎</span>
                     <input
                         ref={inputRef}
                         type="text"
@@ -85,16 +85,17 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
                         <button
                             type="button"
                             onClick={() => setSearchTerm('')}
-                            className="text-xs text-gray-400 hover:text-gold transition p-1"
+                            className="text-xs text-gray-400 hover:text-gold transition p-1 focus:outline-none focus:ring-1 focus:ring-gold/50"
                             aria-label="Limpar busca"
                         >
-                            ✕
+                            <span aria-hidden="true">✕</span>
                         </button>
                     )}
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-carbon-800 text-gray-300 border border-carbon-700 hover:text-white transition cursor-pointer"
+                        aria-label="Fechar busca global"
+                        className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-carbon-800 text-gray-300 border border-carbon-700 hover:text-white transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/50"
                     >
                         ESC
                     </button>

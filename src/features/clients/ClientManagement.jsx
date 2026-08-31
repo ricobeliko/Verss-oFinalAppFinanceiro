@@ -165,13 +165,15 @@ export default function ClientManagement() {
                         value={newClientName}
                         onChange={(e) => setNewClientName(e.target.value)}
                         placeholder="Nome da Pessoa"
+                        aria-label="Nome da pessoa"
                         className="flex-grow w-full"
                         disabled={isSubmitting}
                     />
                     <button 
                         type="submit" 
                         disabled={isSubmitting}
-                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+                        aria-label="Adicionar pessoa"
+                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gold/50"
                     >
                         {isSubmitting ? <Spinner /> : <PlusIcon />}
                         <span className="hidden sm:inline">{isSubmitting ? 'Salvando...' : 'Adicionar Pessoa'}</span>
@@ -182,7 +184,7 @@ export default function ClientManagement() {
             {/* Central Consolidada de Repasses de Terceiros */}
             <div className="bg-gradient-to-br from-carbon-900 via-carbon-900 to-carbon-800 border border-carbon-700 p-6 rounded-3xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-2.5">
-                    <span className="text-xl">👥</span>
+                    <span className="text-xl" aria-hidden="true">👥</span>
                     <h2 className="text-base font-bold text-gold-cream tracking-tight">
                         Central de Repasses de Terceiros ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })})
                     </h2>
@@ -214,11 +216,11 @@ export default function ClientManagement() {
                     <table className="min-w-full border-collapse">
                         <thead>
                             <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
-                                <th className="px-6 py-4 text-left">Nome</th>
-                                <th className="px-6 py-4 text-left">A Receber no Mês</th>
-                                <th className="px-6 py-4 text-left">Status do Repasse</th>
-                                <th className="px-6 py-4 text-left">Saldo Futuro Restante</th>
-                                <th className="px-6 py-4 text-right">Ações</th>
+                                <th scope="col" className="px-6 py-4 text-left">Nome</th>
+                                <th scope="col" className="px-6 py-4 text-left">A Receber no Mês</th>
+                                <th scope="col" className="px-6 py-4 text-left">Status do Repasse</th>
+                                <th scope="col" className="px-6 py-4 text-left">Saldo Futuro Restante</th>
+                                <th scope="col" className="px-6 py-4 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-carbon-800 text-sm">
@@ -277,7 +279,8 @@ export default function ClientManagement() {
                                                 </button>
                                                 <button 
                                                     onClick={() => handleReport(client)} 
-                                                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-semibold py-1.5 px-3.5 rounded-xl transition cursor-pointer"
+                                                    aria-label={`Ver extrato e PDF de ${client.name || ''}`.trim()}
+                                                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-semibold py-1.5 px-3.5 rounded-xl transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                                                 >
                                                     Extrato / PDF
                                                 </button>

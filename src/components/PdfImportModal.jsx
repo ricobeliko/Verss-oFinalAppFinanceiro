@@ -59,6 +59,19 @@ export default function PdfImportModal({
         }
     }, [selectedCardId, existingLoans]);
 
+    // Fechar com Escape quando seguro
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen && !isSubmitting) {
+                onClose();
+            }
+        };
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isSubmitting, onClose]);
+
     // Estatísticas da importação
     const stats = useMemo(() => {
         const totalFound = importedItems.length;
@@ -261,21 +274,32 @@ export default function PdfImportModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fadeIn">
+        <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fadeIn"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pdf-import-modal-title"
+        >
             <div className="bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
                 
                 {/* Header */}
                 <div className="p-6 border-b border-[#2A2A2A] flex justify-between items-center bg-[#1A1A1A]">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-[#F2B705]/10 text-[#F2B705] border border-[#F2B705]/20 rounded-2xl">
+                        <div className="p-2.5 bg-[#F2B705]/10 text-[#F2B705] border border-[#F2B705]/20 rounded-2xl" aria-hidden="true">
                             <SparklesIcon />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-[#FFF3D6] tracking-tight">Importação Inteligente de Fatura PDF</h2>
+                            <h2 id="pdf-import-modal-title" className="text-xl font-bold text-[#FFF3D6] tracking-tight">Importação Inteligente de Fatura PDF</h2>
                             <p className="text-xs text-gray-400 mt-0.5">Lê Nubank, Itaú, Inter, Bradesco, Santander e outros bancos com motor anti-duplicidade.</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer">✕</button>
+                    <button 
+                        onClick={onClose} 
+                        aria-label="Fechar modal de importação PDF"
+                        className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/50"
+                    >
+                        <span aria-hidden="true">✕</span>
+                    </button>
                 </div>
 
                 {/* Conteúdo Principal */}

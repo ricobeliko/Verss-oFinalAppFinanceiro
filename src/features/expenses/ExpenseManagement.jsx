@@ -170,12 +170,12 @@ function ExpenseManagement() {
                     <table className="min-w-full border-collapse">
                         <thead>
                             <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
-                                <th className="px-6 py-4">Descrição</th>
-                                <th className="px-6 py-4">Valor</th>
-                                <th className="px-6 py-4">Data</th>
-                                <th className="px-6 py-4">Categoria</th>
-                                <th className="px-6 py-4">Pagamento</th>
-                                <th className="px-6 py-4">Ações</th>
+                                <th scope="col" className="px-6 py-4">Descrição</th>
+                                <th scope="col" className="px-6 py-4">Valor</th>
+                                <th scope="col" className="px-6 py-4">Data</th>
+                                <th scope="col" className="px-6 py-4">Categoria</th>
+                                <th scope="col" className="px-6 py-4">Pagamento</th>
+                                <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-carbon-800 text-sm">
@@ -225,37 +225,37 @@ function ExpenseManagement() {
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingExpense ? 'Editar Despesa' : 'Adicionar Despesa'} theme="dark" maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
-                        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Supermercado" required />
+                        <label htmlFor="expenseDescription" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                        <input id="expenseDescription" type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Supermercado" required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
+                        <label htmlFor="expenseValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
-                            <input type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" placeholder="0,00" />
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10" aria-hidden="true">R$</span>
+                            <input id="expenseValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Data</label>
-                        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                        <label htmlFor="expenseDate" className="block text-sm font-medium text-gray-300 mb-1">Data</label>
+                        <input id="expenseDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
-                        <select value={category} onChange={(e) => setCategory(e.target.value)} required>
+                        <label htmlFor="expenseCategory" className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
+                        <select id="expenseCategory" value={category} onChange={(e) => setCategory(e.target.value)} required>
                             <option value="">Selecione uma categoria</option>
                             {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Forma de Pagamento</label>
-                        <select value={cardId} onChange={(e) => setCardId(e.target.value)}>
+                        <label htmlFor="expensePaymentMethod" className="block text-sm font-medium text-gray-300 mb-1">Forma de Pagamento</label>
+                        <select id="expensePaymentMethod" value={cardId} onChange={(e) => setCardId(e.target.value)}>
                             <option value="">Dinheiro/Pix</option>
                             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Pessoa (Opcional)</label>
-                        <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+                        <label htmlFor="expenseClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa (Opcional)</label>
+                        <select id="expenseClient" value={clientId} onChange={(e) => setClientId(e.target.value)}>
                             <option value="">Nenhuma</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                         </select>

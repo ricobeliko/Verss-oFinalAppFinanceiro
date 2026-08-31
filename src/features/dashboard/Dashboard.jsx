@@ -22,7 +22,7 @@ import Spinner from '../../components/Spinner';
 
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
-    <svg className="w-4 h-4 inline-block ml-1 text-gold transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-gold transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         {direction === 'ascending' ? <path strokeLinecap="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
     </svg>
 );
@@ -1065,20 +1065,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     <table className="min-w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
-                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('type')}>
+                                <th scope="col" aria-sort={sortConfig.key === 'type' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('type')}>
                                     Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
                                 </th>
-                                <th className="px-6 py-4">Descrição</th>
-                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('clientId')}>
+                                <th scope="col" className="px-6 py-4">Descrição</th>
+                                <th scope="col" aria-sort={sortConfig.key === 'clientId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('clientId')}>
                                     Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
                                 </th>
-                                <th className="px-6 py-4 cursor-pointer" onClick={() => requestSort('cardId')}>
+                                <th scope="col" aria-sort={sortConfig.key === 'cardId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('cardId')}>
                                     Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
                                 </th>
-                                <th className="px-6 py-4">Valor da Parcela</th>
-                                <th className="px-6 py-4">Nº Parcelas</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Ações</th>
+                                <th scope="col" className="px-6 py-4">Valor da Parcela</th>
+                                <th scope="col" className="px-6 py-4">Nº Parcelas</th>
+                                <th scope="col" className="px-6 py-4">Status</th>
+                                <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-carbon-800 text-sm">
@@ -1093,7 +1093,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         <td className="px-6 py-4 whitespace-nowrap text-gray-400">
                                             {card ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }}></div>
+                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }} aria-hidden="true"></div>
                                                     <span>{card.name}</span>
                                                 </div>
                                             ) : '---'}
@@ -1114,12 +1114,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {item.currentStatus !== 'Paga' && (
-                                                <button onClick={() => updateItemStatus(item, 'Paga')} className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-emerald-500/20 cursor-pointer">
+                                                <button 
+                                                    onClick={() => updateItemStatus(item, 'Paga')} 
+                                                    aria-label={`Marcar ${item.description} como paga`}
+                                                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-emerald-500/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                                >
                                                     Marcar Paga
                                                 </button>
                                             )}
                                             {item.currentStatus === 'Paga' && (
-                                                 <button onClick={() => updateItemStatus(item, 'Pendente')} className="bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-rose-500/20 cursor-pointer">
+                                                 <button 
+                                                    onClick={() => updateItemStatus(item, 'Pendente')} 
+                                                    aria-label={`Desmarcar ${item.description}`}
+                                                    className="bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-rose-500/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                                                 >
                                                      Desmarcar
                                                  </button>
                                             )}
