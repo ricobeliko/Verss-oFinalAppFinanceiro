@@ -1,7 +1,8 @@
 // src/hooks/useLoans.js
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../services/firestoreSubscriptionRegistry';
 
 export function useLoans() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
@@ -23,10 +24,16 @@ export function useLoans() {
 
         const basePath = [...getUserCollectionPathSegments(), userId];
         const loansRef = collection(db, ...basePath, 'loans');
+        const canonicalKey = buildCanonicalQueryKey({
+            collectionPath: `${basePath.join('/')}/loans`,
+            uid: userId,
+        });
 
-        const unsubscribe = onSnapshot(
-            loansRef,
-            (snapshot) => {
+        const unsubscribe = subscribeToFirestoreQuery({
+            queryRef: loansRef,
+            canonicalKey,
+            uid: userId,
+            onNext: (snapshot) => {
                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 data.sort((a, b) => {
                     const dateA = a.createdAt?.toDate?.() || new Date(a.purchaseDate || a.date || 0);
@@ -36,13 +43,13 @@ export function useLoans() {
                 setLoans(data);
                 setLoading(false);
             },
-            (error) => {
+            onError: (error) => {
                 if (import.meta.env?.DEV) {
                     console.error('Erro no listener useLoans:', error);
                 }
                 setLoading(false);
-            }
-        );
+            },
+        });
 
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);

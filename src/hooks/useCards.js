@@ -1,7 +1,8 @@
 // src/hooks/useCards.js
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../services/firestoreSubscriptionRegistry';
 
 export function useCards() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
@@ -23,21 +24,27 @@ export function useCards() {
 
         const basePath = [...getUserCollectionPathSegments(), userId];
         const cardsRef = collection(db, ...basePath, 'cards');
+        const canonicalKey = buildCanonicalQueryKey({
+            collectionPath: `${basePath.join('/')}/cards`,
+            uid: userId,
+        });
 
-        const unsubscribe = onSnapshot(
-            cardsRef,
-            (snapshot) => {
+        const unsubscribe = subscribeToFirestoreQuery({
+            queryRef: cardsRef,
+            canonicalKey,
+            uid: userId,
+            onNext: (snapshot) => {
                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setCards(data);
                 setLoading(false);
             },
-            (error) => {
+            onError: (error) => {
                 if (import.meta.env?.DEV) {
                     console.error('Erro no listener useCards:', error);
                 }
                 setLoading(false);
-            }
-        );
+            },
+        });
 
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);

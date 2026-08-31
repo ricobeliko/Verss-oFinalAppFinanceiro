@@ -1,7 +1,8 @@
 // src/hooks/usePaidSubscriptions.js
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../services/firestoreSubscriptionRegistry';
 
 export function usePaidSubscriptions() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
@@ -16,21 +17,27 @@ export function usePaidSubscriptions() {
 
         const basePath = [...getUserCollectionPathSegments(), userId];
         const paidSubsRef = collection(db, ...basePath, 'paidSubscriptions');
+        const canonicalKey = buildCanonicalQueryKey({
+            collectionPath: `${basePath.join('/')}/paidSubscriptions`,
+            uid: userId,
+        });
 
-        const unsubscribe = onSnapshot(
-            paidSubsRef,
-            (snapshot) => {
+        const unsubscribe = subscribeToFirestoreQuery({
+            queryRef: paidSubsRef,
+            canonicalKey,
+            uid: userId,
+            onNext: (snapshot) => {
                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setPaidSubscriptions(data);
                 setLoading(false);
             },
-            (error) => {
+            onError: (error) => {
                 if (import.meta.env?.DEV) {
                     console.error('Erro no listener usePaidSubscriptions:', error);
                 }
                 setLoading(false);
-            }
-        );
+            },
+        });
 
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);

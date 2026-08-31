@@ -1,8 +1,9 @@
 // src/features/dashboard/Dashboard.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../services/firestoreSubscriptionRegistry';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { generateTransactionsCsv, generateAnnualReportCsv, downloadCsvFile } from '../../services/csvExportService';
 import { calculateMonthlyComparisonSummary, generateDeterministicFinancialInsights, generateFinancialAlerts } from '../../services/financialService';
@@ -125,26 +126,72 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         };
 
         const unsubs = [
-            onSnapshot(collections.loans, snapshot => setDashboardData(prev => ({ ...prev, loans: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
-            onSnapshot(collections.clients, snapshot => setDashboardData(prev => ({ ...prev, clients: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
-            onSnapshot(collections.cards, snapshot => setDashboardData(prev => ({ ...prev, cards: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
-            onSnapshot(collections.subscriptions, snapshot => setDashboardData(prev => ({ ...prev, subscriptions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }))),
-            onSnapshot(collections.expenses, snapshot => setDashboardData(prev => ({ ...prev, expenses: snapshot.docs.map(safeDataMapper) }))),
-            onSnapshot(collections.incomes, snapshot => setDashboardData(prev => ({ ...prev, incomes: snapshot.docs.map(safeDataMapper) }))),
+            subscribeToFirestoreQuery({
+                queryRef: collections.loans,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/loans`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, loans: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+                onError: (err) => console.error('Erro no listener loans:', err),
+            }),
+            subscribeToFirestoreQuery({
+                queryRef: collections.clients,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/clients`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, clients: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+                onError: (err) => console.error('Erro no listener clients:', err),
+            }),
+            subscribeToFirestoreQuery({
+                queryRef: collections.cards,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/cards`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, cards: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+                onError: (err) => console.error('Erro no listener cards:', err),
+            }),
+            subscribeToFirestoreQuery({
+                queryRef: collections.subscriptions,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/subscriptions`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, subscriptions: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+                onError: (err) => console.error('Erro no listener subscriptions:', err),
+            }),
+            subscribeToFirestoreQuery({
+                queryRef: collections.expenses,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/expenses`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, expenses: snapshot.docs.map(safeDataMapper) })),
+                onError: (err) => console.error('Erro no listener expenses:', err),
+            }),
+            subscribeToFirestoreQuery({
+                queryRef: collections.incomes,
+                canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/incomes`, uid: userId }),
+                uid: userId,
+                onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, incomes: snapshot.docs.map(safeDataMapper) })),
+                onError: (err) => console.error('Erro no listener incomes:', err),
+            }),
         ];
 
-        const paidSubscriptionsQuery = query(collection(db, ...userCollectionPath, userId, 'paidSubscriptions'), where("month", "==", selectedMonth));
-        const unsubPaid = onSnapshot(paidSubscriptionsQuery, snapshot => {
-            setDashboardData(prev => ({ ...prev, paidSubscriptions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) }));
-            setIsLoading(false);
-        }, error => {
-            console.error("Erro ao buscar assinaturas pagas:", error);
-            setIsLoading(false);
+        const paidSubscriptionsQuery = query(collection(db, ...userCollectionPath, userId, 'paidSubscriptions'), where('month', '==', selectedMonth));
+        const unsubPaid = subscribeToFirestoreQuery({
+            queryRef: paidSubscriptionsQuery,
+            canonicalKey: buildCanonicalQueryKey({
+                collectionPath: `users_fallback/${userId}/paidSubscriptions`,
+                uid: userId,
+                queryClauses: [`month:==:${selectedMonth}`],
+            }),
+            uid: userId,
+            onNext: (snapshot) => {
+                setDashboardData((prev) => ({ ...prev, paidSubscriptions: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) }));
+                setIsLoading(false);
+            },
+            onError: (error) => {
+                console.error('Erro ao buscar assinaturas pagas:', error);
+                setIsLoading(false);
+            },
         });
-        
+
         unsubs.push(unsubPaid);
 
-        return () => unsubs.forEach(unsub => unsub());
+        return () => unsubs.forEach((unsub) => unsub());
 
     }, [db, userId, isAuthReady, getUserCollectionPathSegments, selectedMonth]);
 

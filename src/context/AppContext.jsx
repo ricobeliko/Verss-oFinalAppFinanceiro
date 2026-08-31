@@ -1,10 +1,9 @@
-// src/context/AppContext.jsx
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, getAppFunctions } from '../utils/firebase';
 import Toast from '../components/Toast';
+import { clearAllSubscriptions } from '../services/firestoreSubscriptionRegistry';
 
 const getUserCollectionPathSegments = () => ['users_fallback'];
 
@@ -68,6 +67,7 @@ export function AppProvider({ children }) {
                 });
             } else {
                 unsubscribeFromUserProfile();
+                clearAllSubscriptions();
                 setUserProfile(null);
                 setIsAuthReady(true);
             }
@@ -76,6 +76,7 @@ export function AppProvider({ children }) {
         return () => {
             unsubscribeFromAuth();
             unsubscribeFromUserProfile();
+            clearAllSubscriptions();
         };
     }, []);
 

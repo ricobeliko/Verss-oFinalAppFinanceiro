@@ -1,7 +1,8 @@
 // src/hooks/useClients.js
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../services/firestoreSubscriptionRegistry';
 
 export function useClients() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
@@ -23,21 +24,27 @@ export function useClients() {
 
         const basePath = [...getUserCollectionPathSegments(), userId];
         const clientsRef = collection(db, ...basePath, 'clients');
+        const canonicalKey = buildCanonicalQueryKey({
+            collectionPath: `${basePath.join('/')}/clients`,
+            uid: userId,
+        });
 
-        const unsubscribe = onSnapshot(
-            clientsRef,
-            (snapshot) => {
+        const unsubscribe = subscribeToFirestoreQuery({
+            queryRef: clientsRef,
+            canonicalKey,
+            uid: userId,
+            onNext: (snapshot) => {
                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setClients(data);
                 setLoading(false);
             },
-            (error) => {
+            onError: (error) => {
                 if (import.meta.env?.DEV) {
                     console.error('Erro no listener useClients:', error);
                 }
                 setLoading(false);
-            }
-        );
+            },
+        });
 
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);

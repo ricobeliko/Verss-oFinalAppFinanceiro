@@ -1,7 +1,8 @@
 // src/hooks/useIncomes.js
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
+import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../services/firestoreSubscriptionRegistry';
 
 export function useIncomes() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
@@ -23,10 +24,16 @@ export function useIncomes() {
 
         const basePath = [...getUserCollectionPathSegments(), userId];
         const incomesRef = collection(db, ...basePath, 'incomes');
+        const canonicalKey = buildCanonicalQueryKey({
+            collectionPath: `${basePath.join('/')}/incomes`,
+            uid: userId,
+        });
 
-        const unsubscribe = onSnapshot(
-            incomesRef,
-            (snapshot) => {
+        const unsubscribe = subscribeToFirestoreQuery({
+            queryRef: incomesRef,
+            canonicalKey,
+            uid: userId,
+            onNext: (snapshot) => {
                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 data.sort((a, b) => {
                     const dateA = a.createdAt?.toDate?.() || new Date(a.date || 0);
@@ -36,13 +43,13 @@ export function useIncomes() {
                 setIncomes(data);
                 setLoading(false);
             },
-            (error) => {
+            onError: (error) => {
                 if (import.meta.env?.DEV) {
                     console.error('Erro no listener useIncomes:', error);
                 }
                 setLoading(false);
-            }
-        );
+            },
+        });
 
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
