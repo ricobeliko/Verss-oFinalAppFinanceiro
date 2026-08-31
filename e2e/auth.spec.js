@@ -49,7 +49,7 @@ test.describe('E2E Real Browser - Autenticação e Interface', () => {
         await expect(modalHeading).toBeVisible();
 
         // Fechar modal
-        const closeBtn = page.getByRole('button', { name: '✕' });
+        const closeBtn = page.getByRole('button', { name: /Fechar|✕/i });
         await closeBtn.click();
         await expect(modalHeading).not.toBeVisible();
     });

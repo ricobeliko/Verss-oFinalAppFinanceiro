@@ -51,26 +51,26 @@ function UnifiedTransactionManagement() {
                 </div>
                 
                 {/* Seletor de Abas Black Card */}
-                <div role="tablist" aria-label="Tipos de movimentação" className="flex justify-center p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl max-w-md mx-auto">
+                <div role="group" aria-label="Tipos de movimentação" className="flex justify-center p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl max-w-md mx-auto">
                     <button 
-                        role="tab"
-                        aria-selected={transactionType === 'loan'}
+                        type="button"
+                        aria-pressed={transactionType === 'loan'}
                         onClick={() => setTransactionType('loan')}
                         className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'loan' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
                     >
                         Compras
                     </button>
                     <button 
-                        role="tab"
-                        aria-selected={transactionType === 'income'}
+                        type="button"
+                        aria-pressed={transactionType === 'income'}
                         onClick={() => setTransactionType('income')}
                         className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'income' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
                     >
                         Receitas
                     </button>
                     <button 
-                        role="tab"
-                        aria-selected={transactionType === 'expense'}
+                        type="button"
+                        aria-pressed={transactionType === 'expense'}
                         onClick={() => setTransactionType('expense')}
                         className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'expense' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
                     >
