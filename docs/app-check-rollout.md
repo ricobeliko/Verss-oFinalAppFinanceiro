@@ -104,7 +104,26 @@ Nas Cloud Functions (`request.app`), o estado da atestação é avaliado atravé
 
 ---
 
-## 7. Critérios de Readiness para Enforcement (Sem Limiares Arbitrários)
+## 7. Content Security Policy (CSP)
+
+A Content-Security-Policy configurada no `firebase.json` libera estritamente os endpoints oficiais necessários para o funcionamento do reCAPTCHA Enterprise e App Check:
+
+- **`script-src`:**
+  - `https://www.google.com/recaptcha/`
+  - `https://www.gstatic.com/recaptcha/`
+- **`frame-src`:**
+  - `https://www.google.com/recaptcha/`
+  - `https://recaptcha.google.com/recaptcha/`
+- **`connect-src`:**
+  - `https://www.google.com/recaptcha/`
+  - `https://*.googleapis.com` (já cobre nativamente `recaptchaenterprise.googleapis.com`)
+
+> [!NOTE]
+> A política de segurança do FinControl **deliberadamente NÃO utiliza wildcards amplos** como `https://*.google.com` ou `*`. Cada origem é declarada de forma pontual e verificável para mitigar riscos de injeção ou exfiltração de dados.
+
+---
+
+## 8. Critérios de Readiness para Enforcement (Sem Limiares Arbitrários)
 
 A ativação de enforcement em produção **NÃO** deve utilizar um percentual fixo arbitrário (como ">99%"). A decisão de enforcement para cada serviço deve ser tomada pelo Operador com base nos seguintes critérios objetivos:
 
@@ -117,7 +136,7 @@ A ativação de enforcement em produção **NÃO** deve utilizar um percentual f
 
 ---
 
-## 8. Procedimento de Rollback de Emergência
+## 9. Procedimento de Rollback de Emergência
 
 Se, após uma futura ativação de enforcement, for detectado bloqueio indevido de usuários legítimos:
 
@@ -136,7 +155,7 @@ Se, após uma futura ativação de enforcement, for detectado bloqueio indevido 
 
 ---
 
-## 9. Referências Oficiais Consultadas
+## 10. Referências Oficiais Consultadas
 - [Firebase App Check Web — reCAPTCHA Enterprise](https://firebase.google.com/docs/app-check/web/recaptcha-enterprise-provider)
 - [Firebase App Check — Cloud Functions](https://firebase.google.com/docs/app-check/cloud-functions)
 - [Firebase App Check — Cloud Firestore](https://firebase.google.com/docs/app-check/firestore)
