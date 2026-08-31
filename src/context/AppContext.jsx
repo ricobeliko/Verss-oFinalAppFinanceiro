@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, getAppFunctions } from '../utils/firebase';
 import Toast from '../components/Toast';
-import { clearAllSubscriptions } from '../services/firestoreSubscriptionRegistry';
+import { clearAllSubscriptions, clearUserSubscriptions } from '../services/firestoreSubscriptionRegistry';
 
 const getUserCollectionPathSegments = () => ['users_fallback'];
 
@@ -45,10 +45,26 @@ export function AppProvider({ children }) {
         }
 
         let unsubscribeFromUserProfile = () => {};
+        let previousUid = null;
 
         const unsubscribeFromAuth = onAuthStateChanged(auth, (user) => {
+            // Se o UID mudou diretamente (ex: UserA -> UserB ou UserA -> null), encerra os listeners e limpa as subscriptions de A
+            if (previousUid && (!user || user.uid !== previousUid)) {
+                if (typeof unsubscribeFromUserProfile === 'function') {
+                    try {
+                        unsubscribeFromUserProfile();
+                    } catch (err) {
+                        console.error('Erro ao encerrar listener de perfil anterior:', err);
+                    }
+                    unsubscribeFromUserProfile = () => {};
+                }
+                clearUserSubscriptions(previousUid);
+            }
+
             setCurrentUser(user);
+
             if (user) {
+                previousUid = user.uid;
                 const userCollectionPath = getUserCollectionPathSegments();
                 const userDocRef = doc(db, ...userCollectionPath, user.uid);
                 
@@ -66,7 +82,15 @@ export function AppProvider({ children }) {
                     setIsAuthReady(true);
                 });
             } else {
-                unsubscribeFromUserProfile();
+                previousUid = null;
+                if (typeof unsubscribeFromUserProfile === 'function') {
+                    try {
+                        unsubscribeFromUserProfile();
+                    } catch (err) {
+                        console.error('Erro ao encerrar listener de perfil:', err);
+                    }
+                    unsubscribeFromUserProfile = () => {};
+                }
                 clearAllSubscriptions();
                 setUserProfile(null);
                 setIsAuthReady(true);
@@ -75,7 +99,13 @@ export function AppProvider({ children }) {
 
         return () => {
             unsubscribeFromAuth();
-            unsubscribeFromUserProfile();
+            if (typeof unsubscribeFromUserProfile === 'function') {
+                try {
+                    unsubscribeFromUserProfile();
+                } catch (err) {
+                    console.error('Erro ao encerrar listener de perfil no cleanup:', err);
+                }
+            }
             clearAllSubscriptions();
         };
     }, []);
