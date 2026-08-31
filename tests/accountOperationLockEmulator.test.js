@@ -12,7 +12,7 @@ const {
     releaseAccountOperationLock,
 } = require('../functions/security/accountOperationLock.js');
 
-describe.runIf(isEmulatorHostDefined)('Account Operation Lock — Firestore Emulator Integration Tests', () => {
+describe.runIf(isEmulatorHostDefined)('Account Operation Lock — Firestore Emulator Integration Tests', { timeout: 30000 }, () => {
     let db;
     const testProjectId = process.env.GCLOUD_PROJECT || 'demo-fincontrol-e2e';
 

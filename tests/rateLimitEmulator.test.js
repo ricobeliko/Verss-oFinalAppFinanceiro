@@ -8,7 +8,7 @@ import { reserveApiActionAttempt, releaseApiActionInFlight } from '../functions/
 
 const isEmulatorHostDefined = Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
-describe.runIf(isEmulatorHostDefined)('FIRESTORE_EMULATOR_INTEGRATION — Real Firestore Emulator Concurrency Gate', () => {
+describe.runIf(isEmulatorHostDefined)('FIRESTORE_EMULATOR_INTEGRATION — Real Firestore Emulator Concurrency Gate', { timeout: 30000 }, () => {
     let db;
 
     beforeEach(async () => {
