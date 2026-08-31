@@ -13,15 +13,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:demo12345",
 };
 
-// Inicializar a aplicação Firebase
+// 1. Inicializar a aplicação Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar os serviços essenciais do client
+// 2. Inicializar Firebase App Check ANTES dos serviços essenciais (Firestore / Auth)
+initAppCheck(app);
+
+// 3. Inicializar os serviços essenciais do client
 const db = getFirestore(app);
 const auth = getAuth(app);
-
-// Inicializar Firebase App Check (Modo de observação e emissão de tokens, não-enforcing)
-initAppCheck(app);
 
 // Conectar aos Emuladores Locais quando a flag estiver habilitada
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
