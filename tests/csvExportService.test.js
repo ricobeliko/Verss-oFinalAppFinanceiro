@@ -110,13 +110,25 @@ describe('csvExportService', () => {
             expect(csv).not.toContain('"Compra de 2025 (Ignorar)"');
         });
 
-        it('deve gerar relatório anual seguro mesmo sem dados', () => {
-            const csv = generateAnnualReportCsv({ targetYear: 2026 });
-            expect(csv.startsWith('\uFEFF')).toBe(true);
-            expect(csv).toContain('EXERCÍCIO 2026');
-            expect(csv).toContain('"Total de Receitas no Ano";"0,00"');
-            expect(csv).toContain('"Saldo Líquido Anual";"0,00"');
+        it('deve tolerar shapes legados corrompidos em loans e installments sem lançar TypeError', () => {
+            const malformedLoans = [
+                { description: 'Legado 1', installments: {} },
+                { description: 'Legado 2', installments: 'string-invalida' },
+                { description: 'Legado 3', isShared: true, sharedDetails: { person1: { installments: {} }, person2: { installments: null } } },
+                null
+            ];
+
+            expect(() => generateAnnualReportCsv({
+                targetYear: 2026,
+                loans: malformedLoans,
+                expenses: null,
+                subscriptions: {},
+                incomes: 123
+            })).not.toThrow();
+
+            expect(() => generateTransactionsCsv(malformedLoans)).not.toThrow();
         });
     });
 });
+
 

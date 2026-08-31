@@ -1,3 +1,5 @@
+import { asArray } from './financialService';
+
 // src/services/csvExportService.js
 
 /**
@@ -42,6 +44,7 @@ export function formatCsvCurrency(value) {
  * @returns {string} Conteúdo CSV com BOM UTF-8
  */
 export function generateTransactionsCsv(transactions = []) {
+    const safeTransactions = asArray(transactions);
     const headers = [
         'Tipo',
         'Data',
@@ -54,34 +57,32 @@ export function generateTransactionsCsv(transactions = []) {
         'Status'
     ];
 
-    const headerLine = headers.map(escapeCsvField).join(';');
-
-    const rows = transactions.map(t => {
-        const type = t.type || 'Movimentação';
-        const date = t.date || t.dueDate || '';
-        const description = t.description || t.name || '';
-        const category = t.category || '-';
-        const client = t.clientName || t.person || '-';
-        const card = t.cardName || t.paymentMethod || 'Dinheiro/Pix';
-        const installment = t.installment || (t.totalInstallments ? `${t.installmentNumber || 1}/${t.totalInstallments}` : '-');
-        const value = formatCsvCurrency(t.value !== undefined ? t.value : t.amount);
-        const status = t.status || 'Pendente';
+    const rows = safeTransactions.map(item => {
+        if (!item) return '';
+        const itemType = item.type || (item.installmentsCount ? 'Compra Parcelada' : (item.amount !== undefined ? 'Assinatura' : 'Despesa'));
+        const itemDate = item.dueDate || (item.date instanceof Date ? item.date.toISOString().slice(0, 10) : (item.date || ''));
+        const itemDesc = item.description || item.name || 'Sem Descrição';
+        const itemCat = item.category || 'Geral';
+        const itemPerson = item.personName || item.clientName || '-';
+        const itemPayment = item.cardName || 'Dinheiro/Pix';
+        const itemInstallment = item.currentInstallment ? `${item.currentInstallment}/${item.totalInstallments}` : '-';
+        const itemVal = item.value !== undefined ? item.value : (item.amount !== undefined ? item.amount : 0);
+        const itemStatus = item.currentStatus || item.status || 'Pendente';
 
         return [
-            escapeCsvField(type),
-            escapeCsvField(date),
-            escapeCsvField(description),
-            escapeCsvField(category),
-            escapeCsvField(client),
-            escapeCsvField(card),
-            escapeCsvField(installment),
-            escapeCsvField(value),
-            escapeCsvField(status)
+            escapeCsvField(itemType),
+            escapeCsvField(itemDate),
+            escapeCsvField(itemDesc),
+            escapeCsvField(itemCat),
+            escapeCsvField(itemPerson),
+            escapeCsvField(itemPayment),
+            escapeCsvField(itemInstallment),
+            escapeCsvField(formatCsvCurrency(itemVal)),
+            escapeCsvField(itemStatus)
         ].join(';');
     });
 
-    // UTF-8 BOM + Cabeçalho + Linhas
-    return '\uFEFF' + [headerLine, ...rows].join('\r\n');
+    return '\uFEFF' + [headers.map(escapeCsvField).join(';'), ...rows].join('\r\n');
 }
 
 /**
@@ -106,17 +107,17 @@ export function downloadCsvFile(csvContent, filename = 'fincontrol-extrato.csv')
 }
 
 /**
- * Gera um relatório CSV anual consolidado com resumo financeiro e detalhamento de todos os lançamentos do ano.
+ * Gera o relatório anual financeiro em CSV consolidando todas as receitas, despesas, parcelas e assinaturas.
  * 
  * @param {Object} params
- * @param {string|number} params.targetYear - Ano de referência (ex: '2026' ou 2026)
+ * @param {number|string} params.targetYear - Ano de competência (ex: 2026)
  * @param {Array<Object>} [params.loans=[]] - Compras parceladas
  * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
  * @param {Array<Object>} [params.subscriptions=[]] - Assinaturas
- * @param {Array<Object>} [params.incomes=[]] - Receitas cadastradas
- * @param {Array<Object>} [params.cards=[]] - Cartões cadastrados
+ * @param {Array<Object>} [params.incomes=[]] - Receitas
+ * @param {Array<Object>} [params.cards=[]] - Cartões de crédito
  * @param {Array<Object>} [params.clients=[]] - Pessoas cadastradas
- * @returns {string} Conteúdo CSV completo formatado no padrão brasileiro com UTF-8 BOM
+ * @returns {string} Conteúdo do arquivo CSV com BOM UTF-8
  */
 export function generateAnnualReportCsv({
     targetYear,
@@ -128,8 +129,15 @@ export function generateAnnualReportCsv({
     clients = []
 }) {
     const yearStr = String(targetYear || new Date().getFullYear());
-    const cardMap = new Map((cards || []).map(c => [c.id, c.name]));
-    const clientMap = new Map((clients || []).map(c => [c.id, c.name]));
+    const safeCards = asArray(cards);
+    const safeClients = asArray(clients);
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeIncomes = asArray(incomes);
+
+    const cardMap = new Map(safeCards.map(c => [c?.id, c?.name]));
+    const clientMap = new Map(safeClients.map(c => [c?.id, c?.name]));
 
     let totalIncomesCents = 0;
     let totalExpensesCents = 0;
@@ -139,7 +147,8 @@ export function generateAnnualReportCsv({
     const itemizedRows = [];
 
     // 1. Processar Receitas do Ano
-    incomes.forEach(inc => {
+    safeIncomes.forEach(inc => {
+        if (!inc) return;
         const dateStr = typeof inc.date === 'string' ? inc.date : (inc.date?.toDate ? inc.date.toDate().toISOString().slice(0, 10) : '');
         if (dateStr.startsWith(yearStr)) {
             const valCents = Math.round(Number(inc.value || 0) * 100);
@@ -160,7 +169,8 @@ export function generateAnnualReportCsv({
     });
 
     // 2. Processar Despesas Avulsas do Ano
-    expenses.forEach(exp => {
+    safeExpenses.forEach(exp => {
+        if (!exp) return;
         const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().slice(0, 10) : '');
         if (dateStr.startsWith(yearStr)) {
             const valCents = Math.round(Number(exp.value || 0) * 100);
@@ -180,13 +190,14 @@ export function generateAnnualReportCsv({
         }
     });
 
-    // 3. Processar Parcelas de Compras que vencem no Ano
-    loans.forEach(loan => {
+    // 3. Processar Parcelas de Compras no Ano
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+        const clientName = loan.clientId ? clientMap.get(loan.clientId) : 'Titular';
         const cardName = cardMap.get(loan.cardId) || 'Cartão';
-        const clientName = clientMap.get(loan.clientId) || '-';
 
         const processInst = (inst, pClientName) => {
-            if (!inst.dueDate || !inst.dueDate.startsWith(yearStr)) return;
+            if (!inst || !inst.dueDate || !inst.dueDate.startsWith(yearStr)) return;
             const valCents = Math.round(Number(inst.value || 0) * 100);
             totalCardInstallmentsCents += valCents;
             itemizedRows.push({
@@ -209,16 +220,16 @@ export function generateAnnualReportCsv({
             const p1Name = p1?.clientId ? clientMap.get(p1.clientId) : (p1?.name || '-');
             const p2Name = p2?.clientId ? clientMap.get(p2.clientId) : (p2?.name || '-');
 
-            (p1?.installments || []).forEach(inst => processInst(inst, p1Name));
-            (p2?.installments || []).forEach(inst => processInst(inst, p2Name));
+            asArray(p1?.installments).forEach(inst => processInst(inst, p1Name));
+            asArray(p2?.installments).forEach(inst => processInst(inst, p2Name));
         } else {
-            (loan.installments || []).forEach(inst => processInst(inst, clientName));
+            asArray(loan.installments).forEach(inst => processInst(inst, clientName));
         }
     });
 
     // 4. Processar Assinaturas do Ano (12 competências para assinaturas ativas)
-    subscriptions.forEach(sub => {
-        if (sub.isActive === false || sub.status === 'Inativa') return;
+    safeSubs.forEach(sub => {
+        if (!sub || sub.isActive === false || sub.status === 'Inativa') return;
         const subVal = Number(sub.amount !== undefined ? sub.amount : (sub.value || 0));
         const subValCents = Math.round(subVal * 100);
         const cardName = cardMap.get(sub.cardId) || 'Cartão';

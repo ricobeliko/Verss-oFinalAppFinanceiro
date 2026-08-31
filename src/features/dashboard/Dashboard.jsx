@@ -429,11 +429,19 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
             };
 
-            loans.forEach(loan => {
+            const safeLoans = Array.isArray(loans) ? loans : [];
+            const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
+            const safeExpenses = Array.isArray(expenses) ? expenses : [];
+            const safeCards = Array.isArray(cards) ? cards : [];
+            const safeClients = Array.isArray(clients) ? clients : [];
+            const safePaidSubscriptions = Array.isArray(paidSubscriptions) ? paidSubscriptions : [];
+
+            safeLoans.forEach(loan => {
                 if (!loan || typeof loan.totalValue !== 'number') return;
                 const processInstallments = (installments, personDetails) => {
                     if (Array.isArray(installments)) {
                         installments.forEach(inst => {
+                            if (!inst) return;
                             const instDate = new Date(inst.dueDate + "T00:00:00Z");
                             if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
                                 (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
@@ -467,9 +475,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             });
 
             const addedSubKeys = new Set();
-            subscriptions.forEach(sub => {
+            safeSubscriptions.forEach(sub => {
+                if (!sub) return;
                 if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
-                    const card = cards.find(c => c.id === sub.cardId);
+                    const card = safeCards.find(c => c && c.id === sub.cardId);
                     if (!card) return;
 
                     [-1, 0].forEach(monthOffset => {
@@ -479,7 +488,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
                             const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
                             if (!addedSubKeys.has(uniqueKey)) {
-                                const isPaid = paidSubscriptions.some(ps => ps.subscriptionId === sub.id && ps.month === selectedMonth);
+                                const isPaid = safePaidSubscriptions.some(ps => ps && ps.subscriptionId === sub.id && ps.month === selectedMonth);
                                 allItems.push({ 
                                     ...sub, 
                                     type: 'Assinatura', 
@@ -497,7 +506,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             });
             
-            expenses.forEach(expense => {
+            safeExpenses.forEach(expense => {
+                if (!expense) return;
                 const expenseDate = expense.date;
                 if (!(expenseDate instanceof Date) || isNaN(expenseDate)) return;
 
@@ -505,7 +515,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
                     (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
                 ) {
-                    const card = expense.cardId ? cards.find(c => c.id === expense.cardId) : null;
+                    const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
                     const relevantDate = card ? getInvoiceDueDate(expenseDate, card) : expenseDate;
                     
                     if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
@@ -525,12 +535,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 let bValue = b[sortConfig.key] || '';
 
                 if (sortConfig.key === 'clientId') {
-                    aValue = clients.find(c => c.id === a.clientId)?.name || '';
-                    bValue = clients.find(c => c.id === b.clientId)?.name || '';
+                    aValue = safeClients.find(c => c && c.id === a.clientId)?.name || '';
+                    bValue = safeClients.find(c => c && c.id === b.clientId)?.name || '';
                 }
                 if (sortConfig.key === 'cardId') {
-                    aValue = cards.find(c => c.id === a.cardId)?.name || '';
-                    bValue = cards.find(c => c.id === b.cardId)?.name || '';
+                    aValue = safeCards.find(c => c && c.id === a.cardId)?.name || '';
+                    bValue = safeCards.find(c => c && c.id === b.cardId)?.name || '';
                 }
 
                 if (sortConfig.key === 'dueDate') {
@@ -565,7 +575,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     // Análise de Inteligência (Auditoria Relâmpago & Metas de Quitação)
     const intelligenceData = useMemo(() => {
         let upcomingFinishes = [];
-        loans.forEach(loan => {
+        const safeLoans = Array.isArray(loans) ? loans : [];
+        const safeSubs = Array.isArray(subscriptions) ? subscriptions : [];
+
+        safeLoans.forEach(loan => {
+            if (!loan) return;
             const isFullyPaid = loan.isShared 
                 ? (loan.sharedDetails?.person1?.statusPayment === 'Pago Total' && loan.sharedDetails?.person2?.statusPayment === 'Pago Total')
                 : (loan.statusPaymentClient === 'Pago Total');
@@ -573,27 +587,29 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             if (!isFullyPaid) {
                 let allInsts = [];
                 if (loan.isShared) {
-                    if (loan.sharedDetails?.person1?.installments) allInsts.push(...loan.sharedDetails.person1.installments);
-                    if (loan.sharedDetails?.person2?.installments) allInsts.push(...loan.sharedDetails.person2.installments);
+                    if (Array.isArray(loan.sharedDetails?.person1?.installments)) allInsts.push(...loan.sharedDetails.person1.installments);
+                    if (Array.isArray(loan.sharedDetails?.person2?.installments)) allInsts.push(...loan.sharedDetails.person2.installments);
                 } else if (Array.isArray(loan.installments)) {
                     allInsts.push(...loan.installments);
                 }
 
-                const pendingInsts = allInsts.filter(i => i.status !== 'Paga');
+                const pendingInsts = allInsts.filter(i => i && i.status !== 'Paga');
                 if (pendingInsts.length > 0) {
                     pendingInsts.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
                     const lastInst = pendingInsts[pendingInsts.length - 1];
-                    upcomingFinishes.push({
-                        description: loan.description || 'Compra',
-                        remaining: pendingInsts.length,
-                        finalDate: lastInst.dueDate
-                    });
+                    if (lastInst) {
+                        upcomingFinishes.push({
+                            description: loan.description || 'Compra',
+                            remaining: pendingInsts.length,
+                            finalDate: lastInst.dueDate
+                        });
+                    }
                 }
             }
         });
 
-        const activeSubscriptionsTotal = subscriptions
-            .filter(s => s.isActive)
+        const activeSubscriptionsTotal = safeSubs
+            .filter(s => s && s.isActive)
             .reduce((acc, s) => acc + (s.amount !== undefined ? s.amount : (s.value || 0)), 0);
 
         return {
@@ -724,7 +740,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             if (loanData.isShared && loanData.sharedDetails) {
                 ['person1', 'person2'].forEach(pKey => {
                     if (loanData.sharedDetails[pKey]) {
-                        const insts = loanData.sharedDetails[pKey].installments || [];
+                        const insts = Array.isArray(loanData.sharedDetails[pKey].installments) ? loanData.sharedDetails[pKey].installments : [];
                         const origAmount = loanData.sharedDetails[pKey].shareAmount || 0;
                         const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
                         const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));
@@ -737,7 +753,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     }
                 });
             } else if (!loanData.isShared) {
-                const insts = loanData.installments || [];
+                const insts = Array.isArray(loanData.installments) ? loanData.installments : [];
                 const origAmount = loanData.totalValue || 0;
                 const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
                 const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));

@@ -121,6 +121,17 @@ export function calculateInstallments({ totalValue, count, startDate }) {
 }
 
 /**
+ * Retorna o valor fornecido se for um Array legítimo; caso contrário, retorna array vazio [].
+ * Proteção determinística e fail-safe contra shapes legados inválidos ({}, string, number, null).
+ * NUNCA converte objetos com Object.values ou Array.from para evitar distorção financeira de dados legados.
+ * 
+ * @template T
+ * @param {T} value
+ * @returns {Array}
+ */
+export const asArray = (value) => (Array.isArray(value) ? value : []);
+
+/**
  * Calcula o saldo devedor remanescente de uma compra ou cliente.
  * @param {number|string} totalValue - Valor total
  * @param {number|string} valuePaid - Valor já pago
@@ -159,9 +170,13 @@ export function calculatePaymentStatus(totalValue, valuePaid) {
  * @returns {{ totalIncomes: number, totalExpenses: number, totalCardDebt: number, netBalance: number }}
  */
 export function calculateNetBalance(incomes = [], expenses = [], cardInstallments = []) {
-    const incomesCents = incomes.reduce((acc, item) => acc + toCents(item.value || 0), 0);
-    const expensesCents = expenses.reduce((acc, item) => acc + toCents(item.value || 0), 0);
-    const cardDebtCents = cardInstallments.reduce((acc, item) => acc + toCents(item.value || 0), 0);
+    const safeIncomes = asArray(incomes);
+    const safeExpenses = asArray(expenses);
+    const safeCardInstallments = asArray(cardInstallments);
+
+    const incomesCents = safeIncomes.reduce((acc, item) => acc + toCents(item?.value || 0), 0);
+    const expensesCents = safeExpenses.reduce((acc, item) => acc + toCents(item?.value || 0), 0);
+    const cardDebtCents = safeCardInstallments.reduce((acc, item) => acc + toCents(item?.value || 0), 0);
 
     const totalOutflowCents = expensesCents + cardDebtCents;
     const netBalanceCents = incomesCents - totalOutflowCents;
@@ -183,11 +198,16 @@ export function calculateNetBalance(incomes = [], expenses = [], cardInstallment
  * @returns {{ totalOwed: number, totalPaid: number, remainingBalance: number }}
  */
 export function calculateClientDebt(clientLoans = [], clientExpenses = [], clientSubscriptions = []) {
+    const safeLoans = asArray(clientLoans);
+    const safeExpenses = asArray(clientExpenses);
+    const safeSubs = asArray(clientSubscriptions);
+
     let totalOwedCents = 0;
     let totalPaidCents = 0;
 
     // Processa compras/parcelas
-    clientLoans.forEach(loan => {
+    safeLoans.forEach(loan => {
+        if (!loan) return;
         const val = toCents(loan.totalValue || loan.value || 0);
         const paid = toCents(loan.paidValue || (loan.status === 'Pago' ? (loan.totalValue || loan.value || 0) : 0));
         totalOwedCents += val;
@@ -195,7 +215,8 @@ export function calculateClientDebt(clientLoans = [], clientExpenses = [], clien
     });
 
     // Processa despesas avulsas vinculadas
-    clientExpenses.forEach(exp => {
+    safeExpenses.forEach(exp => {
+        if (!exp) return;
         const val = toCents(exp.value || 0);
         const paid = toCents(exp.paidValue || (exp.status === 'Pago' ? exp.value : 0));
         totalOwedCents += val;
@@ -203,7 +224,8 @@ export function calculateClientDebt(clientLoans = [], clientExpenses = [], clien
     });
 
     // Processa assinaturas vinculadas
-    clientSubscriptions.forEach(sub => {
+    safeSubs.forEach(sub => {
+        if (!sub) return;
         const val = toCents(sub.value || 0);
         const paid = toCents(sub.status === 'Pago' ? sub.value : 0);
         totalOwedCents += val;
@@ -230,13 +252,15 @@ export function calculateClientDebt(clientLoans = [], clientExpenses = [], clien
 export function calculateCardInvoiceTotal(loans = [], targetMonth, cardId = null) {
     if (!targetMonth) return 0;
     let totalInvoiceCents = 0;
+    const safeLoans = asArray(loans);
 
-    loans.forEach(loan => {
-        if (cardId && loan.cardId !== cardId) return;
+    safeLoans.forEach(loan => {
+        if (!loan || (cardId && loan.cardId !== cardId)) return;
 
-        if (Array.isArray(loan.installments) && loan.installments.length > 0) {
-            loan.installments.forEach(inst => {
-                if (inst.dueDate && inst.dueDate.startsWith(targetMonth)) {
+        const insts = asArray(loan.installments);
+        if (insts.length > 0) {
+            insts.forEach(inst => {
+                if (inst?.dueDate && inst.dueDate.startsWith(targetMonth)) {
                     totalInvoiceCents += toCents(inst.value || 0);
                 }
             });
@@ -256,8 +280,10 @@ export function calculateCardInvoiceTotal(loans = [], targetMonth, cardId = null
  */
 export function aggregateByCategory(items = []) {
     const categoryMap = {};
+    const safeItems = asArray(items);
 
-    items.forEach(item => {
+    safeItems.forEach(item => {
+        if (!item) return;
         const cat = (item.category && String(item.category).trim()) || 'Outros';
         const cents = toCents(item.value || 0);
         categoryMap[cat] = (categoryMap[cat] || 0) + cents;
@@ -290,8 +316,11 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
     const [startYearNum, startMonthNum] = startMonth.split('-').map(Number);
     if (isNaN(startYearNum) || isNaN(startMonthNum)) return [];
 
-    const activeSubsCents = (subscriptions || [])
-        .filter(s => s.isActive !== false && s.status !== 'Inativa')
+    const safeLoans = asArray(loans);
+    const safeSubs = asArray(subscriptions);
+
+    const activeSubsCents = safeSubs
+        .filter(s => s && s.isActive !== false && s.status !== 'Inativa')
         .reduce((sum, s) => sum + toCents(s.amount !== undefined ? s.amount : (s.value || 0)), 0);
 
     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -308,16 +337,18 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
         let endingLoansCount = 0;
         let reliefCents = 0;
 
-        loans.forEach(loan => {
+        safeLoans.forEach(loan => {
+            if (!loan) return;
             const processInstallmentList = (instList, isSharedPortion = false) => {
-                if (!Array.isArray(instList) || instList.length === 0) return;
+                const safeInstList = asArray(instList);
+                if (safeInstList.length === 0) return;
                 
-                const instThisMonth = instList.find(inst => inst.dueDate && inst.dueDate.startsWith(targetMonthString));
+                const instThisMonth = safeInstList.find(inst => inst?.dueDate && inst.dueDate.startsWith(targetMonthString));
                 if (instThisMonth) {
                     installmentsCents += toCents(instThisMonth.value || 0);
 
-                    const lastInst = instList[instList.length - 1];
-                    if (lastInst.dueDate && lastInst.dueDate.startsWith(targetMonthString)) {
+                    const lastInst = safeInstList[safeInstList.length - 1];
+                    if (lastInst?.dueDate && lastInst.dueDate.startsWith(targetMonthString)) {
                         if (!isSharedPortion) {
                             endingLoansCount += 1;
                             reliefCents += toCents(instThisMonth.value || 0);
@@ -330,10 +361,10 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
                 if (loan.sharedDetails.person1) processInstallmentList(loan.sharedDetails.person1.installments, true);
                 if (loan.sharedDetails.person2) processInstallmentList(loan.sharedDetails.person2.installments, true);
                 
-                const allInsts = loan.installments || [];
+                const allInsts = asArray(loan.installments);
                 if (allInsts.length > 0) {
                     const lastInst = allInsts[allInsts.length - 1];
-                    if (lastInst.dueDate && lastInst.dueDate.startsWith(targetMonthString)) {
+                    if (lastInst?.dueDate && lastInst.dueDate.startsWith(targetMonthString)) {
                         endingLoansCount += 1;
                         reliefCents += toCents(lastInst.value || 0);
                     }
@@ -370,7 +401,8 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
  * @returns {{ totalLoansEnding: number, totalMonthlyRelief: number, timeline: Array<{ month: string, label: string, relief: number, endingCount: number }> }}
  */
 export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCount = 4 }) {
-    const commitments = calculateFutureCommitments({ loans, subscriptions: [], startMonth, monthsCount });
+    const safeLoans = asArray(loans);
+    const commitments = calculateFutureCommitments({ loans: safeLoans, subscriptions: [], startMonth, monthsCount });
     
     let totalLoansEnding = 0;
     let totalMonthlyReliefCents = 0;
@@ -441,26 +473,34 @@ export function calculateConsolidatedClientReceivables({
         };
     }
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeClients = asArray(clients);
+
     let grandTotalReceivableCents = 0;
     let grandTotalPaidCents = 0;
     let grandTotalFutureCents = 0;
 
-    const byClient = clients.map(client => {
+    const byClient = safeClients.map(client => {
+        if (!client) return { clientId: '', clientName: '', receivableThisMonth: 0, paidThisMonth: 0, pendingThisMonth: 0, totalFutureRemaining: 0, hasPending: false };
         let clientReceivableCents = 0;
         let clientPaidCents = 0;
         let clientFutureRemainingCents = 0;
 
         // 1. Processar compras (individuais e compartilhadas)
-        loans.forEach(loan => {
+        safeLoans.forEach(loan => {
+            if (!loan) return;
             if (loan.isShared && loan.sharedDetails) {
                 const isPerson1 = loan.sharedDetails.person1?.clientId === client.id;
                 const isPerson2 = loan.sharedDetails.person2?.clientId === client.id;
 
                 if (isPerson1 || isPerson2) {
                     const personDetails = isPerson1 ? loan.sharedDetails.person1 : loan.sharedDetails.person2;
-                    const instList = personDetails.installments || [];
+                    const instList = asArray(personDetails?.installments);
 
                     instList.forEach(inst => {
+                        if (!inst) return;
                         const isThisMonth = inst.dueDate && inst.dueDate.startsWith(targetMonth);
                         const instValCents = toCents(inst.value || 0);
 
@@ -477,9 +517,10 @@ export function calculateConsolidatedClientReceivables({
                     });
                 }
             } else if (loan.clientId === client.id) {
-                const instList = loan.installments || [];
+                const instList = asArray(loan.installments);
                 if (instList.length > 0) {
                     instList.forEach(inst => {
+                        if (!inst) return;
                         const isThisMonth = inst.dueDate && inst.dueDate.startsWith(targetMonth);
                         const instValCents = toCents(inst.value || 0);
 
@@ -505,8 +546,8 @@ export function calculateConsolidatedClientReceivables({
         });
 
         // 2. Processar despesas avulsas vinculadas
-        expenses.forEach(exp => {
-            if (exp.clientId === client.id) {
+        safeExpenses.forEach(exp => {
+            if (exp && exp.clientId === client.id) {
                 const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
                 if (dateStr.startsWith(targetMonth)) {
                     const valCents = toCents(exp.value || 0);
@@ -519,8 +560,8 @@ export function calculateConsolidatedClientReceivables({
         });
 
         // 3. Processar assinaturas vinculadas
-        subscriptions.forEach(sub => {
-            if (sub.clientId === client.id && sub.isActive !== false && sub.status !== 'Inativa') {
+        safeSubs.forEach(sub => {
+            if (sub && sub.clientId === client.id && sub.isActive !== false && sub.status !== 'Inativa') {
                 const valCents = toCents(sub.amount !== undefined ? sub.amount : (sub.value || 0));
                 clientReceivableCents += valCents;
                 if (sub.status === 'Pago' || sub.status === 'Paga') {
@@ -645,28 +686,36 @@ export function calculateMonthlyComparisonSummary({
         };
     }
 
-    const curInvoice = calculateCardInvoiceTotal(loans, selectedMonth);
-    const prevInvoice = calculateCardInvoiceTotal(loans, prevMonth);
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeIncomes = asArray(incomes);
+
+    const curInvoice = calculateCardInvoiceTotal(safeLoans, selectedMonth);
+    const prevInvoice = calculateCardInvoiceTotal(safeLoans, prevMonth);
     const invoiceDelta = calculateMonthOverMonthDelta(curInvoice, prevInvoice);
 
-    const curExpensesCents = (expenses || []).filter(exp => {
+    const curExpensesCents = safeExpenses.filter(exp => {
+        if (!exp) return false;
         const dStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(selectedMonth);
     }).reduce((sum, exp) => sum + toCents(exp.value || 0), 0);
 
-    const prevExpensesCents = (expenses || []).filter(exp => {
+    const prevExpensesCents = safeExpenses.filter(exp => {
+        if (!exp) return false;
         const dStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(prevMonth);
     }).reduce((sum, exp) => sum + toCents(exp.value || 0), 0);
 
     const expensesDelta = calculateMonthOverMonthDelta(fromCents(curExpensesCents), fromCents(prevExpensesCents));
 
-    const curIncomesCents = (incomes || []).filter(inc => {
+    const curIncomesCents = safeIncomes.filter(inc => {
+        if (!inc) return false;
         const dStr = typeof inc.date === 'string' ? inc.date : (inc.date?.toDate ? inc.date.toDate().toISOString().substring(0, 10) : (inc.date instanceof Date ? inc.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(selectedMonth);
     }).reduce((sum, inc) => sum + toCents(inc.value || 0), 0);
 
-    const prevIncomesCents = (incomes || []).filter(inc => {
+    const prevIncomesCents = safeIncomes.filter(inc => {
+        if (!inc) return false;
         const dStr = typeof inc.date === 'string' ? inc.date : (inc.date?.toDate ? inc.date.toDate().toISOString().substring(0, 10) : (inc.date instanceof Date ? inc.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(prevMonth);
     }).reduce((sum, inc) => sum + toCents(inc.value || 0), 0);
@@ -710,10 +759,16 @@ export function generateDeterministicFinancialInsights({
 }) {
     if (!selectedMonth) return [];
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeIncomes = asArray(incomes);
+    const safeClients = asArray(clients);
+
     const candidates = [];
 
     // 1. Regra de Descompressão (Alívio de Parcelas)
-    const relief = calculateDebtReliefTimeline({ loans, startMonth: selectedMonth, monthsCount: 3 });
+    const relief = calculateDebtReliefTimeline({ loans: safeLoans, startMonth: selectedMonth, monthsCount: 3 });
     if (relief.totalLoansEnding > 0 && relief.totalMonthlyRelief > 0) {
         const countText = relief.totalLoansEnding === 1 ? '1 compra chega' : `${relief.totalLoansEnding} compras chegam`;
         candidates.push({
@@ -729,10 +784,10 @@ export function generateDeterministicFinancialInsights({
 
     // 2. Regra de Repasses de Terceiros
     const receivables = calculateConsolidatedClientReceivables({
-        loans,
-        expenses,
-        subscriptions,
-        clients,
+        loans: safeLoans,
+        expenses: safeExpenses,
+        subscriptions: safeSubs,
+        clients: safeClients,
         targetMonth: selectedMonth
     });
     if (receivables.totalReceivableThisMonth > 0) {
@@ -748,12 +803,13 @@ export function generateDeterministicFinancialInsights({
     }
 
     // 3. Regra de Comprometimento de Renda
-    const curIncomesCents = (incomes || []).filter(inc => {
+    const curIncomesCents = safeIncomes.filter(inc => {
+        if (!inc) return false;
         const dStr = typeof inc.date === 'string' ? inc.date : (inc.date?.toDate ? inc.date.toDate().toISOString().substring(0, 10) : (inc.date instanceof Date ? inc.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(selectedMonth);
     }).reduce((sum, inc) => sum + toCents(inc.value || 0), 0);
 
-    const invoiceTotal = calculateCardInvoiceTotal(loans, selectedMonth);
+    const invoiceTotal = calculateCardInvoiceTotal(safeLoans, selectedMonth);
     const invoiceCents = toCents(invoiceTotal);
 
     if (curIncomesCents > 0 && invoiceCents > 0) {
@@ -772,7 +828,7 @@ export function generateDeterministicFinancialInsights({
     }
 
     // 4. Regra de Variação Mensal de Fatura
-    const monthlySummary = calculateMonthlyComparisonSummary({ selectedMonth, loans, expenses, incomes });
+    const monthlySummary = calculateMonthlyComparisonSummary({ selectedMonth, loans: safeLoans, expenses: safeExpenses, incomes: safeIncomes });
     if (monthlySummary.previousInvoiceTotal > 0 && Math.abs(monthlySummary.invoiceDelta.percentage) >= 15) {
         const isIncrease = monthlySummary.invoiceDelta.direction === 'up';
         candidates.push({
@@ -787,7 +843,8 @@ export function generateDeterministicFinancialInsights({
     }
 
     // 5. Regra de Concentração de Gastos por Categoria
-    const monthExpenses = (expenses || []).filter(exp => {
+    const monthExpenses = safeExpenses.filter(exp => {
+        if (!exp) return false;
         const dStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(selectedMonth);
     });
@@ -853,43 +910,48 @@ export function calculateCardLimitIntelligence({ card, loans = [], expenses = []
         };
     }
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
     const cardId = card.id;
     const limitCents = toCents(card.limit || 0);
 
     let committedCents = 0;
 
     // 1. Processar compras vinculadas ao cartão
-    loans.forEach(loan => {
-        if (loan.cardId !== cardId) return;
+    safeLoans.forEach(loan => {
+        if (!loan || loan.cardId !== cardId) return;
 
         if (loan.isShared && loan.sharedDetails) {
-            const p1Insts = loan.sharedDetails.person1?.installments || [];
-            const p2Insts = loan.sharedDetails.person2?.installments || [];
+            const p1Insts = asArray(loan.sharedDetails.person1?.installments);
+            const p2Insts = asArray(loan.sharedDetails.person2?.installments);
 
             p1Insts.forEach(inst => {
-                if (inst.status !== 'Pago' && inst.status !== 'Paga') {
+                if (inst && inst.status !== 'Pago' && inst.status !== 'Paga') {
                     committedCents += toCents(inst.value || 0);
                 }
             });
             p2Insts.forEach(inst => {
-                if (inst.status !== 'Pago' && inst.status !== 'Paga') {
+                if (inst && inst.status !== 'Pago' && inst.status !== 'Paga') {
                     committedCents += toCents(inst.value || 0);
                 }
             });
-        } else if (Array.isArray(loan.installments) && loan.installments.length > 0) {
-            loan.installments.forEach(inst => {
-                if (inst.status !== 'Pago' && inst.status !== 'Paga') {
-                    committedCents += toCents(inst.value || 0);
-                }
-            });
-        } else if (loan.status !== 'Pago' && loan.status !== 'Paga') {
-            committedCents += toCents(loan.balanceDueClient !== undefined ? loan.balanceDueClient : (loan.totalValue || loan.value || 0));
+        } else {
+            const insts = asArray(loan.installments);
+            if (insts.length > 0) {
+                insts.forEach(inst => {
+                    if (inst && inst.status !== 'Pago' && inst.status !== 'Paga') {
+                        committedCents += toCents(inst.value || 0);
+                    }
+                });
+            } else if (loan.status !== 'Pago' && loan.status !== 'Paga') {
+                committedCents += toCents(loan.balanceDueClient !== undefined ? loan.balanceDueClient : (loan.totalValue || loan.value || 0));
+            }
         }
     });
 
     // 2. Processar despesas avulsas pendentes do cartão
-    expenses.forEach(exp => {
-        if (exp.cardId === cardId && exp.status !== 'Pago' && exp.status !== 'Paga') {
+    safeExpenses.forEach(exp => {
+        if (exp && exp.cardId === cardId && exp.status !== 'Pago' && exp.status !== 'Paga') {
             committedCents += toCents(exp.value || 0);
         }
     });
@@ -947,6 +1009,12 @@ export function generateFinancialAlerts({
 }) {
     if (!selectedMonth || typeof selectedMonth !== 'string') return [];
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeCards = asArray(cards);
+    const safeClients = asArray(clients);
+
     const settings = {
         cardDueEnabled: notificationSettings.cardDueEnabled !== false,
         cardDueDays: Number(notificationSettings.cardDueDays) || 3,
@@ -965,14 +1033,15 @@ export function generateFinancialAlerts({
 
     // 1. Alerta de Vencimento de Fatura
     if (settings.cardDueEnabled && selYear === nowYear && selMonth === nowMonth) {
-        cards.forEach(card => {
-            const cardInvoiceTotal = calculateCardInvoiceTotal(loans, selectedMonth, card.id);
+        safeCards.forEach(card => {
+            if (!card) return;
+            const cardInvoiceTotal = calculateCardInvoiceTotal(safeLoans, selectedMonth, card.id);
             if (cardInvoiceTotal <= 0) return;
 
             let hasPending = false;
-            loans.filter(l => l.cardId === card.id).forEach(loan => {
-                (loan.installments || []).forEach(inst => {
-                    if (inst.dueDate && inst.dueDate.startsWith(selectedMonth)) {
+            safeLoans.filter(l => l && l.cardId === card.id).forEach(loan => {
+                asArray(loan.installments).forEach(inst => {
+                    if (inst && inst.dueDate && inst.dueDate.startsWith(selectedMonth)) {
                         if (inst.status !== 'Pago' && inst.status !== 'Paga') {
                             hasPending = true;
                         }
@@ -1002,10 +1071,10 @@ export function generateFinancialAlerts({
     // 2. Alerta de Repasse Pendente de Terceiros
     if (settings.receivablesEnabled) {
         const receivables = calculateConsolidatedClientReceivables({
-            loans,
-            expenses,
-            subscriptions,
-            clients,
+            loans: safeLoans,
+            expenses: safeExpenses,
+            subscriptions: safeSubs,
+            clients: safeClients,
             targetMonth: selectedMonth
         });
 
@@ -1024,8 +1093,9 @@ export function generateFinancialAlerts({
 
     // 3. Alerta de Limite Alto no App (>= threshold % do limite cadastrado)
     if (settings.highLimitEnabled) {
-        cards.forEach(card => {
-            const limitInfo = calculateCardLimitIntelligence({ card, loans, expenses });
+        safeCards.forEach(card => {
+            if (!card) return;
+            const limitInfo = calculateCardLimitIntelligence({ card, loans: safeLoans, expenses: safeExpenses });
             if (limitInfo.utilizationPercentage >= settings.highLimitThreshold) {
                 candidates.push({
                     id: `alert-high-limit-${card.id}`,
@@ -1041,7 +1111,7 @@ export function generateFinancialAlerts({
 
     // 4. Alerta de Assinatura Próxima (<= 2 dias)
     if (settings.subscriptionsEnabled && selYear === nowYear && selMonth === nowMonth) {
-        subscriptions.filter(s => s.isActive !== false && s.status !== 'Inativa').forEach(sub => {
+        safeSubs.filter(s => s && s.isActive !== false && s.status !== 'Inativa').forEach(sub => {
             const subDay = Number(sub.dueDate || sub.dia);
             if (!isNaN(subDay)) {
                 const daysUntilSub = subDay - nowDay;
@@ -1063,7 +1133,7 @@ export function generateFinancialAlerts({
 
     // 5. Alerta de Anomalia de Gastos
     if (settings.anomaliesEnabled) {
-        const anomalies = detectExpenseAnomalies({ selectedMonth, expenses, loans });
+        const anomalies = detectExpenseAnomalies({ selectedMonth, expenses: safeExpenses, loans: safeLoans });
         anomalies.forEach((anomaly, index) => {
             candidates.push({
                 id: `alert-anomaly-${index}`,
@@ -1077,7 +1147,7 @@ export function generateFinancialAlerts({
     }
 
     // 6. Alerta de Última Parcela no Mês
-    const relief = calculateDebtReliefTimeline({ loans, startMonth: selectedMonth, monthsCount: 1 });
+    const relief = calculateDebtReliefTimeline({ loans: safeLoans, startMonth: selectedMonth, monthsCount: 1 });
     if (relief.totalLoansEnding > 0) {
         candidates.push({
             id: 'alert-final-installment',
@@ -1117,6 +1187,9 @@ export function detectExpenseAnomalies({
 } = {}) {
     if (!selectedMonth || typeof selectedMonth !== 'string') return [];
 
+    const safeExpenses = asArray(expenses);
+    const safeLoans = asArray(loans);
+
     // Obter os meses históricos anteriores (ex: se M = 2026-08 -> 2026-07, 2026-06, 2026-05)
     const prevMonths = [];
     let cur = selectedMonth;
@@ -1132,7 +1205,8 @@ export function detectExpenseAnomalies({
         const catMap = {};
 
         // Despesas avulsas
-        expenses.forEach(exp => {
+        safeExpenses.forEach(exp => {
+            if (!exp) return;
             const d = exp.date || exp.data;
             const dStr = typeof d === 'string' ? d : (d?.toDate ? d.toDate().toISOString().slice(0, 10) : (d instanceof Date ? d.toISOString().slice(0, 10) : ''));
             if (dStr.startsWith(monthStr)) {
@@ -1143,10 +1217,11 @@ export function detectExpenseAnomalies({
         });
 
         // Parcelas de cartão
-        loans.forEach(loan => {
+        safeLoans.forEach(loan => {
+            if (!loan) return;
             const cat = (loan.category && String(loan.category).trim()) || 'Compras Parceladas';
-            (loan.installments || []).forEach(inst => {
-                if (inst.dueDate && inst.dueDate.startsWith(monthStr)) {
+            asArray(loan.installments).forEach(inst => {
+                if (inst && inst.dueDate && inst.dueDate.startsWith(monthStr)) {
                     const valCents = toCents(inst.value || 0);
                     catMap[cat] = (catMap[cat] || 0) + valCents;
                 }
@@ -1215,6 +1290,11 @@ export function generateWeeklyFinancialSummary({
     const [tY, tM, tD] = today.split('-').map(Number);
     const refDate = new Date(Date.UTC(tY, tM - 1, tD));
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeIncomes = asArray(incomes);
+
     // Janela de 7 dias passados (D-6 a D)
     const pastStart = new Date(refDate);
     pastStart.setUTCDate(pastStart.getUTCDate() - 6);
@@ -1231,7 +1311,8 @@ export function generateWeeklyFinancialSummary({
     let upcomingSubscriptionsCents = 0;
 
     // 1. Receitas nos últimos 7 dias
-    incomes.forEach(inc => {
+    safeIncomes.forEach(inc => {
+        if (!inc) return;
         const d = inc.date || inc.data;
         if (d && d >= pastStartStr && d <= today) {
             pastIncomesCents += toCents(inc.value || inc.amount || 0);
@@ -1239,7 +1320,8 @@ export function generateWeeklyFinancialSummary({
     });
 
     // 2. Despesas avulsas nos últimos 7 dias
-    expenses.forEach(exp => {
+    safeExpenses.forEach(exp => {
+        if (!exp) return;
         const d = exp.date || exp.data;
         if (d && d >= pastStartStr && d <= today) {
             pastExpensesCents += toCents(exp.value || exp.amount || 0);
@@ -1247,7 +1329,8 @@ export function generateWeeklyFinancialSummary({
     });
 
     // 3. Parcelas de cartão nos próximos 7 dias
-    loans.forEach(loan => {
+    safeLoans.forEach(loan => {
+        if (!loan) return;
         const processInst = (inst) => {
             if (inst && inst.dueDate && inst.dueDate >= today && inst.dueDate <= futureEndStr) {
                 if (inst.status !== 'Pago' && inst.status !== 'Paga') {
@@ -1257,17 +1340,17 @@ export function generateWeeklyFinancialSummary({
         };
 
         if (loan.isShared && loan.sharedDetails) {
-            if (loan.sharedDetails.person1) (loan.sharedDetails.person1.installments || []).forEach(processInst);
-            if (loan.sharedDetails.person2) (loan.sharedDetails.person2.installments || []).forEach(processInst);
+            if (loan.sharedDetails.person1) asArray(loan.sharedDetails.person1.installments).forEach(processInst);
+            if (loan.sharedDetails.person2) asArray(loan.sharedDetails.person2.installments).forEach(processInst);
         } else {
-            (loan.installments || []).forEach(processInst);
+            asArray(loan.installments).forEach(processInst);
         }
     });
 
     // 4. Assinaturas nos próximos 7 dias
     const currentMonthPrefix = today.slice(0, 7);
-    subscriptions.forEach(sub => {
-        if (sub.isActive === false || sub.status === 'Inativa') return;
+    safeSubs.forEach(sub => {
+        if (!sub || sub.isActive === false || sub.status === 'Inativa') return;
         const subDay = parseInt(sub.dueDate || sub.dia || 1, 10);
         const subDateStr = `${currentMonthPrefix}-${String(subDay).padStart(2, '0')}`;
 
@@ -1280,7 +1363,7 @@ export function generateWeeklyFinancialSummary({
     const pastNetCents = pastIncomesCents - pastExpensesCents;
     const upcomingCommitmentsCents = upcomingInstallmentsCents + upcomingSubscriptionsCents;
 
-    const relief = calculateDebtReliefTimeline({ loans, startMonth: currentMonthPrefix, monthsCount: 1 });
+    const relief = calculateDebtReliefTimeline({ loans: safeLoans, startMonth: currentMonthPrefix, monthsCount: 1 });
 
     return {
         window: {
@@ -1321,22 +1404,30 @@ export function generateMonthlyFinancialSummary({
 }) {
     const monthStr = selectedMonth || new Date().toISOString().slice(0, 7);
 
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const safeIncomes = asArray(incomes);
+    const safeClients = asArray(clients);
+
     // Comparativo Mensal vs Mês Anterior
     const comparison = calculateMonthlyComparisonSummary({
         selectedMonth: monthStr,
-        loans,
-        expenses,
-        incomes
+        loans: safeLoans,
+        expenses: safeExpenses,
+        incomes: safeIncomes
     });
 
-    const curInvoice = calculateCardInvoiceTotal(loans, monthStr);
-    const curExpensesCents = (expenses || []).filter(exp => {
+    const curInvoice = calculateCardInvoiceTotal(safeLoans, monthStr);
+    const curExpensesCents = safeExpenses.filter(exp => {
+        if (!exp) return false;
         const dStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(monthStr);
     }).reduce((sum, exp) => sum + toCents(exp.value || 0), 0);
     const curExpenses = fromCents(curExpensesCents);
 
-    const curIncomesCents = (incomes || []).filter(inc => {
+    const curIncomesCents = safeIncomes.filter(inc => {
+        if (!inc) return false;
         const dStr = typeof inc.date === 'string' ? inc.date : (inc.date?.toDate ? inc.date.toDate().toISOString().substring(0, 10) : (inc.date instanceof Date ? inc.date.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(monthStr);
     }).reduce((sum, inc) => sum + toCents(inc.value || 0), 0);
@@ -1344,16 +1435,18 @@ export function generateMonthlyFinancialSummary({
     const netBalance = fromCents(curIncomesCents - (curExpensesCents + toCents(curInvoice)));
 
     // Top Categorias do Mês
-    const monthExpenses = (expenses || []).filter(e => {
+    const monthExpenses = safeExpenses.filter(e => {
+        if (!e) return false;
         const d = e.date || e.data;
         const dStr = typeof d === 'string' ? d : (d?.toDate ? d.toDate().toISOString().substring(0, 10) : (d instanceof Date ? d.toISOString().substring(0, 10) : ''));
         return dStr.startsWith(monthStr);
     });
-    const monthInstallments = (loans || []).flatMap(l =>
-        (l.installments || [])
-            .filter(i => i.dueDate && i.dueDate.startsWith(monthStr))
-            .map(i => ({ category: l.category || 'Compras Parceladas', value: i.value }))
-    );
+    const monthInstallments = safeLoans.flatMap(l => {
+        if (!l) return [];
+        return asArray(l.installments)
+            .filter(i => i && i.dueDate && i.dueDate.startsWith(monthStr))
+            .map(i => ({ category: l.category || 'Compras Parceladas', value: i.value }));
+    });
     const combinedMonthItems = [...monthExpenses, ...monthInstallments];
 
     const categoryBreakdown = aggregateByCategory(combinedMonthItems);
@@ -1368,17 +1461,17 @@ export function generateMonthlyFinancialSummary({
 
     // Alívio de Compras Finalizadas
     const relief = calculateDebtReliefTimeline({
-        loans,
+        loans: safeLoans,
         startMonth: monthStr,
         monthsCount: 1
     });
 
     // Repasses de Terceiros
     const repasses = calculateConsolidatedClientReceivables({
-        loans,
-        expenses,
-        subscriptions,
-        clients,
+        loans: safeLoans,
+        expenses: safeExpenses,
+        subscriptions: safeSubs,
+        clients: safeClients,
         targetMonth: monthStr
     });
 
@@ -1430,11 +1523,14 @@ export function calculateCategoryBudgetsProgress({
     }
 
     const monthStr = selectedMonth;
+    const safeExpenses = asArray(expenses);
+    const safeLoans = asArray(loans);
 
     // 1. Somar gastos por categoria no mês selecionado
     const categorySpentMap = {};
 
-    expenses.forEach(exp => {
+    safeExpenses.forEach(exp => {
+        if (!exp) return;
         const d = exp.date || exp.data;
         const dStr = typeof d === 'string' ? d : (d?.toDate ? d.toDate().toISOString().slice(0, 10) : (d instanceof Date ? d.toISOString().slice(0, 10) : ''));
         if (dStr.startsWith(monthStr)) {
@@ -1444,10 +1540,11 @@ export function calculateCategoryBudgetsProgress({
         }
     });
 
-    loans.forEach(loan => {
+    safeLoans.forEach(loan => {
+        if (!loan) return;
         const cat = (loan.category && String(loan.category).trim()) || 'Compras Parceladas';
-        (loan.installments || []).forEach(inst => {
-            if (inst.dueDate && inst.dueDate.startsWith(monthStr)) {
+        asArray(loan.installments).forEach(inst => {
+            if (inst && inst.dueDate && inst.dueDate.startsWith(monthStr)) {
                 const valCents = toCents(inst.value || 0);
                 categorySpentMap[cat] = (categorySpentMap[cat] || 0) + valCents;
             }
@@ -1487,3 +1584,6 @@ export function calculateCategoryBudgetsProgress({
 
     return results.sort((a, b) => b.percentage - a.percentage);
 }
+
+// Alias para compatibilidade retroativa
+export const detectCategorySpendingAnomalies = detectExpenseAnomalies;

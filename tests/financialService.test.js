@@ -19,8 +19,14 @@ import {
     calculateMonthlyComparisonSummary,
     generateDeterministicFinancialInsights,
     calculateCardLimitIntelligence,
-    generateFinancialAlerts
+    generateFinancialAlerts,
+    asArray,
+    detectExpenseAnomalies,
+    generateWeeklyFinancialSummary,
+    generateMonthlyFinancialSummary,
+    calculateCategoryBudgetsProgress
 } from '../src/services/financialService';
+import { generateAnnualReportCsv, generateTransactionsCsv } from '../src/services/csvExportService';
 import { parseCurrencyInput, formatCurrencyDisplay } from '../src/utils/currency';
 import { matchAndDeduplicate } from '../src/utils/pdfParser';
 
@@ -886,6 +892,287 @@ describe('Financial Service - Motor de Alertas Financeiros Internos', () => {
         expect(alerts.length).toBeLessThanOrEqual(3);
     });
 });
+
+describe('Financial Service - Compatibilidade com Shapes Legados e Arrays Inválidos (Fase 7.2.4 Hotfix)', () => {
+    it('asArray helper: deve retornar o array quando válido e [] para qualquer valor não-array', () => {
+        expect(asArray([1, 2, 3])).toEqual([1, 2, 3]);
+        expect(asArray([])).toEqual([]);
+        expect(asArray({})).toEqual([]);
+        expect(asArray("string")).toEqual([]);
+        expect(asArray(100)).toEqual([]);
+        expect(asArray(null)).toEqual([]);
+        expect(asArray(undefined)).toEqual([]);
+        expect(asArray(true)).toEqual([]);
+    });
+
+    it('A. deve tolerar loan.installments = {} sem lançar TypeError', () => {
+        const loans = [
+            { id: 'l1', totalValue: 300, cardId: 'c1', clientId: 'cli1', dueDate: '2026-08-10', installments: {} }
+        ];
+
+        expect(() => calculateCardInvoiceTotal(loans, '2026-08', 'c1')).not.toThrow();
+        expect(calculateCardInvoiceTotal(loans, '2026-08', 'c1')).toBe(300);
+
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08', monthsCount: 3 })).not.toThrow();
+        expect(() => calculateConsolidatedClientReceivables({ loans, clients: [{ id: 'cli1', name: 'Ana' }], targetMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateCardLimitIntelligence({ card: { id: 'c1', limit: 1000 }, loans })).not.toThrow();
+        expect(() => generateFinancialAlerts({ selectedMonth: '2026-08', loans, cards: [{ id: 'c1', name: 'Black', dueDay: 10 }] })).not.toThrow();
+    });
+
+    it('B. deve tolerar loan.installments = "invalid" sem lançar TypeError', () => {
+        const loans = [
+            { id: 'l2', totalValue: 200, cardId: 'c1', clientId: 'cli1', dueDate: '2026-08-15', installments: "invalid" }
+        ];
+
+        expect(() => calculateCardInvoiceTotal(loans, '2026-08')).not.toThrow();
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateConsolidatedClientReceivables({ loans, clients: [{ id: 'cli1', name: 'Ana' }], targetMonth: '2026-08' })).not.toThrow();
+        expect(() => detectExpenseAnomalies({ selectedMonth: '2026-08', loans })).not.toThrow();
+    });
+
+    it('C. deve tolerar loan.installments = 10 sem lançar TypeError', () => {
+        const loans = [
+            { id: 'l3', totalValue: 500, cardId: 'c1', clientId: 'cli1', dueDate: '2026-08-20', installments: 10 }
+        ];
+
+        expect(() => calculateCardInvoiceTotal(loans, '2026-08')).not.toThrow();
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08' })).not.toThrow();
+        expect(() => generateWeeklyFinancialSummary({ loans, todayStr: '2026-08-15' })).not.toThrow();
+        expect(() => generateMonthlyFinancialSummary({ selectedMonth: '2026-08', loans })).not.toThrow();
+        expect(() => calculateCategoryBudgetsProgress({ loans, selectedMonth: '2026-08', budgets: { 'Geral': 1000 } })).not.toThrow();
+    });
+
+    it('D. deve tolerar loan.installments = null sem lançar TypeError', () => {
+        const loans = [
+            { id: 'l4', totalValue: 150, cardId: 'c1', clientId: 'cli1', dueDate: '2026-08-05', installments: null }
+        ];
+
+        expect(() => calculateCardInvoiceTotal(loans, '2026-08')).not.toThrow();
+        expect(calculateCardInvoiceTotal(loans, '2026-08')).toBe(150);
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08' })).not.toThrow();
+    });
+
+    it('E. deve tolerar loan.sharedDetails.person1.installments = {} sem lançar TypeError', () => {
+        const loans = [
+            {
+                id: 'l-shared-1',
+                totalValue: 600,
+                isShared: true,
+                cardId: 'c1',
+                sharedDetails: {
+                    person1: { clientId: 'p1', shareAmount: 300, installments: {} },
+                    person2: { clientId: 'p2', shareAmount: 300, installments: [{ number: 1, value: 100, dueDate: '2026-08-10', status: 'Pendente' }] }
+                }
+            }
+        ];
+
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateConsolidatedClientReceivables({ loans, clients: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], targetMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateCardLimitIntelligence({ card: { id: 'c1', limit: 1000 }, loans })).not.toThrow();
+        expect(() => generateWeeklyFinancialSummary({ loans, todayStr: '2026-08-09' })).not.toThrow();
+        expect(() => generateAnnualReportCsv({ targetYear: 2026, loans })).not.toThrow();
+    });
+
+    it('F. deve tolerar loan.sharedDetails.person2.installments = "invalid" sem lançar TypeError', () => {
+        const loans = [
+            {
+                id: 'l-shared-2',
+                totalValue: 400,
+                isShared: true,
+                cardId: 'c1',
+                sharedDetails: {
+                    person1: { clientId: 'p1', shareAmount: 200, installments: [{ number: 1, value: 100, dueDate: '2026-08-10', status: 'Pendente' }] },
+                    person2: { clientId: 'p2', shareAmount: 200, installments: "invalid" }
+                }
+            }
+        ];
+
+        expect(() => calculateFutureCommitments({ loans, startMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateConsolidatedClientReceivables({ loans, clients: [{ id: 'p1', name: 'P1' }], targetMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateCardLimitIntelligence({ card: { id: 'c1', limit: 1000 }, loans })).not.toThrow();
+        expect(() => generateWeeklyFinancialSummary({ loans, todayStr: '2026-08-09' })).not.toThrow();
+    });
+
+    it('G. arrays válidos continuam calculando exatamente os mesmos resultados matemáticos anteriores', () => {
+        const validLoans = [
+            {
+                id: 'l-val-1',
+                cardId: 'c1',
+                clientId: 'cli1',
+                category: 'Eletrônicos',
+                totalValue: 300,
+                installments: [
+                    { number: 1, value: 100.00, dueDate: '2026-08-10', status: 'Pendente' },
+                    { number: 2, value: 100.00, dueDate: '2026-09-10', status: 'Pendente' },
+                    { number: 3, value: 100.00, dueDate: '2026-10-10', status: 'Pendente' }
+                ]
+            }
+        ];
+
+        expect(calculateCardInvoiceTotal(validLoans, '2026-08')).toBe(100.00);
+        expect(calculateCardInvoiceTotal(validLoans, '2026-09')).toBe(100.00);
+        expect(calculateCardInvoiceTotal(validLoans, '2026-10')).toBe(100.00);
+
+        const commitments = calculateFutureCommitments({ loans: validLoans, startMonth: '2026-08', monthsCount: 3 });
+        expect(commitments[0].installmentsTotal).toBe(100.00);
+        expect(commitments[1].installmentsTotal).toBe(100.00);
+        expect(commitments[2].installmentsTotal).toBe(100.00);
+        expect(commitments[2].endingLoansCount).toBe(1);
+        expect(commitments[2].reliefAmount).toBe(100.00);
+    });
+
+    it('H. nenhuma função chamada pelo Dashboard lança TypeError quando recebe shape legado inválido em todos os parâmetros', () => {
+        const malformedLoans = [
+            { id: 'm1', totalValue: 100, installments: {} },
+            { id: 'm2', totalValue: 200, installments: 'bad' },
+            { id: 'm3', totalValue: 300, isShared: true, sharedDetails: { person1: { installments: {} }, person2: { installments: 123 } } },
+            null,
+            undefined
+        ];
+        const malformedExpenses = [
+            { id: 'e1', value: 50, date: '2026-08-01' },
+            null,
+            { id: 'e2', value: 'invalid' }
+        ];
+        const malformedSubs = [
+            { id: 's1', amount: 30, dueDate: 10, isActive: true },
+            null
+        ];
+        const malformedClients = [{ id: 'c1', name: 'Test' }, null];
+        const malformedCards = [{ id: 'card1', name: 'Card', limit: 500, dueDay: 10 }, null];
+
+        expect(() => calculateNetBalance({}, {}, {})).not.toThrow();
+        expect(() => calculateClientDebt({}, {}, {})).not.toThrow();
+        expect(() => calculateCardInvoiceTotal(malformedLoans, '2026-08')).not.toThrow();
+        expect(() => aggregateByCategory({})).not.toThrow();
+        expect(() => calculateFutureCommitments({ loans: malformedLoans, subscriptions: malformedSubs, startMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateDebtReliefTimeline({ loans: malformedLoans, startMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateConsolidatedClientReceivables({ loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, clients: malformedClients, targetMonth: '2026-08' })).not.toThrow();
+        expect(() => calculateMonthlyComparisonSummary({ selectedMonth: '2026-08', loans: malformedLoans, expenses: malformedExpenses, incomes: {} })).not.toThrow();
+        expect(() => generateDeterministicFinancialInsights({ selectedMonth: '2026-08', loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, clients: malformedClients })).not.toThrow();
+        expect(() => calculateCardLimitIntelligence({ card: malformedCards[0], loans: malformedLoans, expenses: malformedExpenses })).not.toThrow();
+        expect(() => generateFinancialAlerts({ selectedMonth: '2026-08', loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, cards: malformedCards, clients: malformedClients })).not.toThrow();
+        expect(() => detectExpenseAnomalies({ selectedMonth: '2026-08', expenses: malformedExpenses, loans: malformedLoans })).not.toThrow();
+        expect(() => generateWeeklyFinancialSummary({ loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, incomes: {} })).not.toThrow();
+        expect(() => generateMonthlyFinancialSummary({ selectedMonth: '2026-08', loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, clients: malformedClients })).not.toThrow();
+        expect(() => calculateCategoryBudgetsProgress({ budgets: { 'Geral': 500 }, expenses: malformedExpenses, loans: malformedLoans, selectedMonth: '2026-08' })).not.toThrow();
+        expect(() => generateAnnualReportCsv({ targetYear: 2026, loans: malformedLoans, expenses: malformedExpenses, subscriptions: malformedSubs, cards: malformedCards, clients: malformedClients })).not.toThrow();
+        expect(() => generateTransactionsCsv(malformedLoans)).not.toThrow();
+    });
+
+    it('I. reproduzir o padrão vulnerável anterior vs novo comportamento seguro', () => {
+        const legacyDoc = {
+            id: 'legacy-doc',
+            description: 'Compra Legada',
+            totalValue: 500,
+            installments: {} // Objeto map ao invés de Array
+        };
+
+        // Comportamento anterior (vulnerável):
+        expect(() => {
+            const vulnerableInstallments = legacyDoc.installments || [];
+            vulnerableInstallments.forEach(() => {});
+        }).toThrow(TypeError);
+
+        // Novo comportamento blindado com asArray:
+        expect(() => {
+            const safeInstallments = asArray(legacyDoc.installments);
+            safeInstallments.forEach(() => {});
+        }).not.toThrow();
+    });
+
+    it('Integração: Simulação do pipeline de cálculo do Dashboard com dados legados reais misturados', () => {
+        const fixtureLoans = [
+            {
+                id: 'loan-valid-array',
+                description: 'Celular',
+                totalValue: 1200,
+                cardId: 'card-1',
+                clientId: 'client-1',
+                installments: [
+                    { number: 1, value: 400, dueDate: '2026-08-10', status: 'Paga' },
+                    { number: 2, value: 400, dueDate: '2026-09-10', status: 'Pendente' },
+                    { number: 3, value: 400, dueDate: '2026-10-10', status: 'Pendente' }
+                ]
+            },
+            {
+                id: 'loan-legacy-object',
+                description: 'Notebook Antigo',
+                totalValue: 2000,
+                cardId: 'card-1',
+                clientId: 'client-2',
+                dueDate: '2026-08-10',
+                installments: {} // Shape legado Firestore map
+            },
+            {
+                id: 'loan-legacy-null',
+                description: 'Cadeira',
+                totalValue: 350,
+                cardId: 'card-2',
+                dueDate: '2026-08-15',
+                installments: null
+            },
+            {
+                id: 'loan-shared-corrupted',
+                description: 'Jantar',
+                totalValue: 300,
+                isShared: true,
+                cardId: 'card-1',
+                sharedDetails: {
+                    person1: { clientId: 'client-1', shareAmount: 150, installments: {} },
+                    person2: { clientId: 'client-2', shareAmount: 150, installments: "string-malformada" }
+                }
+            }
+        ];
+
+        const fixtureCards = [
+            { id: 'card-1', name: 'Nubank Black', limit: 10000, dueDay: 10 },
+            { id: 'card-2', name: 'Itaú Platinum', limit: 5000, dueDay: 15 }
+        ];
+
+        const fixtureClients = [
+            { id: 'client-1', name: 'Carlos' },
+            { id: 'client-2', name: 'Mariana' }
+        ];
+
+        // 1. Fatura
+        const invoiceTotal = calculateCardInvoiceTotal(fixtureLoans, '2026-08', 'card-1');
+        expect(invoiceTotal).toBeGreaterThan(0);
+
+        // 2. Repasses
+        const receivables = calculateConsolidatedClientReceivables({
+            loans: fixtureLoans,
+            clients: fixtureClients,
+            targetMonth: '2026-08'
+        });
+        expect(receivables).toBeDefined();
+
+        // 3. Projeção Futura
+        const commitments = calculateFutureCommitments({
+            loans: fixtureLoans,
+            startMonth: '2026-08',
+            monthsCount: 4
+        });
+        expect(commitments.length).toBe(4);
+
+        // 4. Insights & Alertas
+        const insights = generateDeterministicFinancialInsights({
+            selectedMonth: '2026-08',
+            loans: fixtureLoans,
+            clients: fixtureClients
+        });
+        expect(Array.isArray(insights)).toBe(true);
+
+        const alerts = generateFinancialAlerts({
+            selectedMonth: '2026-08',
+            loans: fixtureLoans,
+            cards: fixtureCards,
+            clients: fixtureClients
+        });
+        expect(Array.isArray(alerts)).toBe(true);
+    });
+});
+
 
 
 
