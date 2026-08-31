@@ -47,7 +47,7 @@ export function runPreflightChecks(options = {}) {
     }
 
     // 1. NODE_22: Verificação de Versão do Node (deve ser Node 22)
-    const isNode22 = /^v?22\./.test(nodeVersion) || process.env.FINCONTROL_ALLOW_NODE_VERSION === 'true';
+    const isNode22 = /^v?22\./.test(nodeVersion);
     addCheck(
         'NODE_22',
         'Node 22 LTS Gate',

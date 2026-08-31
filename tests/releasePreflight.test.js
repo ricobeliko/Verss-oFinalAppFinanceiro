@@ -1,6 +1,6 @@
 /* global process */
 // tests/releasePreflight.test.js
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import path from 'path';
 import fs from 'fs';
 import {
@@ -14,10 +14,10 @@ import {
 } from '../scripts/release/manifestGenerator.js';
 import { runPreflightChecks } from '../scripts/release/preflight.js';
 
-describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gate Correction)', () => {
+describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Final Fail-Closed Gate)', () => {
 
     const validManifestParams = {
-        commitSha: '2e8a90d52cb374d543f99351bb52352e405ffe10',
+        commitSha: '4d2118ce3ffface662a29a9e74aaba571a534c0b',
         buildTimestamp: '2026-08-31T20:00:00.000Z',
         nodeVersion: 'v22.18.0',
         npmVersion: '10.8.2',
@@ -30,9 +30,13 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
         newHostingVersion: 'sites/controle-de-cartao/versions/fe669241db09ec67',
         appCheckFirestoreMode: 'UNENFORCED',
         appCheckAuthMode: 'OFF/UNSET',
-        ciRunId: '33386898691',
+        ciRunId: '33450366622',
         ciConclusion: 'success'
     };
+
+    afterEach(() => {
+        delete process.env.FINCONTROL_ALLOW_NODE_VERSION;
+    });
 
     describe('Release Manifest Generator & Fail-Closed Contracts', () => {
 
@@ -64,8 +68,126 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             })).toThrow(/firebaseAppId é obrigatório/);
         });
 
-        // D. SHA 40 chars => PASS
-        it('(D) deve aceitar commitSha de exatamente 40 caracteres hexadecimais', () => {
+        // D. ciConclusion ausente => FAIL
+        it('(D) deve rejeitar manifesto se ciConclusion estiver ausente', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                ciConclusion: undefined
+            })).toThrow(/ciConclusion é obrigatório/);
+        });
+
+        // E. ciConclusion=failure => FAIL
+        it('(E) deve rejeitar manifesto se ciConclusion for "failure"', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                ciConclusion: 'failure'
+            })).toThrow(/ciConclusion deve ser estritamente "success"/);
+        });
+
+        // F. ciConclusion=cancelled => FAIL
+        it('(F) deve rejeitar manifesto se ciConclusion for "cancelled"', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                ciConclusion: 'cancelled'
+            })).toThrow(/ciConclusion deve ser estritamente "success"/);
+        });
+
+        // G. ciConclusion=success => PASS
+        it('(G) deve aceitar manifesto quando ciConclusion for "success"', () => {
+            const manifest = createReleaseManifest({
+                ...validManifestParams,
+                ciConclusion: 'success'
+            });
+            expect(manifest.ciConclusion).toBe('success');
+        });
+
+        // H. appCheckFirestoreMode ausente => FAIL
+        it('(H) deve rejeitar manifesto se appCheckFirestoreMode estiver ausente', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                appCheckFirestoreMode: undefined
+            })).toThrow(/appCheckFirestoreMode é obrigatório/);
+        });
+
+        // I. appCheckFirestoreMode inválido => FAIL
+        it('(I) deve rejeitar manifesto se appCheckFirestoreMode for inválido', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                appCheckFirestoreMode: 'INVALID_MODE'
+            })).toThrow(/appCheckFirestoreMode inválido/);
+        });
+
+        // J. UNENFORCED => PASS
+        it('(J) deve aceitar appCheckFirestoreMode="UNENFORCED"', () => {
+            const manifest = createReleaseManifest({
+                ...validManifestParams,
+                appCheckFirestoreMode: 'UNENFORCED'
+            });
+            expect(manifest.appCheckFirestoreMode).toBe('UNENFORCED');
+        });
+
+        // K. ENFORCED => PASS
+        it('(K) deve aceitar appCheckFirestoreMode="ENFORCED"', () => {
+            const manifest = createReleaseManifest({
+                ...validManifestParams,
+                appCheckFirestoreMode: 'ENFORCED'
+            });
+            expect(manifest.appCheckFirestoreMode).toBe('ENFORCED');
+        });
+
+        // L. appCheckAuthMode ausente => FAIL
+        it('(L) deve rejeitar manifesto se appCheckAuthMode estiver ausente', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: undefined
+            })).toThrow(/appCheckAuthMode é obrigatório/);
+        });
+
+        // M. OFF/UNSET => normaliza OFF e PASS
+        it('(M) deve normalizar "OFF/UNSET" e "UNSET" para "OFF"', () => {
+            const manifest1 = createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: 'OFF/UNSET'
+            });
+            expect(manifest1.appCheckAuthMode).toBe('OFF');
+
+            const manifest2 = createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: 'UNSET'
+            });
+            expect(manifest2.appCheckAuthMode).toBe('OFF');
+        });
+
+        // N. OFF => PASS
+        it('(N) deve aceitar appCheckAuthMode="OFF"', () => {
+            const manifest = createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: 'OFF'
+            });
+            expect(manifest.appCheckAuthMode).toBe('OFF');
+        });
+
+        // O. ENFORCED => PASS
+        it('(O) deve aceitar appCheckAuthMode="ENFORCED"', () => {
+            const manifest = createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: 'ENFORCED'
+            });
+            expect(manifest.appCheckAuthMode).toBe('ENFORCED');
+        });
+
+        // P. modo Auth desconhecido => FAIL
+        it('(P) deve falhar e lançar erro se appCheckAuthMode for desconhecido', () => {
+            expect(() => createReleaseManifest({
+                ...validManifestParams,
+                appCheckAuthMode: 'CUSTOM_UNSUPPORTED'
+            })).toThrow(/appCheckAuthMode inválido ou desconhecido/);
+
+            expect(() => normalizeAppCheckAuthMode('SOME_UNKNOWN_MODE'))
+                .toThrow(/appCheckAuthMode inválido ou desconhecido/);
+        });
+
+        it('deve aceitar commitSha de exatamente 40 caracteres hexadecimais', () => {
             const manifest = createReleaseManifest({
                 ...validManifestParams,
                 commitSha: '559be31c7a20011e3224985d6eaaa335771681ab'
@@ -73,53 +195,43 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(manifest.commitSha).toBe('559be31c7a20011e3224985d6eaaa335771681ab');
         });
 
-        // E. SHA curto / longo / não-hex => FAIL
-        it('(E) deve rejeitar commitSha curto (39), longo (41) ou não-hexadecimal', () => {
-            // 39 chars
+        it('deve rejeitar commitSha curto (39), longo (41) ou não-hexadecimal', () => {
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 commitSha: '559be31c7a20011e3224985d6eaaa335771681a'
             })).toThrow(/commitSha é obrigatório e deve ter exatamente 40 caracteres/);
 
-            // 41 chars
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 commitSha: '559be31c7a20011e3224985d6eaaa335771681abc0'
             })).toThrow(/commitSha é obrigatório e deve ter exatamente 40 caracteres/);
 
-            // SHA curto de 7 chars (proibido para release final)
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 commitSha: '559be31'
             })).toThrow(/commitSha é obrigatório e deve ter exatamente 40 caracteres/);
 
-            // Caracteres não-hexadecimais
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 commitSha: '559be31c7a20011e3224985d6eaaa335771681zz'
             })).toThrow(/commitSha é obrigatório e deve ter exatamente 40 caracteres/);
         });
 
-        // M. Manifesto com secret-like field => FAIL & App ID não é classificado como secret
-        it('(M) deve bloquear e lançar erro se detectar API Keys ou Secrets no payload, mas permitir App ID canônico', () => {
-            // App ID canônico não é secret
+        it('deve bloquear e lançar erro se detectar API Keys ou Secrets no payload, mas permitir App ID canônico', () => {
             expect(() => validateNoSecrets({ appId: CANONICAL_FIREBASE_APP_ID })).not.toThrow();
 
-            // API key detectada
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 leakedKey: 'AIzaSyA_example_fake_api_key_35_chars_long'
             })).toThrow(/SECURITY_GATE_VIOLATION/);
 
-            // Mercado Pago token detectado
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 mpSecret: 'APP_USR-1234567890-abcdef-123456'
             })).toThrow(/SECURITY_GATE_VIOLATION/);
         });
 
-        // N. hostingOnly=false => FAIL
-        it('(N) deve rejeitar tentativa de deploy com hostingOnly = false (Gate de Segurança)', () => {
+        it('deve rejeitar tentativa de deploy com hostingOnly = false (Gate de Segurança)', () => {
             expect(() => createReleaseManifest({
                 ...validManifestParams,
                 hostingOnly: false
@@ -137,20 +249,55 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
                 hostingSite: 'outro-site'
             })).toThrow(/hostingSite inválido/);
         });
-
-        it('deve normalizar o modo de autenticação do App Check', () => {
-            expect(normalizeAppCheckAuthMode('OFF/UNSET')).toBe('OFF');
-            expect(normalizeAppCheckAuthMode('UNSET')).toBe('OFF');
-            expect(normalizeAppCheckAuthMode('OFF')).toBe('OFF');
-            expect(normalizeAppCheckAuthMode('ENFORCED')).toBe('ENFORCED');
-        });
     });
 
     describe('Release Preflight Validator & Git/Bundle Gates', () => {
-        const fullValidSha = '2e8a90d52cb374d543f99351bb52352e405ffe10';
+        const fullValidSha = '4d2118ce3ffface662a29a9e74aaba571a534c0b';
 
-        // F. worktree dirty => FAIL
-        it('(F) deve falhar se o worktree não estiver limpo (DIRTY_WORKTREE)', () => {
+        // A. Node 22 => PASS
+        it('(A) deve passar quando nodeVersion for Node 22.x', () => {
+            const result = runPreflightChecks({
+                nodeVersion: 'v22.18.0',
+                isWorktreeClean: true,
+                requireDist: false,
+                currentHead: fullValidSha,
+                expectedHead: fullValidSha
+            });
+
+            expect(result.passed).toBe(true);
+            expect(result.errors.length).toBe(0);
+        });
+
+        // B. Node 24 => FAIL
+        it('(B) deve falhar estritamente se nodeVersion for Node 24.x', () => {
+            const result = runPreflightChecks({
+                nodeVersion: 'v24.19.0',
+                isWorktreeClean: true,
+                requireDist: false,
+                currentHead: fullValidSha,
+                expectedHead: fullValidSha
+            });
+
+            expect(result.passed).toBe(false);
+            expect(result.errors.some(e => e.includes('NODE_22'))).toBe(true);
+        });
+
+        // C. FINCONTROL_ALLOW_NODE_VERSION=true NÃO pode mudar B
+        it('(C) FINCONTROL_ALLOW_NODE_VERSION=true NÃO deve fazer bypass e Node 24 continua falhando', () => {
+            process.env.FINCONTROL_ALLOW_NODE_VERSION = 'true';
+            const result = runPreflightChecks({
+                nodeVersion: 'v24.19.0',
+                isWorktreeClean: true,
+                requireDist: false,
+                currentHead: fullValidSha,
+                expectedHead: fullValidSha
+            });
+
+            expect(result.passed).toBe(false);
+            expect(result.errors.some(e => e.includes('NODE_22'))).toBe(true);
+        });
+
+        it('deve falhar se o worktree não estiver limpo (DIRTY_WORKTREE)', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: false,
@@ -161,8 +308,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.some(e => e.includes('WORKTREE_CLEAN'))).toBe(true);
         });
 
-        // G. currentHead != expectedHead => FAIL
-        it('(G) deve falhar se currentHead for diferente de expectedHead', () => {
+        it('deve falhar se currentHead for diferente de expectedHead', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
@@ -175,8 +321,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.some(e => e.includes('HEAD_MATCH'))).toBe(true);
         });
 
-        // H. origin/main != expectedHead => FAIL
-        it('(H) deve falhar se origin/main divergir de expectedHead', () => {
+        it('deve falhar se origin/main divergir de expectedHead', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
@@ -190,8 +335,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.some(e => e.includes('ORIGIN_MAIN_MATCH'))).toBe(true);
         });
 
-        // I. currentHead == origin/main == expectedHead => PASS
-        it('(I) deve passar quando currentHead == origin/main == expectedHead com ambiente limpo', () => {
+        it('deve passar quando currentHead == origin/main == expectedHead com ambiente limpo', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
@@ -205,9 +349,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.length).toBe(0);
         });
 
-        // J. requireDist default operacional => true
-        it('(J) deve ter requireDist = true como padrão operacional fail-closed', () => {
-            // Se chamar sem requireDist e dist não existir em um path inexistente -> deve falhar
+        it('deve ter requireDist = true como padrão operacional fail-closed', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
@@ -220,8 +362,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.some(e => e.includes('DIST_PRESENT'))).toBe(true);
         });
 
-        // K. dist ausente => FAIL
-        it('(K) deve falhar se dist/index.html estiver ausente com requireDist=true', () => {
+        it('deve falhar se dist/index.html estiver ausente com requireDist=true', () => {
             const result = runPreflightChecks({
                 nodeVersion: 'v22.18.0',
                 isWorktreeClean: true,
@@ -233,8 +374,7 @@ describe('FinControl — Release & Staging Readiness (Fase 7.7.1 Operational Gat
             expect(result.errors.some(e => e.includes('DIST_PRESENT'))).toBe(true);
         });
 
-        // L. demo config no bundle => FAIL
-        it('(L) deve rejeitar bundle contendo configurações de teste sintéticas / demo', () => {
+        it('deve rejeitar bundle contendo configurações de teste sintéticas / demo', () => {
             const tempDist = path.join(process.cwd(), 'scratch', 'test-demo-dist');
             const tempAssets = path.join(tempDist, 'assets');
             fs.mkdirSync(tempAssets, { recursive: true });

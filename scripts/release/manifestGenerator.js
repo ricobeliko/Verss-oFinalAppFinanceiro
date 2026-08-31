@@ -46,17 +46,21 @@ export function validateNoSecrets(data) {
 
 /**
  * Normaliza o modo de autenticação do App Check (ex: OFF/UNSET -> OFF)
+ * Lança erro explícito em caso de modo ausente ou desconhecido.
  * @param {string} mode
  * @returns {string} modo normalizado
  */
 export function normalizeAppCheckAuthMode(mode) {
-    if (!mode || mode === 'OFF/UNSET' || mode === 'OFF' || mode === 'UNSET') {
+    if (!mode || typeof mode !== 'string') {
+        throw new Error('VALIDATION_ERROR: appCheckAuthMode é obrigatório.');
+    }
+    if (mode === 'OFF/UNSET' || mode === 'OFF' || mode === 'UNSET') {
         return 'OFF';
     }
     if (mode === 'ENFORCED') {
         return 'ENFORCED';
     }
-    return mode;
+    throw new Error(`VALIDATION_ERROR: appCheckAuthMode inválido ou desconhecido: "${mode}". Modos permitidos: OFF/UNSET, OFF, UNSET, ENFORCED.`);
 }
 
 /**
@@ -85,10 +89,10 @@ export function createReleaseManifest(params) {
         hostingSite,
         previousHostingVersion,
         newHostingVersion,
-        appCheckFirestoreMode = 'UNENFORCED',
-        appCheckAuthMode = 'OFF',
+        appCheckFirestoreMode,
+        appCheckAuthMode,
         ciRunId,
-        ciConclusion = 'success'
+        ciConclusion
     } = params;
 
     // Gate 1: commitSha obrigatório e exatamente 40 caracteres hexadecimais
@@ -142,12 +146,29 @@ export function createReleaseManifest(params) {
         throw new Error('VALIDATION_ERROR: newHostingVersion é obrigatório.');
     }
 
-    // Gate 8: CI Run ID e status
+    // Gate 8: appCheckFirestoreMode obrigatório e validado
+    if (!appCheckFirestoreMode || typeof appCheckFirestoreMode !== 'string') {
+        throw new Error('VALIDATION_ERROR: appCheckFirestoreMode é obrigatório.');
+    }
+    if (appCheckFirestoreMode !== 'UNENFORCED' && appCheckFirestoreMode !== 'ENFORCED') {
+        throw new Error(`VALIDATION_ERROR: appCheckFirestoreMode inválido: "${appCheckFirestoreMode}". Modos permitidos: UNENFORCED, ENFORCED.`);
+    }
+
+    // Gate 9: appCheckAuthMode obrigatório e normalizado
+    const normalizedAuthMode = normalizeAppCheckAuthMode(appCheckAuthMode);
+
+    // Gate 10: CI Run ID obrigatório
     if (!ciRunId) {
         throw new Error('VALIDATION_ERROR: ciRunId do GitHub Actions é obrigatório para vincular o artefato ao pipeline verificado.');
     }
 
-    const normalizedAuthMode = normalizeAppCheckAuthMode(appCheckAuthMode);
+    // Gate 11: CI Conclusion obrigatório e estritamente 'success'
+    if (!ciConclusion || typeof ciConclusion !== 'string') {
+        throw new Error('VALIDATION_ERROR: ciConclusion é obrigatório.');
+    }
+    if (ciConclusion !== 'success') {
+        throw new Error(`VALIDATION_ERROR: ciConclusion deve ser estritamente "success" (recebido: "${ciConclusion}"). Deploy bloqueado.`);
+    }
 
     const manifest = {
         manifestVersion: '1.0.0',
@@ -175,7 +196,7 @@ export function createReleaseManifest(params) {
         }
     };
 
-    // Gate 9: Validação final contra vazamento de dados sensíveis
+    // Gate 12: Validação final contra vazamento de dados sensíveis
     validateNoSecrets(manifest);
 
     return manifest;
