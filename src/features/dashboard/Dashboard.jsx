@@ -570,7 +570,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             console.error("ERRO FATAL DURANTE O CÁLCULO DO RESUMO:", error);
             return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
         }
-    }, [isLoading, dashboardData, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
+    }, [isLoading, loans, clients, cards, subscriptions, expenses, paidSubscriptions, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
     
     // Análise de Inteligência (Auditoria Relâmpago & Metas de Quitação)
     const intelligenceData = useMemo(() => {

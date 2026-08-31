@@ -51,9 +51,11 @@ export default function PdfImportModal({
 
     // Recalcula duplicidades quando o usuário troca o cartão de destino
     useEffect(() => {
-        if (importedItems.length > 0 && selectedCardId) {
-            const reprocessed = matchAndDeduplicate(importedItems, existingLoans, selectedCardId);
-            setImportedItems(reprocessed);
+        if (selectedCardId) {
+            setImportedItems(prev => {
+                if (!prev || prev.length === 0) return prev;
+                return matchAndDeduplicate(prev, existingLoans, selectedCardId);
+            });
         }
     }, [selectedCardId, existingLoans]);
 

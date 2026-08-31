@@ -1,6 +1,6 @@
 // src/context/AppContext.jsx
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, getAppFunctions } from '../utils/firebase';
@@ -168,6 +168,15 @@ export function AppProvider({ children }) {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [toast, setToast] = useState({ message: '', type: 'info', visible: false });
 
+    const showToast = useCallback((message, type = 'info') => {
+        setToast({ message, type, visible: true });
+        setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 4000);
+    }, []);
+
+    const clearToast = useCallback(() => {
+        setToast((prev) => ({ ...prev, visible: false }));
+    }, []);
+
     useEffect(() => {
         // Suporte Seguro para Sessão de Testes E2E (Isolamento Estrito de Produção)
         const e2eSession =
@@ -190,18 +199,9 @@ export function AppProvider({ children }) {
             clearAllSubs: clearAllSubscriptions,
             e2eSession,
         });
-    }, []);
+    }, [showToast]);
 
-    const showToast = (message, type = 'info') => {
-        setToast({ message, type, visible: true });
-        setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 4000);
-    };
-
-    const clearToast = () => {
-        setToast((prev) => ({ ...prev, visible: false }));
-    };
-
-    const activateFreeTrial = async () => {
+    const activateFreeTrial = useCallback(async () => {
         if (!currentUser || !currentUser.uid) {
             showToast('Você precisa estar logado para ativar o teste.', 'error');
             return;
@@ -228,9 +228,9 @@ export function AppProvider({ children }) {
             console.error('Erro ao ativar período de teste VIP:', error);
             showToast('Não foi possível ativar o período de teste. Tente novamente mais tarde.', 'error');
         }
-    };
+    }, [currentUser, userProfile, showToast]);
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             if (typeof window !== 'undefined' && (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__)) {
                 delete window.__FINCONTROL_E2E_USER__;
@@ -253,19 +253,22 @@ export function AppProvider({ children }) {
             console.error('Erro ao fazer logout:', error);
             showToast('Não foi possível fazer logout. Tente novamente.', 'error');
         }
-    };
+    }, [showToast]);
 
-    const value = {
+    const isPro = userProfile?.plan === 'pro';
+    const isTrialActive =
+        userProfile?.trialExpiresAt && typeof userProfile.trialExpiresAt.toDate === 'function'
+            ? userProfile.trialExpiresAt.toDate() > new Date()
+            : userProfile?.trialExpiresAt
+            ? new Date(userProfile.trialExpiresAt) > new Date()
+            : false;
+
+    const value = useMemo(() => ({
         currentUser,
         userId: currentUser?.uid,
         userProfile,
-        isPro: userProfile?.plan === 'pro',
-        isTrialActive:
-            userProfile?.trialExpiresAt && typeof userProfile.trialExpiresAt.toDate === 'function'
-                ? userProfile.trialExpiresAt.toDate() > new Date()
-                : userProfile?.trialExpiresAt
-                ? new Date(userProfile.trialExpiresAt) > new Date()
-                : false,
+        isPro,
+        isTrialActive,
         isAuthReady,
         showToast,
         db,
@@ -274,7 +277,7 @@ export function AppProvider({ children }) {
         getUserCollectionPathSegments,
         activateFreeTrial,
         logout,
-    };
+    }), [currentUser, userProfile, isPro, isTrialActive, isAuthReady, showToast, activateFreeTrial, logout]);
 
     return (
         <AppContext.Provider value={value}>

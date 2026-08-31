@@ -26,7 +26,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     return null;
 };
 
-const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
+const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions }) => {
     const { isPro, isTrialActive, currentUser, showToast } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
 
