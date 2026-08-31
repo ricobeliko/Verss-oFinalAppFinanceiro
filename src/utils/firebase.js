@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { initAppCheck, getAppCheckInstance } from "./appCheck";
 
 // Credenciais do Firebase
 const firebaseConfig = {
@@ -18,6 +19,9 @@ const app = initializeApp(firebaseConfig);
 // Inicializar os serviços essenciais do client
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// Inicializar Firebase App Check (Modo de observação e emissão de tokens, não-enforcing)
+initAppCheck(app);
 
 // Conectar aos Emuladores Locais quando a flag estiver habilitada
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
@@ -44,4 +48,4 @@ async function getAppFunctions() {
   return functionsInstance;
 }
 
-export { app, db, auth, getAppFunctions };
+export { app, db, auth, getAppFunctions, initAppCheck, getAppCheckInstance };
