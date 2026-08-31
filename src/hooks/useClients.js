@@ -8,6 +8,8 @@ export function useClients() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isStale, setIsStale] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !userId || !db) {
@@ -19,6 +21,8 @@ export function useClients() {
         if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.clients) {
             setClients(window.__FINCONTROL_E2E_MOCK_DATA__.clients);
             setLoading(false);
+            setError(null);
+            setIsStale(false);
             return;
         }
 
@@ -34,14 +38,18 @@ export function useClients() {
             canonicalKey,
             uid: userId,
             onNext: (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 setClients(data);
                 setLoading(false);
+                setError(null);
+                setIsStale(false);
             },
-            onError: (error) => {
+            onError: (err) => {
                 if (import.meta.env?.DEV) {
-                    console.error('Erro no listener useClients:', error);
+                    console.error('Erro no listener useClients:', err);
                 }
+                setError(err);
+                setIsStale(true);
                 setLoading(false);
             },
         });
@@ -49,5 +57,5 @@ export function useClients() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { clients, loading };
+    return { clients, loading, error, isStale };
 }

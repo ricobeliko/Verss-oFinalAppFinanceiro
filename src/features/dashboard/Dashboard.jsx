@@ -50,6 +50,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
     const [isBudgetsModalOpen, setIsBudgetsModalOpen] = useState(false);
     const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
+    const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
 
     const handleSaveBudgets = async (newBudgets) => {
@@ -131,42 +132,60 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/loans`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, loans: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
-                onError: (err) => console.error('Erro no listener loans:', err),
+                onError: (err) => {
+                    console.error('Erro no listener loans:', err);
+                    setIsSyncStale(true);
+                },
             }),
             subscribeToFirestoreQuery({
                 queryRef: collections.clients,
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/clients`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, clients: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
-                onError: (err) => console.error('Erro no listener clients:', err),
+                onError: (err) => {
+                    console.error('Erro no listener clients:', err);
+                    setIsSyncStale(true);
+                },
             }),
             subscribeToFirestoreQuery({
                 queryRef: collections.cards,
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/cards`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, cards: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
-                onError: (err) => console.error('Erro no listener cards:', err),
+                onError: (err) => {
+                    console.error('Erro no listener cards:', err);
+                    setIsSyncStale(true);
+                },
             }),
             subscribeToFirestoreQuery({
                 queryRef: collections.subscriptions,
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/subscriptions`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, subscriptions: snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) })),
-                onError: (err) => console.error('Erro no listener subscriptions:', err),
+                onError: (err) => {
+                    console.error('Erro no listener subscriptions:', err);
+                    setIsSyncStale(true);
+                },
             }),
             subscribeToFirestoreQuery({
                 queryRef: collections.expenses,
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/expenses`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, expenses: snapshot.docs.map(safeDataMapper) })),
-                onError: (err) => console.error('Erro no listener expenses:', err),
+                onError: (err) => {
+                    console.error('Erro no listener expenses:', err);
+                    setIsSyncStale(true);
+                },
             }),
             subscribeToFirestoreQuery({
                 queryRef: collections.incomes,
                 canonicalKey: buildCanonicalQueryKey({ collectionPath: `users_fallback/${userId}/incomes`, uid: userId }),
                 uid: userId,
                 onNext: (snapshot) => setDashboardData((prev) => ({ ...prev, incomes: snapshot.docs.map(safeDataMapper) })),
-                onError: (err) => console.error('Erro no listener incomes:', err),
+                onError: (err) => {
+                    console.error('Erro no listener incomes:', err);
+                    setIsSyncStale(true);
+                },
             }),
         ];
 
@@ -185,6 +204,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             },
             onError: (error) => {
                 console.error('Erro ao buscar assinaturas pagas:', error);
+                setIsSyncStale(true);
                 setIsLoading(false);
             },
         });
@@ -754,6 +774,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     
     return (
         <div className="space-y-8 animate-fadeIn">
+            {isSyncStale && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 text-amber-300 text-sm animate-fade-in shadow-lg" role="alert">
+                    <svg className="w-5 h-5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Não foi possível atualizar os dados em tempo real. Os valores exibidos podem estar desatualizados.</span>
+                </div>
+            )}
             {/* Header com Filtros em Cards Carbono/Dourado */}
             <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

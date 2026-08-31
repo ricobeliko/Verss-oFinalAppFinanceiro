@@ -8,6 +8,8 @@ export function useSubscriptions() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isStale, setIsStale] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !userId || !db) {
@@ -19,6 +21,8 @@ export function useSubscriptions() {
         if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.subscriptions) {
             setSubscriptions(window.__FINCONTROL_E2E_MOCK_DATA__.subscriptions);
             setLoading(false);
+            setError(null);
+            setIsStale(false);
             return;
         }
 
@@ -34,14 +38,18 @@ export function useSubscriptions() {
             canonicalKey,
             uid: userId,
             onNext: (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 setSubscriptions(data);
                 setLoading(false);
+                setError(null);
+                setIsStale(false);
             },
-            onError: (error) => {
+            onError: (err) => {
                 if (import.meta.env?.DEV) {
-                    console.error('Erro no listener useSubscriptions:', error);
+                    console.error('Erro no listener useSubscriptions:', err);
                 }
+                setError(err);
+                setIsStale(true);
                 setLoading(false);
             },
         });
@@ -49,5 +57,5 @@ export function useSubscriptions() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { subscriptions, loading };
+    return { subscriptions, loading, error, isStale };
 }

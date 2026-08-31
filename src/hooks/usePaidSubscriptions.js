@@ -8,6 +8,8 @@ export function usePaidSubscriptions() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
     const [paidSubscriptions, setPaidSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isStale, setIsStale] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !userId || !db) {
@@ -27,14 +29,18 @@ export function usePaidSubscriptions() {
             canonicalKey,
             uid: userId,
             onNext: (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 setPaidSubscriptions(data);
                 setLoading(false);
+                setError(null);
+                setIsStale(false);
             },
-            onError: (error) => {
+            onError: (err) => {
                 if (import.meta.env?.DEV) {
-                    console.error('Erro no listener usePaidSubscriptions:', error);
+                    console.error('Erro no listener usePaidSubscriptions:', err);
                 }
+                setError(err);
+                setIsStale(true);
                 setLoading(false);
             },
         });
@@ -42,5 +48,5 @@ export function usePaidSubscriptions() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { paidSubscriptions, loading };
+    return { paidSubscriptions, loading, error, isStale };
 }

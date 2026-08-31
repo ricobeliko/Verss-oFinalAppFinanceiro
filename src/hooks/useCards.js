@@ -8,6 +8,8 @@ export function useCards() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
     const [cards, setCards] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isStale, setIsStale] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !userId || !db) {
@@ -19,6 +21,8 @@ export function useCards() {
         if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.cards) {
             setCards(window.__FINCONTROL_E2E_MOCK_DATA__.cards);
             setLoading(false);
+            setError(null);
+            setIsStale(false);
             return;
         }
 
@@ -34,14 +38,18 @@ export function useCards() {
             canonicalKey,
             uid: userId,
             onNext: (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 setCards(data);
                 setLoading(false);
+                setError(null);
+                setIsStale(false);
             },
-            onError: (error) => {
+            onError: (err) => {
                 if (import.meta.env?.DEV) {
-                    console.error('Erro no listener useCards:', error);
+                    console.error('Erro no listener useCards:', err);
                 }
+                setError(err);
+                setIsStale(true);
                 setLoading(false);
             },
         });
@@ -49,5 +57,5 @@ export function useCards() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { cards, loading };
+    return { cards, loading, error, isStale };
 }

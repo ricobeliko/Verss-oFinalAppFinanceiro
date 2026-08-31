@@ -8,6 +8,8 @@ export function useExpenses() {
     const { db, userId, isAuthReady, getUserCollectionPathSegments } = useAppContext();
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isStale, setIsStale] = useState(false);
 
     useEffect(() => {
         if (!isAuthReady || !userId || !db) {
@@ -19,6 +21,8 @@ export function useExpenses() {
         if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.expenses) {
             setExpenses(window.__FINCONTROL_E2E_MOCK_DATA__.expenses);
             setLoading(false);
+            setError(null);
+            setIsStale(false);
             return;
         }
 
@@ -34,7 +38,7 @@ export function useExpenses() {
             canonicalKey,
             uid: userId,
             onNext: (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 data.sort((a, b) => {
                     const dateA = a.createdAt?.toDate?.() || new Date(a.date || 0);
                     const dateB = b.createdAt?.toDate?.() || new Date(b.date || 0);
@@ -42,11 +46,15 @@ export function useExpenses() {
                 });
                 setExpenses(data);
                 setLoading(false);
+                setError(null);
+                setIsStale(false);
             },
-            onError: (error) => {
+            onError: (err) => {
                 if (import.meta.env?.DEV) {
-                    console.error('Erro no listener useExpenses:', error);
+                    console.error('Erro no listener useExpenses:', err);
                 }
+                setError(err);
+                setIsStale(true);
                 setLoading(false);
             },
         });
@@ -54,5 +62,5 @@ export function useExpenses() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { expenses, loading };
+    return { expenses, loading, error, isStale };
 }
