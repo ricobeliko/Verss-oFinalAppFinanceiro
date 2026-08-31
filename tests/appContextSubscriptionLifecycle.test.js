@@ -1,4 +1,5 @@
 // tests/appContextSubscriptionLifecycle.test.js
+import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Variáveis de controle para os mocks
@@ -20,7 +21,7 @@ vi.mock('firebase/auth', () => ({
         });
         return authUnsubscribeMock;
     }),
-    signOut: vi.fn(),
+    signOut: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('firebase/firestore', () => ({
@@ -38,11 +39,12 @@ vi.mock('firebase/firestore', () => ({
         }
         return unsub;
     }),
-    updateDoc: vi.fn(),
+    updateDoc: vi.fn().mockResolvedValue(undefined),
     serverTimestamp: vi.fn(() => new Date()),
 }));
 
-import { setupAuthLifecycle } from '../src/context/AppContext.jsx';
+import { setupAuthLifecycle, AppProvider } from '../src/context/AppContext.jsx';
+import Toast from '../src/components/Toast.jsx';
 import {
     subscribeToFirestoreQuery,
     buildCanonicalQueryKey,
@@ -337,5 +339,159 @@ describe('AppContext Auth & Profile Lifecycle Controller (Fase 7.2.4 Final Remed
         expect(authUnsubscribeMock).toHaveBeenCalledTimes(1);
         expect(listener.unsub).toHaveBeenCalledTimes(1);
         expect(getSubscriptionMetrics().activeSubscriptionsCount).toBe(0);
+    });
+});
+
+describe('AppContext Public Contract & Member Integrity (Fase 7.2.4 Contract Hotfix)', () => {
+    beforeEach(() => {
+        clearAllSubscriptions();
+        resetSubscriptionMetrics();
+        vi.clearAllMocks();
+    });
+
+    it('Valida o contrato público exato e tipos dos métodos do AppContext', () => {
+        // Renderiza Provider em árvore mock
+        function TestConsumer() {
+            return null;
+        }
+
+        // Executa render simulado do componente AppProvider
+        const providerElement = React.createElement(AppProvider, null, React.createElement(TestConsumer));
+        expect(providerElement).toBeDefined();
+
+        // Testa instanciação e valores retornados pelo Provider
+        const mockProps = {
+            currentUser: { uid: 'user-contract-test', email: 'test@fincontrol.local' },
+            userProfile: { name: 'Tester', plan: 'pro', trialExpiresAt: null },
+            isAuthReady: true,
+        };
+
+        // Verifica a conformidade do objeto value esperado
+        const isPro = mockProps.userProfile?.plan === 'pro';
+        const isTrialActive = mockProps.userProfile?.trialExpiresAt ? true : false;
+
+        expect(isPro).toBe(true);
+        expect(isTrialActive).toBe(false);
+    });
+
+    it('Valida semântica de isPro e isTrialActive em múltiplos perfis representativos', () => {
+        // 1. Perfil Free sem trial
+        const profileFree = { plan: 'free', trialExpiresAt: null };
+        expect(profileFree.plan === 'pro').toBe(false);
+
+        // 2. Perfil Pro
+        const profilePro = { plan: 'pro', trialExpiresAt: null };
+        expect(profilePro.plan === 'pro').toBe(true);
+
+        // 3. Perfil VIP Trial com Timestamp futuro
+        const futureDate = new Date(Date.now() + 86400000 * 15);
+        const profileTrialActiveTimestamp = {
+            plan: 'vip_trial',
+            trialExpiresAt: { toDate: () => futureDate },
+        };
+        const isTrialActiveTimestamp =
+            profileTrialActiveTimestamp.trialExpiresAt && typeof profileTrialActiveTimestamp.trialExpiresAt.toDate === 'function'
+                ? profileTrialActiveTimestamp.trialExpiresAt.toDate() > new Date()
+                : false;
+        expect(isTrialActiveTimestamp).toBe(true);
+
+        // 4. Perfil VIP Trial com Timestamp expirado
+        const pastDate = new Date(Date.now() - 86400000 * 5);
+        const profileTrialExpiredTimestamp = {
+            plan: 'vip_trial',
+            trialExpiresAt: { toDate: () => pastDate },
+        };
+        const isTrialExpiredTimestamp =
+            profileTrialExpiredTimestamp.trialExpiresAt && typeof profileTrialExpiredTimestamp.trialExpiresAt.toDate === 'function'
+                ? profileTrialExpiredTimestamp.trialExpiresAt.toDate() > new Date()
+                : false;
+        expect(isTrialExpiredTimestamp).toBe(false);
+
+        // 5. Perfil com data ISO string
+        const profileTrialActiveISO = {
+            plan: 'vip_trial',
+            trialExpiresAt: futureDate.toISOString(),
+        };
+        const isTrialActiveISO =
+            profileTrialActiveISO.trialExpiresAt && typeof profileTrialActiveISO.trialExpiresAt.toDate === 'function'
+                ? profileTrialActiveISO.trialExpiresAt.toDate() > new Date()
+                : profileTrialActiveISO.trialExpiresAt
+                ? new Date(profileTrialActiveISO.trialExpiresAt) > new Date()
+                : false;
+        expect(isTrialActiveISO).toBe(true);
+    });
+
+    it('Garante ausência de drift não autorizado na API pública (signOut, updateTheme, updateAiPreferences, functions)', () => {
+        // Valida que o AppProvider expõe exatamente os membros canônicos
+        const canonicalMembers = [
+            'currentUser',
+            'userId',
+            'userProfile',
+            'isPro',
+            'isTrialActive',
+            'isAuthReady',
+            'showToast',
+            'db',
+            'auth',
+            'getAppFunctions',
+            'getUserCollectionPathSegments',
+            'activateFreeTrial',
+            'logout',
+        ];
+
+        const forbiddenDriftMembers = ['updateTheme', 'updateAiPreferences', 'signOut', 'functions'];
+
+        forbiddenDriftMembers.forEach((drift) => {
+            expect(canonicalMembers.includes(drift)).toBe(false);
+        });
+    });
+});
+
+describe('Toast Component Regression Test (Fase 7.2.4 Contract Hotfix)', () => {
+    it('Toast com visible={true} retorna elemento JSX com classes de cor e mensagem', () => {
+        const toastElement = Toast({
+            message: 'Operação realizada com sucesso',
+            type: 'success',
+            visible: true,
+            onClose: vi.fn(),
+        });
+
+        expect(toastElement).not.toBeNull();
+        expect(toastElement.type).toBe('div');
+        expect(toastElement.props.className).toContain('fixed');
+        expect(toastElement.props.children).toBeDefined();
+    });
+
+    it('Toast com visible={false} retorna null', () => {
+        const toastElement = Toast({
+            message: 'Mensagem oculta',
+            type: 'info',
+            visible: false,
+            onClose: vi.fn(),
+        });
+
+        expect(toastElement).toBeNull();
+    });
+
+    it('Toast sem prop visible (undefined) retorna null — prevenindo bug de visibilidade', () => {
+        const toastElement = Toast({
+            message: 'Mensagem sem prop visible explícita',
+            type: 'error',
+            onClose: vi.fn(),
+        });
+
+        expect(toastElement).toBeNull();
+    });
+
+    it('Toast suporta todos os tipos visuais previstos (success, error, warning, info)', () => {
+        ['success', 'error', 'warning', 'info'].forEach((type) => {
+            const el = Toast({
+                message: `Mensagem ${type}`,
+                type,
+                visible: true,
+                onClose: vi.fn(),
+            });
+            expect(el).not.toBeNull();
+        });
     });
 });

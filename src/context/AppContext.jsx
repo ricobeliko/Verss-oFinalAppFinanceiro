@@ -201,78 +201,90 @@ export function AppProvider({ children }) {
         setToast((prev) => ({ ...prev, visible: false }));
     };
 
-    const handleSignOut = async () => {
+    const activateFreeTrial = async () => {
+        if (!currentUser || !currentUser.uid) {
+            showToast('Você precisa estar logado para ativar o teste.', 'error');
+            return;
+        }
+
+        if (userProfile?.trialExpiresAt || userProfile?.plan === 'pro') {
+            showToast('O período de teste já foi ativado ou você já é Pro.', 'info');
+            return;
+        }
+
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
         try {
+            const userCollectionPath = getUserCollectionPathSegments();
+            const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
+            await updateDoc(userDocRef, {
+                trialExpiresAt: trialEndDate,
+                plan: 'vip_trial',
+                updatedAt: serverTimestamp(),
+            });
+            showToast('Período de teste VIP ativado com sucesso! Aproveite 30 dias de acesso.', 'success');
+        } catch (error) {
+            console.error('Erro ao ativar período de teste VIP:', error);
+            showToast('Não foi possível ativar o período de teste. Tente novamente mais tarde.', 'error');
+        }
+    };
+
+    const logout = async () => {
+        try {
+            if (typeof window !== 'undefined' && (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__)) {
+                delete window.__FINCONTROL_E2E_USER__;
+                sessionStorage.removeItem('fincontrol_e2e_user');
+                clearAllSubscriptions();
+                setCurrentUser(null);
+                setUserProfile(null);
+                showToast('Você foi desconectado.', 'info');
+                return;
+            }
             await signOut(auth);
             if (typeof window !== 'undefined') {
-                sessionStorage.removeItem('fincontrol_e2e_user');
-                delete window.__FINCONTROL_E2E_USER__;
+                sessionStorage.removeItem('hasSeenWelcomeModal');
             }
             clearAllSubscriptions();
             setCurrentUser(null);
             setUserProfile(null);
-            showToast('Você foi desconectado com sucesso.', 'info');
+            showToast('Você foi desconectado.', 'info');
         } catch (error) {
             console.error('Erro ao fazer logout:', error);
-            showToast('Erro ao desconectar.', 'error');
-        }
-    };
-
-    const updateTheme = async (newTheme) => {
-        if (!currentUser) return;
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
-            await updateDoc(userDocRef, {
-                theme: newTheme,
-                updatedAt: serverTimestamp(),
-            });
-            setUserProfile((prev) => ({ ...prev, theme: newTheme }));
-            showToast('Tema atualizado com sucesso!', 'success');
-        } catch (error) {
-            console.error('Erro ao atualizar tema:', error);
-            showToast('Erro ao atualizar tema.', 'error');
-        }
-    };
-
-    const updateAiPreferences = async (newAiPreferences) => {
-        if (!currentUser) return;
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, currentUser.uid);
-            await updateDoc(userDocRef, {
-                aiPreferences: newAiPreferences,
-                updatedAt: serverTimestamp(),
-            });
-            setUserProfile((prev) => ({ ...prev, aiPreferences: newAiPreferences }));
-            showToast('Preferências de IA atualizadas!', 'success');
-        } catch (error) {
-            console.error('Erro ao atualizar preferências de IA:', error);
-            showToast('Erro ao atualizar preferências de IA.', 'error');
-            throw error;
+            showToast('Não foi possível fazer logout. Tente novamente.', 'error');
         }
     };
 
     const value = {
         currentUser,
+        userId: currentUser?.uid,
         userProfile,
+        isPro: userProfile?.plan === 'pro',
+        isTrialActive:
+            userProfile?.trialExpiresAt && typeof userProfile.trialExpiresAt.toDate === 'function'
+                ? userProfile.trialExpiresAt.toDate() > new Date()
+                : userProfile?.trialExpiresAt
+                ? new Date(userProfile.trialExpiresAt) > new Date()
+                : false,
         isAuthReady,
         showToast,
-        clearToast,
-        signOut: handleSignOut,
-        updateTheme,
-        updateAiPreferences,
         db,
         auth,
-        functions: getAppFunctions(),
-        userId: currentUser ? currentUser.uid : null,
+        getAppFunctions,
         getUserCollectionPathSegments,
+        activateFreeTrial,
+        logout,
     };
 
     return (
         <AppContext.Provider value={value}>
             {children}
-            {toast.visible && <Toast message={toast.message} type={toast.type} onClose={clearToast} />}
+            <Toast
+                message={toast.message}
+                type={toast.type}
+                visible={toast.visible}
+                onClose={clearToast}
+            />
         </AppContext.Provider>
     );
 }
