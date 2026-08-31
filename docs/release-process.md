@@ -82,22 +82,25 @@ cd functions && npm ci && cd ..
 firebase deploy --only functions --project controle-de-cartao
 ```
 
-### 4.3 Apenas Firestore Rules
-
-```bash
-# Deploy somente das regras (rápido, ~30s)
-firebase deploy --only firestore:rules --project controle-de-cartao
-```
-
-### 4.4 Deploy Completo (use com cautela)
-
-```bash
-npm run build
-firebase deploy --project controle-de-cartao
-```
+### 4.3 Firestore Indexes Deploy Gate
 
 > [!CAUTION]
-> O comando `firebase deploy` sem `--only` faz deploy de **tudo**: Hosting, Functions e Firestore Rules simultaneamente. Use somente quando todas as três partes devem ser atualizadas juntas.
+> **FIRESTORE INDEX DEPLOY: BLOCKED UNTIL DRIFT RECONCILIATION**
+> Existe drift conhecido entre os índices remotos e locais. Qualquer comando `firebase deploy --only firestore:indexes` ou `firebase deploy` sem `--only` está **ESTRITAMENTE BLOQUEADO** até que seja executada a reconciliação formal de índices.
+
+### 4.4 Procedimento de Deploy Hosting
+
+O deploy de produção deve ser estritamente restrito a:
+```bash
+# 1. Executar preflight automatizado
+node scripts/release/preflight.js
+
+# 2. Gerar o Release Manifest
+# (Gera o arquivo de manifesto determinístico vinculado ao commit e SHA do bundle)
+
+# 3. Deploy exclusivo do Hosting
+firebase deploy --only hosting --project controle-de-cartao
+```
 
 ---
 
@@ -106,33 +109,57 @@ firebase deploy --project controle-de-cartao
 Após qualquer deploy, execute smoke test manual:
 
 ```
-[ ] Login funciona
-[ ] Dashboard carrega e exibe dados do mês atual
+[ ] Status HTTP 200 na URL de produção
+[ ] Login funciona normalmente
+[ ] Dashboard carrega sem erros de ErrorBoundary
 [ ] Pelo menos um cartão é exibido corretamente
-[ ] Sem erros no console do navegador
-[ ] Cloud Functions estão respondendo (verificar Firebase Console → Functions)
+[ ] Sem erros não tratados no console do navegador
+[ ] Tokens de App Check válidos e trocados com sucesso
 ```
 
 ---
 
-## 6. Rollback
+## 6. Procedimento e Critérios de Rollback
 
-### 6.1 Rollback de Hosting (Frontend)
+### 6.1 Critérios Objetivos de Rollback Imediato (SEV-1 / SEV-2)
+- Dashboard cai no `ErrorBoundary` (exceção JS em runtime).
+- Autenticação/login deixa de funcionar.
+- Assets/chunks retornam erro HTTP 404.
+- SHA-256 do artefato live difere do Release Manifest homologado.
+- CSP bloqueia recursos essenciais de banco ou auth.
+- Regressão financeira identificada.
 
-Firebase Hosting mantém histórico automático de versões:
+### 6.2 Procedimento de Rollback de Hosting (Versão FINALIZED)
 
-```bash
-# Listar versões disponíveis
-firebase hosting:channel:list --project controle-de-cartao
+O Firebase Hosting mantém histórico determinístico de versões imutáveis:
 
-# Ou via Firebase Console:
-# https://console.firebase.google.com/project/controle-de-cartao/hosting/sites
-# → Aba "Release History" → "Rollback" na versão desejada
-```
+1. **Identificar versão live atual e versão estável anterior:**
+   - Consultar Release History no Firebase Hosting.
+2. **Validar status `FINALIZED` da versão alvo:**
+   - Garantir que a versão alvo para onde reverter está íntegra e finalizada.
+3. **Executar Rollback (Release type `ROLLBACK`):**
+   - No Console Firebase Hosting: Release History → Versão Alvo → "Rollback".
+   - Ou via API/CLI apontando a versão anterior como ativa.
+4. **Validar CDN e Cache:**
+   - Aguardar propagação e validar resposta HTTP 200 em `controle-de-cartao.web.app` e `controle-de-cartao.firebaseapp.com`.
+5. **Auditar Logs:**
+   - Confirmar cessação de erros de cliente no Cloud Logging.
 
-**Tempo estimado: 5–10 minutos**
+> [!WARNING]
+> **Nunca executar `firebase deploy --only firestore:indexes` como parte de rollback de Hosting.**
 
-### 6.2 Rollback de Cloud Functions
+### 6.3 Registro Histórico do Incidente Real de Rollback (Evidência Operacional)
+
+O FinControl já executou com sucesso um rollback real de Hosting em produção:
+
+- **Versão Problemática:** `sites/controle-de-cartao/versions/fbd237b9f4363163`
+  - *Gatilho:* Regressão em runtime com `TypeError: (j.installments || []).forEach is not a function` pós-login, acionando o `ErrorBoundary`.
+- **Rollback Executado:** `sites/controle-de-cartao/versions/665a043bb8d750ad`
+  - *Resultado:* Restauração funcional instantânea do Dashboard em produção sem perda de dados.
+- **Hotfix Posteriormente Homologado:** `sites/controle-de-cartao/versions/fe669241db09ec67`
+  - *Resultado:* Correção com defesa retroativa de array em installments e redeploy controlado.
+
+### 6.4 Rollback de Cloud Functions
 
 Não há rollback nativo. Reverter via git e re-deploy:
 
@@ -152,7 +179,7 @@ git checkout HEAD -- functions/index.js
 
 **Tempo estimado: 10–20 minutos**
 
-### 6.3 Rollback de Firestore Rules
+### 6.5 Rollback de Firestore Rules
 
 ```bash
 # Encontrar versão anterior no git
