@@ -1,0 +1,11 @@
+{
+  "name": "rate_limit_rejections_count",
+  "description": "Contagem agregada de rejeições por rate limit e cooldown ativo em Cloud Functions [NOT DEPLOYED]",
+  "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.result=~\"^rate_limited\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "displayName": "Rate Limit Rejections Count"
+  }
+}

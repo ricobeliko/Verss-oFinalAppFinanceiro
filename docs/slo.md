@@ -53,13 +53,14 @@ $$\text{SLI}_{\text{Functions (5xx-free)}} = \frac{\text{Total de Requisições 
   - **4xx Esperados / Defesa Operacional:** Rejeições como `401 unauthenticated`, `400 invalid_argument` (parâmetros incorretos do cliente), `429 resource-exhausted` (cooldown/rate limit ativo), `401 WEBHOOK_SIGNATURE_INVALID` (tentativa externa não autorizada) e `405 method_not_allowed` (scanners de rede) **são comportamentos corretos do sistema de proteção**. São computados como desfechos atendidos com sucesso na disponibilidade livre de 5xx (não constituem indisponibilidade do sistema).
   - **4xx Inesperados:** Aumento súbito de 400 por quebra de schema após deploy é tratado como defeito de release em auditorias específicas, mas não como falha de infraestrutura 5xx.
   - **5xx (Falhas de Servidor):** Erros internos de execução, falhas de infraestrutura no Firestore (`fail_closed_error`), exceções não tratadas e timeouts com upstream (`500/504`) reduzem o SLI e consomem o Error Budget.
+- **Fonte de Medição:** Métrica Cloud Run `run.googleapis.com/request_count` segmentada por `response_code_class="5xx"`. `severity="ERROR"` em logs é indicador complementar de diagnóstico e não sinônimo automático de código HTTP 5xx.
 
-### SLI 4: Conformidade de Latência de Funções Críticas (Latency Compliance SLI)
+### SLI 4: Conformidade de Latência de Funções Críticas (Latency Compliance)
 $$\text{SLI}_{\text{Latency Compliance}} = \frac{\text{Total de Requisições atendidas com Latência } \le \text{Threshold Alvo}}{\text{Total de Requisições Válidas da Função}} \times 100$$
-- **Definição por Threshold:** A meta é expressa como o percentual de requisições que atendem ao teto de latência estipulado para a função:
+- **Definição Canônica por Threshold:** A métrica oficial do SLI é o percentual de requisições que respondem dentro do teto estipulado:
   - `createMercadoPagoPreference`: $\text{Threshold} \le 3.000\text{ms}$ (Meta: $\ge 95.0\%$)
   - `paymentWebhookMercadoPago`: $\text{Threshold} \le 2.000\text{ms}$ (Meta: $\ge 95.0\%$)
-- **Nota:** O percentil P95 representa o objetivo estatístico a ser medido na distribuição de latências do Cloud Run.
+- **Nota:** Percentis de distribuição (ex: P95) são utilizados estritamente como diagnóstico secundário no Cloud Monitoring, não como a fórmula de definição do SLI.
 
 ### SLI 5: Taxa de Sessões Livres de Falhas Fatais no Frontend (Fatal Crash-Free Sessions)
 $$\text{SLI}_{\text{Crash-Free}} = \frac{\text{Total de Sessões de Usuário Sem Ativação do ErrorBoundary}}{\text{Total de Sessões Ativas no Frontend}} \times 100$$
@@ -71,11 +72,11 @@ $$\text{SLI}_{\text{Crash-Free}} = \frac{\text{Total de Sessões de Usuário Sem
 
 | SLO | SLI ASSOCIADO | META (TARGET) | JANELA | ESTADO DE PRONTIDÃO DE MEDIÇÃO | FONTE E LIMITAÇÕES ATUAIS |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **SLO 1: Hosting Availability** | $\text{SLI}_{\text{Hosting}}$ | **99.9%** | 30 dias | **PARTIALLY_MEASURABLE** | Métricas globais disponíveis no Firebase Console; cálculo exato requer export de logs do Hosting. |
+| **SLO 1: Hosting Availability** | $\text{SLI}_{\text{Hosting}}$ | **99.9%** | 30 dias | **PARTIALLY_MEASURABLE** | Métricas globais disponíveis no Firebase Console; cálculo exato automatizado requer export de logs do Hosting. |
 | **SLO 2: Functional Availability** | $\text{SLI}_{\text{Frontend Functional}}$ | **99.5%** | 30 dias | **NOT_MEASURABLE_YET** | Requer implementação futura de Synthetic Monitor automatizado com conta de teste. |
-| **SLO 3: Functions Success Rate** | $\text{SLI}_{\text{Functions}}$ | **99.5%** | 30 dias | **MEASURABLE_NOW** | Mapeável diretamente via Cloud Logging (`severity="ERROR"` em `cloud_run_revision`). |
+| **SLO 3: Functions Success Rate** | $\text{SLI}_{\text{Functions (5xx-free)}}$ | **99.5%** | 30 dias | **PARTIALLY_MEASURABLE** | Mapeável via Cloud Run `request_count` filtrando `response_code_class="5xx"`; requer provisionamento de filtro agregado. |
 | **SLO 4: Critical Latency Compliance** | $\text{SLI}_{\text{Latency Compliance}}$ | **95.0%** | 30 dias | **MEASURABLE_NOW** | Mapeável via Cloud Run Latency Metrics (`request_latencies` percentile distribution). |
-| **SLO 5: Crash-Free Sessions** | $\text{SLI}_{\text{Crash-Free}}$ | **99.5%** | 30 dias | **PARTIALLY_MEASURABLE** | Numerador coletado via `reportClientError`; denominador (total de sessões) requer telemetria de sessão ativa. |
+| **SLO 5: Crash-Free Sessions** | $\text{SLI}_{\text{Crash-Free}}$ | **99.5%** | 30 dias | **PARTIALLY_MEASURABLE** | Numerador coletado via `reportClientError`; denominador (total de sessões ativas) requer telemetria de sessão ativa. |
 
 ---
 
@@ -112,14 +113,14 @@ $$\text{Indisponibilidade Tolerada} = 43.200\text{ min} \times (1 - \text{SLO})$
 > [!NOTE]
 > **Estado Operacional:** Todos os alertas abaixo representam **PROPOSED CONFIGURATION (NOT DEPLOYED)**. Nenhuma política foi criada no Google Cloud Monitoring nesta fase documental.
 
-| NOME DO ALERTA | FONTE DE SINAL REAL | CONDIÇÃO PROPOSTA | JANELA | SEVERIDADE | SALVAGUARDA DE BAIXO VOLUME | RUNBOOK ASSOCIADO |
+| NOME DO ALERTA | MECANISMO TÉCNICO | CONDIÇÃO PROPOSTA | JANELA | SEVERIDADE | SALVAGUARDA DE BAIXO VOLUME | RUNBOOK ASSOCIADO |
 | :--- | :--- | :--- | :---: | :---: | :--- | :--- |
-| `ALERT_WEBHOOK_MP_5XX` | `jsonPayload.stage="paymentWebhookMercadoPago" severity="ERROR"` | $\ge 2$ falhas de processamento | 5 min | **SEV-2** | LogMatch simples; ignora assinaturas inválidas e eventos repetidos. | [Runbook 1](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
-| `ALERT_PREFERENCE_MP_5XX` | `jsonPayload.stage="createMercadoPagoPreference" severity="ERROR"` | $\ge 3$ falhas internas | 5 min | **SEV-2** | LogMatch simples; ignora rejeições 4xx de rate limit e auth. | [Runbook 1](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
-| `ALERT_ACCOUNT_DELETION_FAIL` | `jsonPayload.stage="deleteUserAccount" severity="ERROR"` | $\ge 1$ falha de execução | 10 min | **SEV-2** | LogMatch simples; ignora `operation_in_progress` (429). | [Runbook 3](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
-| `ALERT_FRONTEND_CRASH_SPIKE` | `jsonPayload.event="FRONTEND_ERROR_REPORTED"` | $\ge 5$ crashes em 5 min | 5 min | **SEV-2** | Log-based metric count com agregação temporal. | [Runbook 4](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
-| `ALERT_RATE_LIMIT_FLOOD` | `jsonPayload.result=~"^rate_limited"` | $\ge 30$ rejeições em 5 min | 5 min | **SEV-3** | Threshold elevado para evitar falso-positivo com uso normal. | [Runbook 2](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-2-firebase-authentication-indisponível) |
-| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Metric `invalid_request_count` | $> 20\%$ de requisições inválidas ($\ge 50$ reqs) | 15 min | **SEV-2** | **MANUAL GATE / CONSOLE METRIC** (Não automatizável via Cloud Monitoring). | App Check Console Gate |
+| `ALERT_WEBHOOK_MP_5XX` | Log-Based Metric Threshold (`webhook_processing_errors_count`) | $\ge 2$ falhas de processamento | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s; ignora assinaturas inválidas e 4xx esperados. | [Runbook 1](incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| `ALERT_PREFERENCE_MP_5XX` | Log-Based Metric Threshold (`preference_errors_count`) | $\ge 3$ falhas internas | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s; ignora rejeições 4xx de rate limit e auth. | [Runbook 1](incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| `ALERT_ACCOUNT_DELETION_FAIL` | Single Event LogMatch (`conditionMatchedLog`) | $\ge 1$ falha inesperada | N/A | **SEV-2** | LogMatch de evento único; ignora `operation_in_progress` (429 esperado). | [Runbook 3](incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
+| `ALERT_FRONTEND_CRASH_SPIKE` | Log-Based Metric Threshold (`frontend_crash_count`) | $\ge 5$ crashes no frontend | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s (zero high-cardinality labels). | [Runbook 4](incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
+| `ALERT_RATE_LIMIT_FLOOD` | Log-Based Metric Threshold (`rate_limit_rejections_count`) | $\ge 30$ rejeições | 5 min | **SEV-3** | Threshold elevado ($\ge 30$) para evitar falso-positivo com uso normal. | [Runbook 2](incident-response.md#runbook-2-firebase-authentication-indisponível) |
+| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Console Metric | $> 20\%$ de requisições inválidas ($\ge 50$ reqs) | 15 min | **SEV-2** | **MANUAL GATE / CONSOLE METRIC** (Não automatizável via Cloud Monitoring nesta fase). | App Check Console Gate |
 
 ---
 

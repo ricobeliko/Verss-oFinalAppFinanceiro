@@ -1,0 +1,11 @@
+{
+  "name": "webhook_processing_errors_count",
+  "description": "Contagem de erros críticos 5xx de processamento no webhook do Mercado Pago [NOT DEPLOYED]",
+  "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND jsonPayload.stage=\"paymentWebhookMercadoPago\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "displayName": "Webhook MP Processing Errors"
+  }
+}

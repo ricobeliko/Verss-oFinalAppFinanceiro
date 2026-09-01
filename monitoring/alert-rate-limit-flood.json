@@ -2,24 +2,34 @@
   "displayName": "FinControl — Rate Limit Flood & Abuse (SEV-3) [NOT DEPLOYED]",
   "conditions": [
     {
-      "displayName": "Rate Limit Flood & Cooldown Rejections",
-      "conditionMatchedLog": {
-        "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.result=~\"^rate_limited\""
+      "displayName": "Rate Limit Flood & Cooldown Rejections (>= 30 in 5m)",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/rate_limit_rejections_count\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 29,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "trigger": {
+          "count": 1
+        }
       }
     }
   ],
   "combiner": "OR",
   "alertStrategy": {
-    "notificationRateLimit": {
-      "period": "300s"
-    },
     "autoClose": "1800s"
   },
   "notificationChannels": [
     "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
   ],
   "documentation": {
-    "content": "### FinControl — Alerta de Volume Anormal de Rate Limit (SEV-3)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** `jsonPayload.result=~\"^rate_limited\"` em Cloud Functions.\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e identifique o `userHash` ou IP de origem.\n2. Verifique se trata-se de tentativa de ataque automatizado (flood/brute force) ou loop no cliente.\n3. Se necessário, aplique bloqueio temporário via Firebase App Check ou regras de segurança.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-rate-limit-flood.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
+    "content": "### FinControl — Alerta de Volume Anormal de Rate Limit (SEV-3)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Semântica:** Métricas agregadas (>= 30 rejeições em 5 minutos)\n**Métrica de Origem:** `logging.googleapis.com/user/rate_limit_rejections_count`\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e identifique o `userHash` ou IP de origem.\n2. Verifique se trata-se de tentativa de ataque automatizado (flood/brute force) ou loop no cliente.\n3. Se necessário, aplique bloqueio temporário via Firebase App Check ou regras de segurança.\n\n#### Comandos de Implantação e Remoção:\n- **Criar Métrica:** `gcloud logging metrics create rate_limit_rejections_count --config-from-file=monitoring/metrics/rate-limit-rejections-count.json --project=controle-de-cartao`\n- **Deploy Política:** `gcloud monitoring policies create --policy-from-file=monitoring/alert-rate-limit-flood.json --project=controle-de-cartao`\n- **Delete Política:** `gcloud monitoring policies delete POLICY_ID --project=controle-de-cartao`",
     "mimeType": "text/markdown"
   },
   "enabled": false

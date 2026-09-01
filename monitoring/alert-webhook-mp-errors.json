@@ -2,24 +2,34 @@
   "displayName": "FinControl — Webhook Mercado Pago Errors (SEV-2) [NOT DEPLOYED]",
   "conditions": [
     {
-      "displayName": "Webhook Mercado Pago error log",
-      "conditionMatchedLog": {
-        "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND jsonPayload.stage=\"paymentWebhookMercadoPago\""
+      "displayName": "Webhook Mercado Pago 5xx Errors (>= 2 in 5m)",
+      "conditionThreshold": {
+        "filter": "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/webhook_processing_errors_count\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 1,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "trigger": {
+          "count": 1
+        }
       }
     }
   ],
   "combiner": "OR",
   "alertStrategy": {
-    "notificationRateLimit": {
-      "period": "300s"
-    },
     "autoClose": "1800s"
   },
   "notificationChannels": [
     "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
   ],
   "documentation": {
-    "content": "### FinControl — Alerta de Erro Crítico no Webhook do Mercado Pago (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** `jsonPayload.stage=\"paymentWebhookMercadoPago\" AND severity=\"ERROR\"`\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e verifique o `errorCode` e `errorType` do pagamento.\n2. Se for falha na API do MP, aguarde retentativa automática do webhook.\n3. Se for falha permanente, acione o Runbook 1 em `docs/incident-response.md` para reconciliação manual.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-webhook-mp-errors.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
+    "content": "### FinControl — Alerta de Erros Críticos no Webhook do Mercado Pago (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Semântica:** Métricas agregadas (>= 2 falhas em 5 minutos)\n**Métrica de Origem:** `logging.googleapis.com/user/webhook_processing_errors_count`\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e verifique o `errorCode` e `errorType` do pagamento.\n2. Se for falha na API do MP, aguarde retentativa automática do webhook.\n3. Se for falha permanente, acione o Runbook 1 em `docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500` para reconciliação manual.\n\n#### Comandos de Implantação e Remoção:\n- **Criar Métrica:** `gcloud logging metrics create webhook_processing_errors_count --config-from-file=monitoring/metrics/webhook-processing-errors-count.json --project=controle-de-cartao`\n- **Deploy Política:** `gcloud monitoring policies create --policy-from-file=monitoring/alert-webhook-mp-errors.json --project=controle-de-cartao`\n- **Delete Política:** `gcloud monitoring policies delete POLICY_ID --project=controle-de-cartao`",
     "mimeType": "text/markdown"
   },
   "enabled": false

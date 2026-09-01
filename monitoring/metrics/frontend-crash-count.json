@@ -1,0 +1,11 @@
+{
+  "name": "frontend_crash_count",
+  "description": "Contagem de falhas fatais de renderização capturadas pelo ErrorBoundary no frontend [NOT DEPLOYED]",
+  "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.stage=\"reportClientError\" AND jsonPayload.event=\"FRONTEND_ERROR_REPORTED\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1",
+    "displayName": "Frontend Crash Reports"
+  }
+}

@@ -2,7 +2,7 @@
   "displayName": "FinControl — Backend Critical Errors (SEV-2) [NOT DEPLOYED]",
   "conditions": [
     {
-      "displayName": "Backend Function Critical Errors",
+      "displayName": "Backend Function Critical Errors (Single Event)",
       "conditionMatchedLog": {
         "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND resource.labels.service_name=~\"^(deleteuseraccount|reportclienterror)$\" AND NOT (resource.labels.service_name=\"reportclienterror\" AND jsonPayload.event=\"FRONTEND_ERROR_REPORTED\")"
       }
@@ -19,7 +19,7 @@
     "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
   ],
   "documentation": {
-    "content": "### FinControl — Alerta de Exceção Crítica de Backend (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** Exceções reais de backend em `deleteUserAccount` ou runtime inesperado em `reportClientError` (excluindo a telemetria normal de frontend).\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e filtre por `resource.labels.service_name=\"deleteuseraccount\"`.\n2. Verifique se houve falha na aquisição de lock em `/account_operations` ou erro na deleção em lote.\n3. Consulte o runbook em `docs/incident-response.md`.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-backend-errors.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
+    "content": "### FinControl — Alerta de Exceção Crítica de Backend (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Semântica:** Evento Único Crítico (Single Event LogMatch)\n**Sinal:** Exceções reais de backend em `deleteUserAccount` ou runtime inesperado em `reportClientError` (excluindo a telemetria normal de frontend).\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e filtre por `resource.labels.service_name=\"deleteuseraccount\"`.\n2. Verifique se houve falha na aquisição de lock em `/account_operations` ou erro na deleção em lote.\n3. Rejeições esperadas de concorrência (`operation_in_progress` / HTTP 429) NÃO disparam este alerta.\n4. Consulte o runbook em `docs/incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos`.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud monitoring policies create --policy-from-file=monitoring/alert-backend-errors.json --project=controle-de-cartao`\n- **Delete:** `gcloud monitoring policies delete POLICY_ID --project=controle-de-cartao`",
     "mimeType": "text/markdown"
   },
   "enabled": false
