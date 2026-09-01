@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 
-describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)', () => {
+describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift Guard (Fase 7.8.4)', () => {
     const monitoringDir = path.join(process.cwd(), 'monitoring');
     const stateFile = path.join(monitoringDir, 'production-state.json');
     const verifyScript = path.join(process.cwd(), 'scripts', 'monitoring', 'verifyProductionState.sh');
@@ -76,6 +76,7 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         const webhookPolicy = state.policies.find(p => p.displayName.includes('Webhook Mercado Pago Errors'));
         expect(webhookPolicy).toBeDefined();
         expect(webhookPolicy.type).toBe('METRIC_THRESHOLD');
+        expect(webhookPolicy.comparison).toBe('COMPARISON_GT');
         expect(webhookPolicy.thresholdValue).toBe(1);
         expect(webhookPolicy.alignmentPeriod).toBe('300s');
 
@@ -83,6 +84,7 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         const prefPolicy = state.policies.find(p => p.displayName.includes('Mercado Pago Preference Errors'));
         expect(prefPolicy).toBeDefined();
         expect(prefPolicy.type).toBe('METRIC_THRESHOLD');
+        expect(prefPolicy.comparison).toBe('COMPARISON_GT');
         expect(prefPolicy.thresholdValue).toBe(2);
         expect(prefPolicy.alignmentPeriod).toBe('300s');
 
@@ -90,6 +92,7 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         const frontendPolicy = state.policies.find(p => p.displayName.includes('Frontend Crash Spike'));
         expect(frontendPolicy).toBeDefined();
         expect(frontendPolicy.type).toBe('METRIC_THRESHOLD');
+        expect(frontendPolicy.comparison).toBe('COMPARISON_GT');
         expect(frontendPolicy.thresholdValue).toBe(4);
         expect(frontendPolicy.alignmentPeriod).toBe('300s');
 
@@ -97,6 +100,7 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         const rateLimitPolicy = state.policies.find(p => p.displayName.includes('Rate Limit Flood & Abuse'));
         expect(rateLimitPolicy).toBeDefined();
         expect(rateLimitPolicy.type).toBe('METRIC_THRESHOLD');
+        expect(rateLimitPolicy.comparison).toBe('COMPARISON_GT');
         expect(rateLimitPolicy.thresholdValue).toBe(29);
         expect(rateLimitPolicy.alignmentPeriod).toBe('300s');
     });
@@ -116,15 +120,17 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         }
     });
 
-    it('scripts/monitoring/verifyProductionState.sh deve existir e ter garantia estrita de read-only', () => {
+    it('verifyProductionState.sh deve conter comandos read-only individuais obrigatórios', () => {
         expect(fs.existsSync(verifyScript)).toBe(true);
         const scriptContent = fs.readFileSync(verifyScript, 'utf8');
 
         expect(scriptContent).toContain('set -euo pipefail');
-        expect(scriptContent).toContain('PRODUCTION_MONITORING_DRIFT_CHECK_PASS');
 
-        // Comandos de consulta read-only permitidos
-        expect(scriptContent).toMatch(/gcloud monitoring policies list/);
+        // Comandos de consulta read-only individuais
+        expect(scriptContent).toMatch(/gcloud\s+logging\s+metrics\s+describe/);
+        expect(scriptContent).toMatch(/gcloud\s+monitoring\s+policies\s+describe/);
+        expect(scriptContent).toMatch(/gcloud\s+monitoring\s+policies\s+list/);
+        expect(scriptContent).toMatch(/gcloud\s+(beta\s+)?monitoring\s+channels\s+describe/);
 
         // Proibição estrita de comandos mutadores
         const mutationPatterns = [
@@ -142,5 +148,48 @@ describe('FinControl — Production Monitoring State & Drift Guard (Fase 7.8.4)'
         for (const pattern of mutationPatterns) {
             expect(scriptContent).not.toMatch(pattern);
         }
+    });
+
+    it('verifyProductionState.sh deve validar todas as dimensões de métricas, políticas, canais e duplicidade', () => {
+        const scriptContent = fs.readFileSync(verifyScript, 'utf8');
+
+        // Validação de métricas
+        expect(scriptContent).toContain('metricKind');
+        expect(scriptContent).toContain('valueType');
+        expect(scriptContent).toContain('fail_closed_error');
+        expect(scriptContent).toContain('invalid_argument');
+
+        // Validação de políticas
+        expect(scriptContent).toContain('resourceName');
+        expect(scriptContent).toContain('conditionMatchedLog');
+        expect(scriptContent).toContain('conditionThreshold');
+        expect(scriptContent).toContain('comparison');
+        expect(scriptContent).toContain('thresholdValue');
+        expect(scriptContent).toContain('duration');
+        expect(scriptContent).toContain('alignmentPeriod');
+        expect(scriptContent).toContain('perSeriesAligner');
+        expect(scriptContent).toContain('crossSeriesReducer');
+
+        // Validação de canais e duplicidade
+        expect(scriptContent).toContain('notificationChannels');
+        expect(scriptContent).toContain('channelsEncountered');
+        expect(scriptContent).toContain('displayCount');
+    });
+
+    it('verifyProductionState.sh deve ser estritamente FAIL-CLOSED (sem falsos PASS)', () => {
+        const scriptContent = fs.readFileSync(verifyScript, 'utf8');
+
+        // Garante tratamento explícito de erro em caso de ausência de gcloud ou falha de auth
+        expect(scriptContent).toContain('PRODUCTION_MONITORING_DRIFT_CHECK_UNVERIFIED: gcloud_cli_missing');
+        expect(scriptContent).toContain('PRODUCTION_MONITORING_DRIFT_CHECK_UNVERIFIED: api_or_auth_failure');
+
+        // O único PASS deve ser após o bloco de validação de canais e políticas (exatamente 1 ocorrência)
+        const passMatches = scriptContent.match(/PRODUCTION_MONITORING_DRIFT_CHECK_PASS/g);
+        expect(passMatches).not.toBeNull();
+        expect(passMatches.length).toBe(1);
+
+        // Garante que os blocos de erro saem com exit 1
+        expect(scriptContent).toMatch(/gcloud_cli_missing[\s\S]*?exit 1/);
+        expect(scriptContent).toMatch(/api_or_auth_failure[\s\S]*?exit 1/);
     });
 });
