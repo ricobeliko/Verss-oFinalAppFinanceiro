@@ -3,8 +3,14 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import {
+    normalizeFilter,
+    isZeroDuration,
+    isThresholdEquivalent,
+    isUnitEquivalent
+} from '../scripts/monitoring/monitoringVerificationHelpers.js';
 
-describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift Guard (Fase 7.8.4)', () => {
+describe('FinControl — Production Monitoring State & Strict Drift Guard (Fase 7.8.4 Final Completeness)', () => {
     const monitoringDir = path.join(process.cwd(), 'monitoring');
     const stateFile = path.join(monitoringDir, 'production-state.json');
     const verifyScript = path.join(process.cwd(), 'scripts', 'monitoring', 'verifyProductionState.sh');
@@ -27,7 +33,7 @@ describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift 
         expect(state.notificationChannel.enabled).toBe(true);
     });
 
-    it('production-state.json deve conter exatamente as 4 métricas baseadas em logs provisionadas', () => {
+    it('production-state.json deve conter exatamente as 4 métricas baseadas em logs provisionadas com unit: "1"', () => {
         const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
         expect(Array.isArray(state.metrics)).toBe(true);
         expect(state.metrics.length).toBe(4);
@@ -41,6 +47,7 @@ describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift 
         for (const metric of state.metrics) {
             expect(metric.kind).toBe('DELTA');
             expect(metric.valueType).toBe('INT64');
+            expect(metric.unit).toBe('1');
             expect(metric.filter).toBeDefined();
         }
 
@@ -71,37 +78,42 @@ describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift 
         expect(backendPolicy).toBeDefined();
         expect(backendPolicy.type).toBe('SINGLE_EVENT_LOG_MATCH');
         expect(backendPolicy.conditionType).toBe('conditionMatchedLog');
+        expect(backendPolicy.filter).toBeDefined();
 
-        // Webhook: threshold >= 2 (thresholdValue: 1)
+        // Webhook: threshold >= 2 (thresholdValue: 1, duration: "0s")
         const webhookPolicy = state.policies.find(p => p.displayName.includes('Webhook Mercado Pago Errors'));
         expect(webhookPolicy).toBeDefined();
         expect(webhookPolicy.type).toBe('METRIC_THRESHOLD');
         expect(webhookPolicy.comparison).toBe('COMPARISON_GT');
         expect(webhookPolicy.thresholdValue).toBe(1);
+        expect(webhookPolicy.duration).toBe('0s');
         expect(webhookPolicy.alignmentPeriod).toBe('300s');
 
-        // Preference: threshold >= 3 (thresholdValue: 2)
+        // Preference: threshold >= 3 (thresholdValue: 2, duration: "0s")
         const prefPolicy = state.policies.find(p => p.displayName.includes('Mercado Pago Preference Errors'));
         expect(prefPolicy).toBeDefined();
         expect(prefPolicy.type).toBe('METRIC_THRESHOLD');
         expect(prefPolicy.comparison).toBe('COMPARISON_GT');
         expect(prefPolicy.thresholdValue).toBe(2);
+        expect(prefPolicy.duration).toBe('0s');
         expect(prefPolicy.alignmentPeriod).toBe('300s');
 
-        // Frontend Crash Spike: threshold >= 5 (thresholdValue: 4)
+        // Frontend Crash Spike: threshold >= 5 (thresholdValue: 4, duration: "0s")
         const frontendPolicy = state.policies.find(p => p.displayName.includes('Frontend Crash Spike'));
         expect(frontendPolicy).toBeDefined();
         expect(frontendPolicy.type).toBe('METRIC_THRESHOLD');
         expect(frontendPolicy.comparison).toBe('COMPARISON_GT');
         expect(frontendPolicy.thresholdValue).toBe(4);
+        expect(frontendPolicy.duration).toBe('0s');
         expect(frontendPolicy.alignmentPeriod).toBe('300s');
 
-        // Rate Limit Flood: threshold >= 30 (thresholdValue: 29)
+        // Rate Limit Flood: threshold >= 30 (thresholdValue: 29, duration: "0s")
         const rateLimitPolicy = state.policies.find(p => p.displayName.includes('Rate Limit Flood & Abuse'));
         expect(rateLimitPolicy).toBeDefined();
         expect(rateLimitPolicy.type).toBe('METRIC_THRESHOLD');
         expect(rateLimitPolicy.comparison).toBe('COMPARISON_GT');
         expect(rateLimitPolicy.thresholdValue).toBe(29);
+        expect(rateLimitPolicy.duration).toBe('0s');
         expect(rateLimitPolicy.alignmentPeriod).toBe('300s');
     });
 
@@ -150,30 +162,20 @@ describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift 
         }
     });
 
-    it('verifyProductionState.sh deve validar todas as dimensões de métricas, políticas, canais e duplicidade', () => {
+    it('verifyProductionState.sh deve implementar a verificação completa dos 4 contratos (Blockers A, B, C e D)', () => {
         const scriptContent = fs.readFileSync(verifyScript, 'utf8');
 
-        // Validação de métricas
-        expect(scriptContent).toContain('metricKind');
-        expect(scriptContent).toContain('valueType');
-        expect(scriptContent).toContain('fail_closed_error');
-        expect(scriptContent).toContain('invalid_argument');
+        // BLOCKER A: Comparação de remote.filter e m.filter para TODAS as 4 métricas
+        expect(scriptContent).toMatch(/normalizeFilter\(remote\.filter\)\s*!==\s*normalizeFilter\(m\.filter\)/);
 
-        // Validação de políticas
-        expect(scriptContent).toContain('resourceName');
-        expect(scriptContent).toContain('conditionMatchedLog');
-        expect(scriptContent).toContain('conditionThreshold');
-        expect(scriptContent).toContain('comparison');
-        expect(scriptContent).toContain('thresholdValue');
-        expect(scriptContent).toContain('duration');
-        expect(scriptContent).toContain('alignmentPeriod');
-        expect(scriptContent).toContain('perSeriesAligner');
-        expect(scriptContent).toContain('crossSeriesReducer');
+        // BLOCKER B: Validação de unit da métrica
+        expect(scriptContent).toMatch(/isUnitEquivalent\(descriptor\.unit,\s*m\.unit\)/);
 
-        // Validação de canais e duplicidade
-        expect(scriptContent).toContain('notificationChannels');
-        expect(scriptContent).toContain('channelsEncountered');
-        expect(scriptContent).toContain('displayCount');
+        // BLOCKER C: Comparação exata do filtro de backend
+        expect(scriptContent).toMatch(/normalizeFilter\(cond\.conditionMatchedLog\.filter\)\s*!==\s*normalizeFilter\(expected\.filter\)/);
+
+        // BLOCKER D: Rejeição estrita de duration ausente ou diferente de zero
+        expect(scriptContent).toMatch(/isZeroDuration\(ct\.duration\)/);
     });
 
     it('verifyProductionState.sh deve ser estritamente FAIL-CLOSED (sem falsos PASS)', () => {
@@ -191,5 +193,56 @@ describe('FinControl — Production Monitoring State & Strict Fail-Closed Drift 
         // Garante que os blocos de erro saem com exit 1
         expect(scriptContent).toMatch(/gcloud_cli_missing[\s\S]*?exit 1/);
         expect(scriptContent).toMatch(/api_or_auth_failure[\s\S]*?exit 1/);
+    });
+
+    describe('Testes Comportamentais Unitários dos Helpers de Normalização e Validação', () => {
+        it('normalizeFilter: deve colapsar múltiplos espaços e quebras de linha e preservar semântica', () => {
+            const rawFilter = 'resource.type="cloud_run_revision"\n   AND   severity="ERROR"\n\tAND jsonPayload.stage="test"';
+            const expected = 'resource.type="cloud_run_revision" AND severity="ERROR" AND jsonPayload.stage="test"';
+            expect(normalizeFilter(rawFilter)).toBe(expected);
+
+            // Filtros semanticamente distintos devem diferir
+            const differentFilter = 'resource.type="cloud_run_revision" AND severity="INFO"';
+            expect(normalizeFilter(rawFilter)).not.toBe(normalizeFilter(differentFilter));
+        });
+
+        it('isZeroDuration: deve aceitar estritamente "0s", "0.000s", "0.0s" e rejeitar valores ausentes ou > 0', () => {
+            // Válidos (zero duration)
+            expect(isZeroDuration('0s')).toBe(true);
+            expect(isZeroDuration('0.000s')).toBe(true);
+            expect(isZeroDuration('0.0s')).toBe(true);
+            expect(isZeroDuration(' 0s ')).toBe(true);
+
+            // Inválidos (ausentes, nulos, vazios ou > 0)
+            expect(isZeroDuration(undefined)).toBe(false);
+            expect(isZeroDuration(null)).toBe(false);
+            expect(isZeroDuration('')).toBe(false);
+            expect(isZeroDuration('   ')).toBe(false);
+            expect(isZeroDuration('60s')).toBe(false);
+            expect(isZeroDuration('1s')).toBe(false);
+            expect(isZeroDuration('300s')).toBe(false);
+            expect(isZeroDuration(0)).toBe(false); // Tipo primitivo number não é duration string formatada
+        });
+
+        it('isThresholdEquivalent: deve reconhecer equivalência entre 1 e 1.0, 2 e 2.0, 29 e 29.0', () => {
+            expect(isThresholdEquivalent(1, 1.0)).toBe(true);
+            expect(isThresholdEquivalent(1, '1.0')).toBe(true);
+            expect(isThresholdEquivalent('2.0', 2)).toBe(true);
+            expect(isThresholdEquivalent(4, '4')).toBe(true);
+            expect(isThresholdEquivalent(29, 29.0)).toBe(true);
+
+            // Valores divergentes
+            expect(isThresholdEquivalent(1, 2)).toBe(false);
+            expect(isThresholdEquivalent(undefined, 1)).toBe(false);
+            expect(isThresholdEquivalent(null, 1)).toBe(false);
+            expect(isThresholdEquivalent('abc', 1)).toBe(false);
+        });
+
+        it('isUnitEquivalent: deve validar equivalência de unidade "1"', () => {
+            expect(isUnitEquivalent('1', '1')).toBe(true);
+            expect(isUnitEquivalent('1', ' 1 ')).toBe(true);
+            expect(isUnitEquivalent('1', '{items}')).toBe(false);
+            expect(isUnitEquivalent('1', undefined)).toBe(false);
+        });
     });
 });

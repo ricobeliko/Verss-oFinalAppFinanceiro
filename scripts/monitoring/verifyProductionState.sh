@@ -70,6 +70,16 @@ const { execSync } = require('child_process');
 const state = JSON.parse(fs.readFileSync(process.env.STATE_FILE, 'utf8'));
 const projectId = process.env.PROJECT_ID;
 
+function normalizeFilter(f) {
+  if (typeof f !== 'string') return '';
+  return f.replace(/\s+/g, ' ').trim();
+}
+
+function isUnitEquivalent(uA, uB) {
+  if (typeof uA !== 'string' || typeof uB !== 'string') return false;
+  return uA.trim() === uB.trim();
+}
+
 for (const m of state.metrics) {
   let metricJsonStr;
   try {
@@ -95,7 +105,21 @@ for (const m of state.metrics) {
     process.exit(1);
   }
 
-  // Validação do filtro fail-closed na métrica de preferência
+  // BLOCKER B: Validação de Unit
+  if (m.unit && !isUnitEquivalent(descriptor.unit, m.unit)) {
+    console.error('[-] DRIFT DETECTADO: unit divergente em:', m.name, 'GCP:', descriptor.unit, 'Esperado:', m.unit);
+    process.exit(1);
+  }
+
+  // BLOCKER A: Validação genérica de filtro exato para todas as métricas (com normalização de whitespace)
+  if (normalizeFilter(remote.filter) !== normalizeFilter(m.filter)) {
+    console.error('[-] DRIFT DETECTADO: Filtro da métrica divergente em:', m.name);
+    console.error('  GCP:     ', remote.filter);
+    console.error('  Manifest:', m.filter);
+    process.exit(1);
+  }
+
+  // Validação adicional fail-closed de Preference como defesa em profundidade
   if (m.name === 'preference_errors_count') {
     const rf = remote.filter || '';
     if (!rf.includes('fail_closed_error') || !rf.includes('result=\"error\"')) {
@@ -111,7 +135,7 @@ for (const m of state.metrics) {
     }
   }
 }
-console.log('[+] Todas as 4 log-based metrics remotas validadas com sucesso.');
+console.log('[+] Todas as 4 log-based metrics remotas validadas com sucesso (filtros, descriptors e units).');
 "
 
 # 5. FAIL-CLOSED: Validação individual de cada uma das 5 políticas via `gcloud monitoring policies describe`
@@ -122,6 +146,26 @@ const { execSync } = require('child_process');
 const state = JSON.parse(fs.readFileSync(process.env.STATE_FILE, 'utf8'));
 const cloudPoliciesList = JSON.parse(process.env.POLICIES_LIST_JSON);
 const projectId = process.env.PROJECT_ID;
+
+function normalizeFilter(f) {
+  if (typeof f !== 'string') return '';
+  return f.replace(/\s+/g, ' ').trim();
+}
+
+function isZeroDuration(duration) {
+  if (typeof duration !== 'string') return false;
+  const trimmed = duration.trim();
+  if (!trimmed) return false;
+  return /^0+(\.0+)?s$/.test(trimmed);
+}
+
+function isThresholdEquivalent(valA, valB) {
+  if (valA === undefined || valA === null || valB === undefined || valB === null) return false;
+  const numA = Number(valA);
+  const numB = Number(valB);
+  if (isNaN(numA) || isNaN(numB)) return false;
+  return numA === numB;
+}
 
 // A. Auditoria de duplicidade por displayName
 const displayCount = {};
@@ -184,9 +228,11 @@ for (const expected of state.policies) {
       console.error('[-] DRIFT DETECTADO: conditionThreshold inesperado em política Single Event:', expected.displayName);
       process.exit(1);
     }
-    const filter = cond.conditionMatchedLog.filter || '';
-    if (!filter.includes('deleteuseraccount') || !filter.includes('reportclienterror')) {
-      console.error('[-] DRIFT DETECTADO: Filtro de log do backend divergente:', filter);
+    // BLOCKER C: Validação exata do filtro de log de Backend
+    if (normalizeFilter(cond.conditionMatchedLog.filter) !== normalizeFilter(expected.filter)) {
+      console.error('[-] DRIFT DETECTADO: Filtro de log do backend divergente em:', expected.displayName);
+      console.error('  GCP:     ', cond.conditionMatchedLog.filter);
+      console.error('  Manifest:', expected.filter);
       process.exit(1);
     }
   } else if (expected.type === 'METRIC_THRESHOLD') {
@@ -199,7 +245,7 @@ for (const expected of state.policies) {
       process.exit(1);
     }
     const ct = cond.conditionThreshold;
-    if (!ct.filter.includes(expected.metric)) {
+    if (!normalizeFilter(ct.filter).includes(expected.metric)) {
       console.error('[-] DRIFT DETECTADO: Métrica divergente em:', expected.displayName, 'Filtro:', ct.filter, 'Esperado:', expected.metric);
       process.exit(1);
     }
@@ -208,12 +254,13 @@ for (const expected of state.policies) {
       process.exit(1);
     }
     // Comparação numérica tolerando inteiros e floats (1 vs 1.0)
-    if (Number(ct.thresholdValue) !== Number(expected.thresholdValue)) {
+    if (!isThresholdEquivalent(ct.thresholdValue, expected.thresholdValue)) {
       console.error('[-] DRIFT DETECTADO: ThresholdValue divergente em:', expected.displayName, 'GCP:', ct.thresholdValue, 'Esperado:', expected.thresholdValue);
       process.exit(1);
     }
-    if (ct.duration && ct.duration !== '0s' && ct.duration !== '0.000s') {
-      console.error('[-] DRIFT DETECTADO: Duration divergente (esperado 0s):', ct.duration);
+    // BLOCKER D: Duração obrigatória estritamente zero
+    if (!isZeroDuration(ct.duration)) {
+      console.error('[-] DRIFT DETECTADO: Duration inválida ou ausente (esperado 0s):', ct.duration);
       process.exit(1);
     }
     const agg = (ct.aggregations && ct.aggregations[0]) || {};
