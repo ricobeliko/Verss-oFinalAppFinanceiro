@@ -61,6 +61,23 @@ describe('FinControl — Monitoring-as-Code & Signal Validation (Fase 7.8.2 Sema
         expect(condition.conditionThreshold.thresholdValue).toBe(2); // >= 3 falhas
     });
 
+    // Regressão Blocker: preference_errors_count deve incluir apenas falhas internas e excluir 4xx de validação/rate-limit
+    it('(B.1) preference_errors_count deve contar fail_closed_error e error, mas excluir invalid_argument e outros 4xx', () => {
+        const metric = JSON.parse(fs.readFileSync(path.join(metricsDir, 'preference-errors-count.json'), 'utf8'));
+        const filter = metric.filter;
+
+        expect(filter).toContain('stage="createMercadoPagoPreference"');
+        expect(filter).toContain('severity="ERROR"');
+        expect(filter).toContain('fail_closed_error');
+        expect(filter).toMatch(/result="error"/);
+
+        // Garante que erros 4xx esperados NÃO estão na allowlist do filtro
+        expect(filter).not.toContain('invalid_argument');
+        expect(filter).not.toContain('unauthenticated');
+        expect(filter).not.toContain('failed_precondition');
+        expect(filter).not.toContain('rate_limited');
+    });
+
     // C. Frontend crash >= 5 não pode ser LogMatch simples
     it('(C) frontend crash >= 5 deve ser METRIC_THRESHOLD_AGGREGATED e não LogMatch simples', () => {
         const policy = JSON.parse(fs.readFileSync(path.join(monitoringDir, 'alert-frontend-crashes.json'), 'utf8'));

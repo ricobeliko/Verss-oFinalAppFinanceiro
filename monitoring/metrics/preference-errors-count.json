@@ -1,7 +1,7 @@
 {
   "name": "preference_errors_count",
-  "description": "Contagem de falhas internas 5xx na criação de preferência de pagamento no Mercado Pago [NOT DEPLOYED]",
-  "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND jsonPayload.stage=\"createMercadoPagoPreference\"",
+  "description": "Contagem de falhas internas 5xx e erros upstream na criação de preferência de pagamento no Mercado Pago [NOT DEPLOYED]",
+  "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.stage=\"createMercadoPagoPreference\" AND severity=\"ERROR\" AND (jsonPayload.result=\"fail_closed_error\" OR jsonPayload.result=\"error\")",
   "metricDescriptor": {
     "metricKind": "DELTA",
     "valueType": "INT64",
