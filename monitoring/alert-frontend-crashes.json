@@ -1,0 +1,26 @@
+{
+  "displayName": "FinControl — Frontend Crash Spike (SEV-2) [NOT DEPLOYED]",
+  "conditions": [
+    {
+      "displayName": "Frontend ErrorBoundary Crash Report",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.stage=\"reportClientError\" AND jsonPayload.event=\"FRONTEND_ERROR_REPORTED\""
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": [
+    "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
+  ],
+  "documentation": {
+    "content": "### FinControl — Alerta de Pico de Falhas Fatais no Frontend (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** `jsonPayload.event=\"FRONTEND_ERROR_REPORTED\"` emitido pelo ErrorBoundary.\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e filtre por `jsonPayload.component` e `jsonPayload.route`.\n2. Se o erro começou imediatamente após uma nova release no Firebase Hosting, execute o rollback instantâneo conforme Runbook 4 em `docs/incident-response.md`.\n3. Verifique se o erro é isolado a extensões de navegador de um único cliente (`jsonPayload.userHash`).\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-frontend-crashes.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
+    "mimeType": "text/markdown"
+  },
+  "enabled": false
+}

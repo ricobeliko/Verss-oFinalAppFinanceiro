@@ -1,0 +1,26 @@
+{
+  "displayName": "FinControl — Rate Limit Flood & Abuse (SEV-3) [NOT DEPLOYED]",
+  "conditions": [
+    {
+      "displayName": "Rate Limit Flood & Cooldown Rejections",
+      "conditionMatchedLog": {
+        "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.result=~\"^rate_limited\""
+      }
+    }
+  ],
+  "combiner": "OR",
+  "alertStrategy": {
+    "notificationRateLimit": {
+      "period": "300s"
+    },
+    "autoClose": "1800s"
+  },
+  "notificationChannels": [
+    "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
+  ],
+  "documentation": {
+    "content": "### FinControl — Alerta de Volume Anormal de Rate Limit (SEV-3)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** `jsonPayload.result=~\"^rate_limited\"` em Cloud Functions.\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e identifique o `userHash` ou IP de origem.\n2. Verifique se trata-se de tentativa de ataque automatizado (flood/brute force) ou loop no cliente.\n3. Se necessário, aplique bloqueio temporário via Firebase App Check ou regras de segurança.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-rate-limit-flood.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
+    "mimeType": "text/markdown"
+  },
+  "enabled": false
+}

@@ -1,6 +1,6 @@
 # FinControl — Service Level Objectives (SLOs) & Gestão de Error Budget
 
-Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de Nível de Serviço (SLOs), Orçamentos de Erro (*Error Budgets*), modelo de severidade e o desenho de alertas candidatos do FinControl.
+Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de Nível de Serviço (SLOs), Orçamentos de Erro (*Error Budgets*), prontidão de medição e o desenho de alertas candidatos do FinControl.
 
 ---
 
@@ -10,90 +10,90 @@ Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  SLI (Service Level Indicator)                                          │
 │  "O que medimos em tempo real" — A métrica quantitativa observada.      │
-│  Exemplo: % de requisições HTTP 2xx/3xx atendidas pelo Hosting.         │
+│  Exemplo: % de requisições atendidas com sucesso ou dentro do SLA.      │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  SLO (Service Level Objective)                                          │
 │  "A meta interna de confiabilidade que a engenharia se compromete"      │
-│  Exemplo: 99.9% de sucesso em uma janela móvel de 30 dias.              │
+│  Exemplo: 99.5% de sucesso em uma janela móvel de 30 dias.              │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  Error Budget (Orçamento de Erro)                                       │
 │  "A margem tolerável de imperfeição" — (100% - SLO)                     │
-│  Exemplo: 0.1% em 30 dias = ~43.2 minutos de indisponibilidade permitida│
+│  Exemplo: 0.5% em 30 dias = margem aceitável de degradação transitória. │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 > [!IMPORTANT]
 > **Distinção entre SLO, SLA e Performance Observada:**
-> - **SLO (Objetivo):** Meta interna da equipe de engenharia para guiar decisões de release e priorização de qualidade.
-> - **SLA (Acordo de Nível de Serviço):** Contrato comercial/legal com clientes, tipicamente com penalidades financeiras (o FinControl opera com foco em SLOs internos).
-> - **Performance Observada:** O comportamento real registrado pela telemetria em produção, que pode oscilar acima ou abaixo do SLO.
+> - **SLO (Objetivo):** Meta interna de engenharia para guiar decisões de publicação e confiabilidade.
+> - **SLA (Acordo Comercial):** Contrato legal com clientes (o FinControl opera estritamente com foco em SLOs internos de confiabilidade).
+> - **Performance Observada:** O comportamento real registrado pela telemetria em produção.
 
 ---
 
-## 2. Definição dos SLIs (Service Level Indicators)
+## 2. Definição Precisa dos SLIs (Service Level Indicators)
 
 ### SLI 1: Disponibilidade de Infraestrutura do Hosting (Hosting Availability)
 $$\text{SLI}_{\text{Hosting}} = \frac{\text{Total de Requisições HTTP com Status } 2\text{xx e } 3\text{xx}}{\text{Total de Requisições HTTP ao Firebase Hosting}} \times 100$$
 - **Fonte:** Métricas de tráfego do Firebase Hosting / Cloud CDN.
 
 ### SLI 2: Disponibilidade Funcional da Aplicação (Functional Frontend Availability)
-$$\text{SLI}_{\text{Frontend Functional}} = \frac{\text{Tentativas com Login Válido + Dashboard Renderizado com Dados}}{\text{Total de Tentativas Sintéticas / Sessões Ativas Iniciadas}} \times 100$$
-- **Fonte:** Telemetria de inicialização no cliente e suítes sintéticas de teste contínuo.
+$$\text{SLI}_{\text{Frontend Functional}} = \frac{\text{Tentativas Sintéticas com Login Válido + Dashboard Renderizado com Dados}}{\text{Total de Tentativas Sintéticas Controladas}} \times 100$$
+- **Fonte:** Suíte de testes sintéticos contínuos (Synthetic Monitors).
 
-### SLI 3: Taxa de Sucesso de Processamento em Cloud Functions (5xx-free Processing Rate)
-$$\text{SLI}_{\text{Functions}} = \frac{\text{Total de Invocações com Resposta } \neq 5\text{xx}}{\text{Total de Invocações Válidas das Cloud Functions}} \times 100$$
-- **Fonte:** Cloud Functions Gen2 Execution Logs / Cloud Run Metrics.
-- **Nota:** Rejeições esperadas 4xx (401 unauthenticated, 429 rate limited) são excluídas do numerador e consideradas comportamento correto do sistema de defesa.
+### SLI 3: Taxa de Processamento Livre de 5xx em Cloud Functions (5xx-free Processing Rate)
+$$\text{SLI}_{\text{Functions (5xx-free)}} = \frac{\text{Total de Requisições Elegíveis com Resposta } \neq 5\text{xx}}{\text{Total de Requisições Elegíveis às Cloud Functions}} \times 100$$
+- **Tratamento Semântico Rigoroso de Códigos de Retorno:**
+  - **2xx / 3xx (Sucesso / Redirecionamento):** Contam como desfechos válidos e bem-sucedidos.
+  - **4xx Esperados / Defesa Operacional:** Rejeições como `401 unauthenticated`, `400 invalid_argument` (parâmetros incorretos do cliente), `429 resource-exhausted` (cooldown/rate limit ativo), `401 WEBHOOK_SIGNATURE_INVALID` (tentativa externa não autorizada) e `405 method_not_allowed` (scanners de rede) **são comportamentos corretos do sistema de proteção**. São computados como desfechos atendidos com sucesso na disponibilidade livre de 5xx (não constituem indisponibilidade do sistema).
+  - **4xx Inesperados:** Aumento súbito de 400 por quebra de schema após deploy é tratado como defeito de release em auditorias específicas, mas não como falha de infraestrutura 5xx.
+  - **5xx (Falhas de Servidor):** Erros internos de execução, falhas de infraestrutura no Firestore (`fail_closed_error`), exceções não tratadas e timeouts com upstream (`500/504`) reduzem o SLI e consomem o Error Budget.
 
-### SLI 4: Latência das Funções Críticas de Negócio (Critical Function Latency)
-$$\text{SLI}_{\text{Latency}} = \frac{\text{Total de Requisições atendidas com Latência } \le \text{Threshold P95}}{\text{Total de Requisições das Funções Críticas}} \times 100$$
-- **Thresholds Alvo:**
-  - `createMercadoPagoPreference`: $\text{P95} \le 3.000\text{ms}$
-  - `paymentWebhookMercadoPago`: $\text{P95} \le 2.000\text{ms}$
+### SLI 4: Conformidade de Latência de Funções Críticas (Latency Compliance SLI)
+$$\text{SLI}_{\text{Latency Compliance}} = \frac{\text{Total de Requisições atendidas com Latência } \le \text{Threshold Alvo}}{\text{Total de Requisições Válidas da Função}} \times 100$$
+- **Definição por Threshold:** A meta é expressa como o percentual de requisições que atendem ao teto de latência estipulado para a função:
+  - `createMercadoPagoPreference`: $\text{Threshold} \le 3.000\text{ms}$ (Meta: $\ge 95.0\%$)
+  - `paymentWebhookMercadoPago`: $\text{Threshold} \le 2.000\text{ms}$ (Meta: $\ge 95.0\%$)
+- **Nota:** O percentil P95 representa o objetivo estatístico a ser medido na distribuição de latências do Cloud Run.
 
 ### SLI 5: Taxa de Sessões Livres de Falhas Fatais no Frontend (Fatal Crash-Free Sessions)
-$$\text{SLI}_{\text{Crash-Free}} = \frac{\text{Total de Sessões Sem Ativação do ErrorBoundary}}{\text{Total de Sessões Ativas no Frontend}} \times 100$$
-- **Fonte:** Relatórios de telemetria `reportClientError` emitidos por `src/components/ErrorBoundary.jsx`.
+$$\text{SLI}_{\text{Crash-Free}} = \frac{\text{Total de Sessões de Usuário Sem Ativação do ErrorBoundary}}{\text{Total de Sessões Ativas no Frontend}} \times 100$$
+- **Fonte:** Eventos `FRONTEND_ERROR_REPORTED` emitidos pela função `reportClientError` a partir de `src/components/ErrorBoundary.jsx`.
 
 ---
 
-## 3. Matriz de SLOs Realistas do FinControl (Janela de 30 Dias)
+## 3. Matriz de SLOs e Estado de Prontidão de Medição (Janela de 30 Dias)
 
-Para um aplicativo de gestão financeira em fase de consolidação e volume moderado, as metas são desenhadas de forma justificada e pragmática, evitando metas inatingíveis (como 99.999%):
-
-| SLO | SLI ASSOCIADO | META (TARGET) | JANELA DE MEDIÇÃO | FONTE DE MEDIÇÃO | LIMITAÇÕES CONHECIDAS |
-| :--- | :--- | :---: | :---: | :--- | :--- |
-| **SLO 1: Hosting Availability** | $\text{SLI}_{\text{Hosting}}$ | **99.9%** | 30 dias móveis | Firebase Hosting Metrics | Dependência direta do SLA de infraestrutura global do Google Cloud. |
-| **SLO 2: Functional Availability** | $\text{SLI}_{\text{Frontend Functional}}$ | **99.5%** | 30 dias móveis | Client Telemetry / Synthetics | Flutuações de conectividade de rede do usuário final no browser. |
-| **SLO 3: Functions Success Rate** | $\text{SLI}_{\text{Functions}}$ | **99.5%** | 30 dias móveis | Cloud Logging (5xx count) | Instabilidades transitórias na API externa do Mercado Pago afetam o webhook. |
-| **SLO 4: Critical Latency (P95)** | $\text{SLI}_{\text{Latency}}$ | **95.0%** | 30 dias móveis | Cloud Run Latency Metrics | Cold starts de containers serverless podem gerar outliers pontuais. |
-| **SLO 5: Crash-Free Sessions** | $\text{SLI}_{\text{Crash-Free}}$ | **99.5%** | 30 dias móveis | `reportClientError` logs | Extensões de navegador do usuário podem causar erros de renderização locais. |
+| SLO | SLI ASSOCIADO | META (TARGET) | JANELA | ESTADO DE PRONTIDÃO DE MEDIÇÃO | FONTE E LIMITAÇÕES ATUAIS |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **SLO 1: Hosting Availability** | $\text{SLI}_{\text{Hosting}}$ | **99.9%** | 30 dias | **PARTIALLY_MEASURABLE** | Métricas globais disponíveis no Firebase Console; cálculo exato requer export de logs do Hosting. |
+| **SLO 2: Functional Availability** | $\text{SLI}_{\text{Frontend Functional}}$ | **99.5%** | 30 dias | **NOT_MEASURABLE_YET** | Requer implementação futura de Synthetic Monitor automatizado com conta de teste. |
+| **SLO 3: Functions Success Rate** | $\text{SLI}_{\text{Functions}}$ | **99.5%** | 30 dias | **MEASURABLE_NOW** | Mapeável diretamente via Cloud Logging (`severity="ERROR"` em `cloud_run_revision`). |
+| **SLO 4: Critical Latency Compliance** | $\text{SLI}_{\text{Latency Compliance}}$ | **95.0%** | 30 dias | **MEASURABLE_NOW** | Mapeável via Cloud Run Latency Metrics (`request_latencies` percentile distribution). |
+| **SLO 5: Crash-Free Sessions** | $\text{SLI}_{\text{Crash-Free}}$ | **99.5%** | 30 dias | **PARTIALLY_MEASURABLE** | Numerador coletado via `reportClientError`; denominador (total de sessões) requer telemetria de sessão ativa. |
 
 ---
 
 ## 4. Orçamento de Erro (Error Budget)
 
-O Orçamento de Erro representa a quantidade aceitável de degradação antes que a confiabilidade do produto seja considerada comprometida.
-
 $$\text{Error Budget} = 100\% - \text{SLO}$$
 
-### Cálculo do Orçamento em Tempo (Janela de 30 dias = 43.200 minutos):
+### Cálculo do Orçamento para Janela de 30 Dias (43.200 minutos):
 
-$$\text{Tempo de Indisponibilidade Tolerado} = 43.200\text{ minutos} \times (1 - \text{SLO})$$
+$$\text{Indisponibilidade Tolerada} = 43.200\text{ min} \times (1 - \text{SLO})$$
 
-| SLO | META | ERROR BUDGET (%) | TEMPO MÁXIMO DE INDISPONIBILIDADE (30 DIAS) | POLÍTICA DE ESGOTAMENTO DO BUDGET |
+| SLO | META | ERROR BUDGET (%) | ORÇAMENTO TOLERADO (30 DIAS) | POLÍTICA DE ESGOTAMENTO DO BUDGET |
 | :--- | :---: | :---: | :---: | :--- |
-| **SLO 1 (Hosting)** | 99.9% | **0.1%** | **43,2 minutos** | Congelar novos deploys; focar em estabilidade de build e CDN. |
+| **SLO 1 (Hosting)** | 99.9% | **0.1%** | **43,2 minutos** | Congelar novos deploys; focar em estabilidade de CDN e assets estáticos. |
 | **SLO 2 (Frontend Funcional)** | 99.5% | **0.5%** | **216,0 minutos (3,6 horas)** | Investigar regressões de release e acionar rollback se necessário. |
-| **SLO 3 (Functions 5xx)** | 99.5% | **0.5%** | **0,5% das requisições** | Priorizar correções de backend e isolamento de dependências. |
-| **SLO 4 (Latência P95)** | 95.0% | **5.0%** | **5,0% das requisições** | Otimizar queries Firestore e ajustar timeouts upstream. |
-| **SLO 5 (Crash-Free Sessions)** | 99.5% | **0.5%** | **0,5% das sessões** | Tratar causas raiz no `ErrorBoundary` antes de novas features. |
+| **SLO 3 (Functions 5xx)** | 99.5% | **0.5%** | **0,5% das requisições elegíveis** | Priorizar isolamento de falhas upstream e estabilidade de transações. |
+| **SLO 4 (Latência)** | 95.0% | **5.0%** | **5,0% das requisições** | Otimizar chamadas externas ao Mercado Pago e índices do Firestore. |
+| **SLO 5 (Crash-Free)** | 99.5% | **0.5%** | **0,5% das sessões** | Tratar causas raiz no `ErrorBoundary` antes de introduzir novas telas. |
 
 ---
 
@@ -101,31 +101,35 @@ $$\text{Tempo de Indisponibilidade Tolerado} = 43.200\text{ minutos} \times (1 -
 
 | NÍVEL | CRITÉRIOS DE DISPARO | IMPACTO OPERACIONAL | SLA RESPOSTA | SLA MITIGAÇÃO |
 | :--- | :--- | :--- | :---: | :---: |
-| **SEV-1 (Crítico)** | - Indisponibilidade global do Hosting ou tela de Login.<br>- Crash fatal do Dashboard para a maioria dos usuários.<br>- Corrupção matemática ou perda de dados financeiros comprovada. | Todos os usuários afetados ou risco iminente de integridade contábil. | **< 15 min** | **< 2 horas** |
-| **SEV-2 (Alto)** | - Taxa de erro 5xx em Cloud Functions > 5% persistente.<br>- Webhook do Mercado Pago acumulando falhas de processamento.<br>- Bloqueio de exclusão de conta (`deleteUserAccount`) ou falha em rate limits. | Subconjunto significativo de usuários ou reconciliação financeira atrasada. | **< 30 min** | **< 4 horas** |
-| **SEV-3 (Médio)** | - Degradação não crítica (ex: exportação CSV lenta).<br>- Alertas de crescimento anormal de rate limit (tentativas pontuais de abuso).<br>- Aviso de consumo de cota ou degradação leve de latência P95. | Usuários isolados sem impacto na integridade financeira. | **< 2 horas** | **< 24 horas** |
+| **SEV-1 (Crítico)** | - Indisponibilidade global do Hosting ou tela de Login.<br>- Crash fatal do Dashboard para múltiplos usuários.<br>- Corrupção matemática ou perda de dados financeiros comprovada. | Todos os usuários afetados ou risco iminente de integridade contábil. | **< 15 min** | **< 2 horas** |
+| **SEV-2 (Alto)** | - Taxa de erro 5xx em Cloud Functions > 5% persistente.<br>- Webhook do Mercado Pago acumulando falhas de processamento.<br>- Falha em exclusão de conta (`deleteUserAccount`). | Subconjunto significativo de usuários ou reconciliação financeira atrasada. | **< 30 min** | **< 4 horas** |
+| **SEV-3 (Médio)** | - Degradação não crítica (ex: exportação CSV lenta).<br>- Alertas de crescimento anormal de rate limit (tentativas pontuais de abuso).<br>- Aviso de consumo de cota ou degradação leve de latência. | Usuários isolados sem impacto na integridade financeira. | **< 2 horas** | **< 24 horas** |
 
 ---
 
-## 6. Desenho de Alertas Candidatos (Alert Candidate Design)
+## 6. Desenho de Alertas Candidatos (Monitoring-as-Code)
 
 > [!NOTE]
-> Estes alertas representam a especificação técnica formal para configuração no Google Cloud Monitoring. **Nenhum alerta foi criado automaticamente em produção nesta fase.**
+> **Estado Operacional:** Todos os alertas abaixo representam **PROPOSED CONFIGURATION (NOT DEPLOYED)**. Nenhuma política foi criada no Google Cloud Monitoring nesta fase documental.
 
-| NOME DO ALERTA | MÉTRICA / FILTRO DE LOG DE ORIGEM | CONDIÇÃO DE DISPARO | JANELA DE AVALIAÇÃO | SEVERIDADE | AÇÃO OPERACIONAL RECOMENDADA | RISCO DE FALSO-POSITIVO & SALVAGUARDA |
+| NOME DO ALERTA | FONTE DE SINAL REAL | CONDIÇÃO PROPOSTA | JANELA | SEVERIDADE | SALVAGUARDA DE BAIXO VOLUME | RUNBOOK ASSOCIADO |
 | :--- | :--- | :--- | :---: | :---: | :--- | :--- |
-| `ALERT_WEBHOOK_MP_5XX` | `resource.type="cloud_run_revision" jsonPayload.stage="paymentWebhookMercadoPago" severity="ERROR"` | $\ge 2$ falhas em 5 minutos | 5 min | **SEV-2** | Acionar Runbook 1 (reconciliação manual de pagamentos). | **Baixo:** Exige erro explícito de execução no webhook. |
-| `ALERT_PREFERENCE_MP_5XX` | `resource.type="cloud_run_revision" jsonPayload.stage="createMercadoPagoPreference" severity="ERROR"` | $\ge 3$ falhas em 5 minutos | 5 min | **SEV-2** | Verificar status do Secret Manager e disponibilidade da API do MP. | **Baixo:** Distingue 4xx (sem email/não autenticado) de falha 500. |
-| `ALERT_ACCOUNT_DELETION_FAIL` | `resource.type="cloud_run_revision" jsonPayload.stage="deleteUserAccount" severity="ERROR"` | $\ge 1$ falha em 10 minutos | 10 min | **SEV-2** | Auditar locks em `/account_operations` e logs de subcoleções. | **Muito Baixo:** Processo tem baixa frequência e alta criticidade de compliance. |
-| `ALERT_FRONTEND_CRASH_SPIKE` | `resource.type="cloud_run_revision" jsonPayload.event="FRONTEND_ERROR_REPORTED"` | $\ge 5$ eventos em 5 min de pelo menos 2 usuários distintos | 5 min | **SEV-2** | Analisar `component` e `route` nos logs; preparar rollback. | **Médio:** Salvaguarda de múltiplos `userHash` evita disparo por loop de 1 cliente. |
-| `ALERT_RATE_LIMIT_FLOOD` | `resource.type="cloud_run_revision" jsonPayload.result=~"^rate_limited"` | $\ge 30$ rejeições em 5 minutos | 5 min | **SEV-3** | Auditar IP/UID para verificar ataque de negação de serviço ou script malicioso. | **Baixo:** Threshold alto evita alarmes com uso normal. |
-| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Metric `invalid_request_count` | $> 20\%$ de requisições inválidas com volume $\ge 50$ reqs | 15 min | **SEV-2** | Auditar se houve liberação de versão antiga sem token antes de enforcement. | **Baixo:** Combina taxa percentual com contagem mínima de eventos. |
+| `ALERT_WEBHOOK_MP_5XX` | `jsonPayload.stage="paymentWebhookMercadoPago" severity="ERROR"` | $\ge 2$ falhas de processamento | 5 min | **SEV-2** | LogMatch simples; ignora assinaturas inválidas e eventos repetidos. | [Runbook 1](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| `ALERT_PREFERENCE_MP_5XX` | `jsonPayload.stage="createMercadoPagoPreference" severity="ERROR"` | $\ge 3$ falhas internas | 5 min | **SEV-2** | LogMatch simples; ignora rejeições 4xx de rate limit e auth. | [Runbook 1](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| `ALERT_ACCOUNT_DELETION_FAIL` | `jsonPayload.stage="deleteUserAccount" severity="ERROR"` | $\ge 1$ falha de execução | 10 min | **SEV-2** | LogMatch simples; ignora `operation_in_progress` (429). | [Runbook 3](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
+| `ALERT_FRONTEND_CRASH_SPIKE` | `jsonPayload.event="FRONTEND_ERROR_REPORTED"` | $\ge 5$ crashes em 5 min | 5 min | **SEV-2** | Log-based metric count com agregação temporal. | [Runbook 4](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
+| `ALERT_RATE_LIMIT_FLOOD` | `jsonPayload.result=~"^rate_limited"` | $\ge 30$ rejeições em 5 min | 5 min | **SEV-3** | Threshold elevado para evitar falso-positivo com uso normal. | [Runbook 2](file:///c:/Users/Sibelly/OneDrive/Documentos/Projetos/Verss-oFinalAppFinanceiro/docs/incident-response.md#runbook-2-firebase-authentication-indisponível) |
+| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Metric `invalid_request_count` | $> 20\%$ de requisições inválidas ($\ge 50$ reqs) | 15 min | **SEV-2** | **MANUAL GATE / CONSOLE METRIC** (Não automatizável via Cloud Monitoring). | App Check Console Gate |
 
 ---
 
-## 7. Salvaguardas para Baixo Volume de Requisições
+## 7. Especificação de Testes Sintéticos Futuros (Synthetics)
 
-Em conformidade com as diretrizes de confiabilidade do FinControl:
-1. **Regra de Contagem Mínima:** Nenhum alerta de taxa percentual pode disparar com menos de 5 eventos na janela de avaliação.
-2. **Auto-Supressão:** Notificações repetidas do mesmo incidente são suprimidas por um período mínimo de 300 segundos (`notificationRateLimit`).
-3. **Auto-Fechamento:** Incidentes transitórios são automaticamente encerrados após 1.800 segundos sem recorrência de eventos.
+Para habilitar a medição contínua e automatizada de `SLO 2: Functional Availability` sem impactar usuários:
+1. **Conta de Teste Dedicada:** Utilizar exclusivamente credenciais sintéticas de teste em ambiente isolado (nunca contas reais de operador).
+2. **Fluxo Sintético Mínimo:**
+   - Requisição HTTP 200 na Landing Page.
+   - Renderização da tela de Login.
+   - Autenticação de usuário sintético via Firebase Auth.
+   - Carregamento de dados de leitura no Dashboard em menos de 5 segundos.
+   - Logout e encerramento limpo da sessão.

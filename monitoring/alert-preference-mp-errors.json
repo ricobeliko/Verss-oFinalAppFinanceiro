@@ -1,5 +1,5 @@
 {
-  "displayName": "FinControl — Mercado Pago Preference Errors (SEV-2)",
+  "displayName": "FinControl — Mercado Pago Preference Errors (SEV-2) [NOT DEPLOYED]",
   "conditions": [
     {
       "displayName": "Preference Creation error log",
@@ -16,11 +16,11 @@
     "autoClose": "1800s"
   },
   "notificationChannels": [
-    "CHANNEL_RESOURCE_NAME"
+    "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
   ],
   "documentation": {
-    "content": "Falha na criação de preferência de pagamento no Mercado Pago (createMercadoPagoPreference). Consulte o runbook em docs/incident-response.md e verifique os logs no Cloud Logging.",
+    "content": "### FinControl — Alerta de Erro na Criação de Preferência de Pagamento (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** `jsonPayload.stage=\"createMercadoPagoPreference\" AND severity=\"ERROR\"`\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e verifique se há falha de secret (`MERCADOPAGO_ACCESS_TOKEN`) ou indisponibilidade na API do Mercado Pago.\n2. Rejeições 4xx legítimas (não autenticado, e-mail não verificado, rate limit) NÃO acionam este alerta.\n3. Consulte o runbook em `docs/incident-response.md`.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-preference-mp-errors.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
     "mimeType": "text/markdown"
   },
-  "enabled": true
+  "enabled": false
 }

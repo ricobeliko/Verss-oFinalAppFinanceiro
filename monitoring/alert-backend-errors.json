@@ -1,5 +1,5 @@
 {
-  "displayName": "FinControl — Backend Critical Errors (SEV-2)",
+  "displayName": "FinControl — Backend Critical Errors (SEV-2) [NOT DEPLOYED]",
   "conditions": [
     {
       "displayName": "Backend Function Critical Errors",
@@ -16,11 +16,11 @@
     "autoClose": "1800s"
   },
   "notificationChannels": [
-    "CHANNEL_RESOURCE_NAME"
+    "NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"
   ],
   "documentation": {
-    "content": "Exceção crítica ou falha inesperada nas Cloud Functions de backend (deleteUserAccount ou reportClientError). Consulte o runbook em docs/incident-response.md e investigue a causa raiz no Cloud Logging.",
+    "content": "### FinControl — Alerta de Exceção Crítica de Backend (SEV-2)\n\n**Status:** NOT DEPLOYED / PROPOSED CONFIGURATION\n**Sinal:** Exceções reais de backend em `deleteUserAccount` ou runtime inesperado em `reportClientError` (excluindo a telemetria normal de frontend).\n\n#### Ação Operacional:\n1. Acesse o Cloud Logging e filtre por `resource.labels.service_name=\"deleteuseraccount\"`.\n2. Verifique se houve falha na aquisição de lock em `/account_operations` ou erro na deleção em lote.\n3. Consulte o runbook em `docs/incident-response.md`.\n\n#### Comandos de Implantação e Remoção:\n- **Deploy:** `gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-backend-errors.json --project=controle-de-cartao`\n- **Delete:** `gcloud alpha monitoring policies delete POLICY_ID --project=controle-de-cartao`",
     "mimeType": "text/markdown"
   },
-  "enabled": true
+  "enabled": false
 }
