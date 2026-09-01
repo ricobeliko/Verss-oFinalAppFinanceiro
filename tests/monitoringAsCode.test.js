@@ -8,7 +8,8 @@ describe('FinControl — Monitoring-as-Code & Signal Validation (Fase 7.8.2 Sema
     const monitoringDir = path.join(process.cwd(), 'monitoring');
     const metricsDir = path.join(monitoringDir, 'metrics');
 
-    const policyFiles = fs.readdirSync(monitoringDir).filter(f => f.endsWith('.json'));
+    // Filtra especificamente os templates de alerta alert-*.json
+    const policyFiles = fs.readdirSync(monitoringDir).filter(f => f.startsWith('alert-') && f.endsWith('.json'));
     const metricFiles = fs.existsSync(metricsDir) ? fs.readdirSync(metricsDir).filter(f => f.endsWith('.json')) : [];
 
     it('(K) todos os arquivos JSON em monitoring/ e monitoring/metrics/ devem possuir sintaxe JSON válida', () => {
@@ -195,6 +196,7 @@ describe('FinControl — Monitoring-as-Code & Signal Validation (Fase 7.8.2 Sema
         const allFiles = [
             ...policyFiles.map(f => path.join(monitoringDir, f)),
             ...metricFiles.map(f => path.join(metricsDir, f)),
+            path.join(monitoringDir, 'production-state.json'),
             path.join(monitoringDir, 'README.md')
         ];
 

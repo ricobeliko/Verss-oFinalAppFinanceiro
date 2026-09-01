@@ -1,0 +1,120 @@
+{
+  "projectId": "controle-de-cartao",
+  "status": "DEPLOYED",
+  "verificationSource": "Fase 7.8.3 operational verification",
+  "notificationChannel": {
+    "displayName": "FinControl Operações",
+    "type": "email",
+    "enabled": true
+  },
+  "metrics": [
+    {
+      "name": "webhook_processing_errors_count",
+      "kind": "DELTA",
+      "valueType": "INT64",
+      "unit": "1",
+      "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND jsonPayload.stage=\"paymentWebhookMercadoPago\"",
+      "description": "Contagem de erros críticos 5xx de processamento no webhook do Mercado Pago"
+    },
+    {
+      "name": "preference_errors_count",
+      "kind": "DELTA",
+      "valueType": "INT64",
+      "unit": "1",
+      "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.stage=\"createMercadoPagoPreference\" AND severity=\"ERROR\" AND (jsonPayload.result=\"fail_closed_error\" OR jsonPayload.result=\"error\")",
+      "description": "Contagem de falhas internas 5xx e erros upstream na criação de preferência de pagamento no Mercado Pago"
+    },
+    {
+      "name": "frontend_crash_count",
+      "kind": "DELTA",
+      "valueType": "INT64",
+      "unit": "1",
+      "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.stage=\"reportClientError\" AND jsonPayload.event=\"FRONTEND_ERROR_REPORTED\"",
+      "description": "Contagem de falhas fatais de renderização capturadas pelo ErrorBoundary no frontend"
+    },
+    {
+      "name": "rate_limit_rejections_count",
+      "kind": "DELTA",
+      "valueType": "INT64",
+      "unit": "1",
+      "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.result=~\"^rate_limited\"",
+      "description": "Contagem agregada de rejeições por rate limit e cooldown ativo em Cloud Functions"
+    }
+  ],
+  "policies": [
+    {
+      "resourceName": "projects/controle-de-cartao/alertPolicies/12435886503438713935",
+      "displayName": "FinControl — Backend Critical Errors (SEV-2)",
+      "type": "SINGLE_EVENT_LOG_MATCH",
+      "conditionType": "conditionMatchedLog",
+      "filter": "resource.type=\"cloud_run_revision\" AND severity=\"ERROR\" AND resource.labels.service_name=~\"^(deleteuseraccount|reportclienterror)$\" AND NOT (resource.labels.service_name=\"reportclienterror\" AND jsonPayload.event=\"FRONTEND_ERROR_REPORTED\")",
+      "enabled": true,
+      "severity": "SEV-2",
+      "triggerMeaning": ">= 1 unexpected backend failure in deleteUserAccount or reportClientError"
+    },
+    {
+      "resourceName": "projects/controle-de-cartao/alertPolicies/16070910205452193166",
+      "displayName": "FinControl — Webhook Mercado Pago Errors (SEV-2)",
+      "type": "METRIC_THRESHOLD",
+      "conditionType": "conditionThreshold",
+      "metric": "logging.googleapis.com/user/webhook_processing_errors_count",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 1,
+      "triggerMeaning": ">= 2 failures in 5 minutes",
+      "alignmentPeriod": "300s",
+      "perSeriesAligner": "ALIGN_SUM",
+      "crossSeriesReducer": "REDUCE_SUM",
+      "duration": "0s",
+      "enabled": true,
+      "severity": "SEV-2"
+    },
+    {
+      "resourceName": "projects/controle-de-cartao/alertPolicies/7325912833265943606",
+      "displayName": "FinControl — Mercado Pago Preference Errors (SEV-2)",
+      "type": "METRIC_THRESHOLD",
+      "conditionType": "conditionThreshold",
+      "metric": "logging.googleapis.com/user/preference_errors_count",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 2,
+      "triggerMeaning": ">= 3 failures in 5 minutes",
+      "alignmentPeriod": "300s",
+      "perSeriesAligner": "ALIGN_SUM",
+      "crossSeriesReducer": "REDUCE_SUM",
+      "duration": "0s",
+      "enabled": true,
+      "severity": "SEV-2"
+    },
+    {
+      "resourceName": "projects/controle-de-cartao/alertPolicies/15578765959110476833",
+      "displayName": "FinControl — Frontend Crash Spike (SEV-2)",
+      "type": "METRIC_THRESHOLD",
+      "conditionType": "conditionThreshold",
+      "metric": "logging.googleapis.com/user/frontend_crash_count",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 4,
+      "triggerMeaning": ">= 5 crashes in 5 minutes",
+      "alignmentPeriod": "300s",
+      "perSeriesAligner": "ALIGN_SUM",
+      "crossSeriesReducer": "REDUCE_SUM",
+      "duration": "0s",
+      "enabled": true,
+      "severity": "SEV-2"
+    },
+    {
+      "resourceName": "projects/controle-de-cartao/alertPolicies/14951649493746072121",
+      "displayName": "FinControl — Rate Limit Flood & Abuse (SEV-3)",
+      "type": "METRIC_THRESHOLD",
+      "conditionType": "conditionThreshold",
+      "metric": "logging.googleapis.com/user/rate_limit_rejections_count",
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 29,
+      "triggerMeaning": ">= 30 rejections in 5 minutes",
+      "alignmentPeriod": "300s",
+      "perSeriesAligner": "ALIGN_SUM",
+      "crossSeriesReducer": "REDUCE_SUM",
+      "duration": "0s",
+      "enabled": true,
+      "severity": "SEV-3"
+    }
+  ]
+}

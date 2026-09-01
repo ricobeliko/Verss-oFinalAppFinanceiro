@@ -1,93 +1,52 @@
-# FinControl — Monitoring-as-Code Catalog & Deployment Guide
+# FinControl — Monitoring-as-Code & Production Observability Guide
 
-Este diretório contém os templates versionados das políticas de alerta do Google Cloud Monitoring e descritores de métricas baseadas em logs (Log-Based Metrics) para o FinControl.
-
----
-
-## 1. Estado Operacional Atual
-
-> [!IMPORTANT]
-> **Status dos Templates:** `PROPOSED CONFIGURATION (NOT DEPLOYED)`.
-> Nenhuma política de alerta ou métrica foi criada no projeto `controle-de-cartao` nesta fase documental. A implantação no GCP requer a substituição prévia do canal de notificação.
+Este diretório gerencia a infraestrutura de observabilidade e alertas do FinControl no Google Cloud Monitoring, estruturado em duas camadas rigorosamente separadas: **Versioned Template State** (templates de infraestrutura como código seguros para versionamento) e **Current Production State** (estado real em operação).
 
 ---
 
-## 2. Categorização Semântica dos Alertas
+## 1. Versioned Template State (Safe-by-Default Templates)
 
-O FinControl classifica suas políticas de alerta em duas categorias semânticas estritas:
+Os arquivos versionados neste diretório (`monitoring/*.json` e `monitoring/metrics/*.json`) constituem a especificação canônica e segura para provisionamento e evolução contínua da observabilidade:
 
-### Categoria A: Alertas de Evento Único (Single Event LogMatch)
-- **Mecanismo:** `conditionMatchedLog` (disparo imediato no primeiro evento de log correspondente).
-- **Caso de Uso:** Operações críticas onde uma única falha inesperada de infraestrutura já justifica investigação imediata (ex: erro inesperado de backend em `deleteUserAccount`).
-- **Nota sobre `notificationRateLimit`:** O campo `notificationRateLimit` controla apenas o intervalo mínimo entre notificações para evitar tempestades de alertas; ele **NÃO** realiza contagem agregada de eventos por janela temporal.
-
-### Categoria B: Alertas de Contagem e Taxa Agregada (Metric Threshold)
-- **Mecanismo:** Log-Based Metric (`monitoring/metrics/*.json`) + Cloud Monitoring Policy (`conditionThreshold` com `alignmentPeriod: "300s"` e `perSeriesAligner: "ALIGN_SUM"`).
-- **Caso de Uso:** Políticas com salvaguarda de baixo volume que exigem $\ge N$ falhas em uma janela de 5 minutos (ex: $\ge 2$ falhas no webhook, $\ge 3$ na preferência MP, $\ge 5$ crashes no frontend, $\ge 30$ rejeições de rate limit).
+- **Safe-by-Default:** Todos os templates de políticas mantêm `enabled: false` para evitar ativações automáticas indevidas durante execuções de automação de pré-deploy.
+- **Canal de Notificação Desacoplado:** Os templates utilizam o placeholder padrão `"NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"`. Nenhum identificador de recurso de canal de notificação ou dado sensível (como endereços de e-mail) é fixado nos templates versionados.
+- **Zero Secrets / Zero PII:** Nenhum token, chave de API ou dado de identificação pessoal faz parte dos descritores.
+- **Aplicação Deliberada:** A implantação de qualquer template requer intervenção explícita de operador via CLI autenticada com resolução de variáveis de ambiente.
 
 ---
 
-## 3. Catálogo de Políticas e Métricas
+## 2. Current Production State (Estado Operacional Validado na Fase 7.8.3)
 
-| ARQUIVO DE POLÍTICA | MÉTRICA BASEADA EM LOGS | TIPO / SEMÂNTICA | THRESHOLD OPERACIONAL | SEVERIDADE | RUNBOOK ASSOCIADO |
+O projeto de produção `controle-de-cartao` opera atualmente com a stack completa de observabilidade e políticas de alerta ativas, conforme registrado em `monitoring/production-state.json`:
+
+### Canal de Notificação Operacional
+- **Display Name:** `FinControl Operações`
+- **Tipo:** `email`
+- **Status:** `enabled: true`
+
+### Métricas Baseadas em Logs Provisionadas (4 Métricas)
+1. `webhook_processing_errors_count` (DELTA, INT64): Falhas 5xx críticas de processamento em `paymentWebhookMercadoPago`.
+2. `preference_errors_count` (DELTA, INT64): Falhas internas/upstream em `createMercadoPagoPreference` (allowlist estrita: `fail_closed_error` e `error`; excluindo `invalid_argument`, `unauthenticated`, `failed_precondition` e `rate_limited_*`).
+3. `frontend_crash_count` (DELTA, INT64): Falhas fatais de renderização registradas pelo `ErrorBoundary` via `reportClientError`.
+4. `rate_limit_rejections_count` (DELTA, INT64): Rejeições agregadas por limite de taxa e cooldown ativo em Cloud Functions (`result=~"^rate_limited"`).
+
+### Políticas de Alerta Ativas em Produção (5 Políticas — Todas `enabled: true`)
+| NOME DA POLÍTICA | RESOURCE ID | TIPO DE CONDIÇÃO | THRESHOLD OPERACIONAL | SEVERIDADE | RUNBOOK ASSOCIADO |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| `alert-webhook-mp-errors.json` | `metrics/webhook-processing-errors-count.json` | **Categoria B** (Metric Threshold) | $\ge 2$ falhas em 5 min | **SEV-2** | [Runbook 1](../docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
-| `alert-preference-mp-errors.json` | `metrics/preference-errors-count.json` | **Categoria B** (Metric Threshold) | $\ge 3$ falhas em 5 min | **SEV-2** | [Runbook 1](../docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
-| `alert-frontend-crashes.json` | `metrics/frontend-crash-count.json` | **Categoria B** (Metric Threshold) | $\ge 5$ crashes em 5 min | **SEV-2** | [Runbook 4](../docs/incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
-| `alert-rate-limit-flood.json` | `metrics/rate-limit-rejections-count.json` | **Categoria B** (Metric Threshold) | $\ge 30$ rejeições em 5 min | **SEV-3** | [Runbook 2](../docs/incident-response.md#runbook-2-firebase-authentication-indisponível) |
-| `alert-backend-errors.json` | N/A (LogMatch direto) | **Categoria A** (Single Event) | $\ge 1$ falha inesperada | **SEV-2** | [Runbook 3](../docs/incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
+| **Backend Critical Errors** | `12435886503438713935` | Single Event (`conditionMatchedLog`) | $\ge 1$ falha inesperada | **SEV-2** | [Runbook 3](../docs/incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
+| **Webhook Mercado Pago Errors** | `16070910205452193166` | Metric Threshold (`conditionThreshold`) | $\ge 2$ falhas em 5 min | **SEV-2** | [Runbook 1](../docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| **Mercado Pago Preference Errors** | `7325912833265943606` | Metric Threshold (`conditionThreshold`) | $\ge 3$ falhas em 5 min | **SEV-2** | [Runbook 1](../docs/incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| **Frontend Crash Spike** | `15578765959110476833` | Metric Threshold (`conditionThreshold`) | $\ge 5$ crashes em 5 min | **SEV-2** | [Runbook 4](../docs/incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
+| **Rate Limit Flood & Abuse** | `14951649493746072121` | Metric Threshold (`conditionThreshold`) | $\ge 30$ rejeições em 5 min | **SEV-3** | [Runbook 2](../docs/incident-response.md#runbook-2-firebase-authentication-indisponível) |
 
 ---
 
-## 4. Auditoria de Cardinalidade e Privacidade
+## 3. Verificação Contínua de Drift (Read-Only Drift Guard)
 
-- **Zero High-Cardinality Labels:** Nenhuma métrica baseada em logs utiliza `userId`, `userHash`, `paymentId`, strings de mensagem de erro ou URLs arbitrárias como labels métricos. Todos os descritores operam com cardinalidade zero/mínima (`unit: "1"`).
-- **Zero Secrets / Zero PII:** Nenhum token, credencial, chave de API ou e-mail está presente nos templates ou filtros.
-- **Resource Type:** Todos os filtros utilizam `resource.type="cloud_run_revision"`, compatível com Cloud Functions Gen2.
-- **Placeholder de Notificação:** Todos os templates utilizam estritamente `"NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME"`.
+Para garantir que a infraestrutura provisionada no Google Cloud não sofra desvios não autorizados em relação à especificação canônica, o repositório disponibiliza o utilitário:
 
----
-
-## 5. Guia de Implantação e Remoção (Comandos Estáveis)
-
-### Passo 1: Criar as Métricas Baseadas em Logs (Categoria B)
 ```bash
-gcloud logging metrics create webhook_processing_errors_count \
-  --config-from-file=monitoring/metrics/webhook-processing-errors-count.json \
-  --project=controle-de-cartao
-
-gcloud logging metrics create preference_errors_count \
-  --config-from-file=monitoring/metrics/preference-errors-count.json \
-  --project=controle-de-cartao
-
-gcloud logging metrics create frontend_crash_count \
-  --config-from-file=monitoring/metrics/frontend-crash-count.json \
-  --project=controle-de-cartao
-
-gcloud logging metrics create rate_limit_rejections_count \
-  --config-from-file=monitoring/metrics/rate-limit-rejections-count.json \
-  --project=controle-de-cartao
+bash scripts/monitoring/verifyProductionState.sh
 ```
 
-### Passo 2: Substituir o Canal de Notificação e Criar as Políticas de Alerta
-```bash
-# 1. Identificar o ID do canal de notificação
-gcloud monitoring channels list --project=controle-de-cartao
-
-# 2. Aplicar a política com o ID real
-sed 's|NOTIFICATION_CHANNEL_ID_REQUIRED_AT_DEPLOY_TIME|projects/controle-de-cartao/notificationChannels/YOUR_CHANNEL_ID|g' \
-  monitoring/alert-webhook-mp-errors.json > /tmp/deploy-policy.json
-
-gcloud monitoring policies create \
-  --policy-from-file=/tmp/deploy-policy.json \
-  --project=controle-de-cartao
-```
-
-### Passo 3: Remoção / Rollback de Políticas e Métricas
-```bash
-# Excluir política de alerta
-gcloud monitoring policies delete POLICY_ID --project=controle-de-cartao
-
-# Excluir métrica baseada em logs
-gcloud logging metrics delete METRIC_NAME --project=controle-de-cartao
-```
+Este script executa **estritamente comandos read-only** (`gcloud logging metrics describe`, `gcloud monitoring policies describe/list`) e valida métricas, tipos, filtros, thresholds e canais contra `monitoring/production-state.json`.

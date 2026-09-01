@@ -1,6 +1,6 @@
 # FinControl — Service Level Objectives (SLOs) & Gestão de Error Budget
 
-Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de Nível de Serviço (SLOs), Orçamentos de Erro (*Error Budgets*), prontidão de medição e o desenho de alertas candidatos do FinControl.
+Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de Nível de Serviço (SLOs), Orçamentos de Erro (*Error Budgets*), prontidão de medição e o desenho de alertas operacionais do FinControl.
 
 ---
 
@@ -29,9 +29,9 @@ Este documento define os Indicadores de Nível de Serviço (SLIs), Objetivos de 
 ```
 
 > [!IMPORTANT]
-> **Distinção entre SLO, SLA e Performance Observada:**
-> - **SLO (Objetivo):** Meta interna de engenharia para guiar decisões de publicação e confiabilidade.
-> - **SLA (Acordo Comercial):** Contrato legal com clientes (o FinControl opera estritamente com foco em SLOs internos de confiabilidade).
+> **Distinção entre SLO, Threshold de Alerta e Performance Observada:**
+> - **SLO (Objetivo):** Meta interna de engenharia em janela ampla (ex: 30 dias) para guiar decisões de publicação e confiabilidade.
+> - **Threshold de Alerta (Sinal Operacional):** Gatilho de curto prazo (ex: $\ge 2$ falhas em 5 minutos) para acordar o operador em incidentes agudos. Alertas **não** são fórmulas de SLO.
 > - **Performance Observada:** O comportamento real registrado pela telemetria em produção.
 
 ---
@@ -108,19 +108,19 @@ $$\text{Indisponibilidade Tolerada} = 43.200\text{ min} \times (1 - \text{SLO})$
 
 ---
 
-## 6. Desenho de Alertas Candidatos (Monitoring-as-Code)
+## 6. Políticas de Alerta Operacionais (Implantadas em Produção)
 
-> [!NOTE]
-> **Estado Operacional:** Todos os alertas abaixo representam **PROPOSED CONFIGURATION (NOT DEPLOYED)**. Nenhuma política foi criada no Google Cloud Monitoring nesta fase documental.
+> [!IMPORTANT]
+> **Estado Operacional Confirmado:** As políticas de alerta e métricas abaixo estão **implantadas e ativas (`enabled: true`)** no projeto `controle-de-cartao` no Google Cloud Monitoring (validadas na Fase 7.8.3 e rastreadas em `monitoring/production-state.json`). Os templates em `monitoring/*.json` são preservados com `enabled: false` e placeholders para portabilidade de código.
 
-| NOME DO ALERTA | MECANISMO TÉCNICO | CONDIÇÃO PROPOSTA | JANELA | SEVERIDADE | SALVAGUARDA DE BAIXO VOLUME | RUNBOOK ASSOCIADO |
+| NOME DO ALERTA | MECANISMO TÉCNICO | THRESHOLD OPERACIONAL | JANELA | SEVERIDADE | SALVAGUARDA DE BAIXO VOLUME | RUNBOOK ASSOCIADO |
 | :--- | :--- | :--- | :---: | :---: | :--- | :--- |
 | `ALERT_WEBHOOK_MP_5XX` | Log-Based Metric Threshold (`webhook_processing_errors_count`) | $\ge 2$ falhas de processamento | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s; ignora assinaturas inválidas e 4xx esperados. | [Runbook 1](incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
-| `ALERT_PREFERENCE_MP_5XX` | Log-Based Metric Threshold (`preference_errors_count`) | $\ge 3$ falhas internas | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s; ignora rejeições 4xx de rate limit e auth. | [Runbook 1](incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
+| `ALERT_PREFERENCE_MP_5XX` | Log-Based Metric Threshold (`preference_errors_count`) | $\ge 3$ falhas internas | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s; ignora validações de cliente (`invalid_argument`) e 4xx. | [Runbook 1](incident-response.md#runbook-1-webhook-do-mercado-pago-falhando--rejeições-500) |
 | `ALERT_ACCOUNT_DELETION_FAIL` | Single Event LogMatch (`conditionMatchedLog`) | $\ge 1$ falha inesperada | N/A | **SEV-2** | LogMatch de evento único; ignora `operation_in_progress` (429 esperado). | [Runbook 3](incident-response.md#runbook-3-firestore-rules-bloqueando-usuários-legítimos) |
 | `ALERT_FRONTEND_CRASH_SPIKE` | Log-Based Metric Threshold (`frontend_crash_count`) | $\ge 5$ crashes no frontend | 5 min | **SEV-2** | Contagem agregada via `ALIGN_SUM` em 300s (zero high-cardinality labels). | [Runbook 4](incident-response.md#runbook-4-deploy-frontend-quebrado--rollback-imediato) |
 | `ALERT_RATE_LIMIT_FLOOD` | Log-Based Metric Threshold (`rate_limit_rejections_count`) | $\ge 30$ rejeições | 5 min | **SEV-3** | Threshold elevado ($\ge 30$) para evitar falso-positivo com uso normal. | [Runbook 2](incident-response.md#runbook-2-firebase-authentication-indisponível) |
-| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Console Metric | $> 20\%$ de requisições inválidas ($\ge 50$ reqs) | 15 min | **SEV-2** | **MANUAL GATE / CONSOLE METRIC** (Não automatizável via Cloud Monitoring nesta fase). | App Check Console Gate |
+| `ALERT_APPCHECK_REJECTION_SPIKE` | Firebase App Check Console Metric | $> 20\%$ de requisições inválidas ($\ge 50$ reqs) | 15 min | **SEV-2** | **MANUAL GATE / CONSOLE METRIC** (Acompanhamento direto no Firebase Console). | App Check Console Gate |
 
 ---
 

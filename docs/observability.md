@@ -27,8 +27,8 @@ Este documento descreve a infraestrutura de observabilidade, inventário de sina
 ┌───────────────────────────────────────────────────────────────────────┐
 │                      Google Cloud Observability                       │
 │  - Cloud Logging (armazenamento e consulta estruturada de logs)       │
-│  - Cloud Monitoring (métricas de latência, instâncias e throughput)   │
-│  - Alert Policies (LogMatch / Metric Thresholds — candidato)          │
+│  - Log-Based Metrics (4 métricas provisionadas em produção)           │
+│  - Cloud Monitoring (5 Alert Policies ativas em produção)             │
 │  - Firebase App Check Monitoring (Token validation breakdown)         │
 └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -39,19 +39,19 @@ Este documento descreve a infraestrutura de observabilidade, inventário de sina
 
 | SINAL | FONTE (ORIGEM) | COLETADO HOJE? | ALERTA ATIVO? | SEVERIDADE | AÇÃO OPERACIONAL / OWNER |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Frontend fatal error (Crash)** | `ErrorBoundary.jsx` -> `reportClientError` | **SIM** ✅ | ⚠️ PENDENTE | **SEV-1 / SEV-2** | Investigar componente causador, acionar rollback se afetar > 0.5% sessões. |
-| **ErrorBoundary activation volume** | `reportClientError` Cloud Function | **SIM** ✅ | ⚠️ PENDENTE | **SEV-2** | Avaliar regressão de UI ou anomalia em navegador específico. |
+| **Frontend fatal error (Crash)** | `ErrorBoundary.jsx` -> `reportClientError` | **SIM** ✅ | **SIM** ✅ (`ALERT_FRONTEND_CRASH_SPIKE`) | **SEV-1 / SEV-2** | Investigar componente causador, acionar rollback se afetar > 0.5% sessões. |
+| **ErrorBoundary activation volume** | `reportClientError` Cloud Function | **SIM** ✅ | **SIM** ✅ (`ALERT_FRONTEND_CRASH_SPIKE`) | **SEV-2** | Avaliar regressão de UI ou anomalia em navegador específico. |
 | **Authentication failures** | Firebase Auth Client / SDK | **SIM** ✅ (Console) | ❌ NÃO | **SEV-2 / SEV-3** | Verificar indisponibilidade regional do Identity Toolkit ou bloqueio de domínio. |
 | **Firestore permission-denied** | `firestore.rules` (Cloud Logging) | **SIM** ✅ | ❌ NÃO | **SEV-2** | Auditar quebra de contrato no schema ou violação de isolamento por regra. |
-| **App Check invalid / rejected** | Firebase App Check Metrics | **SIM** ✅ (Console) | ❌ NÃO | **SEV-2** | Auditar clientes desatualizados ou tráfego malicioso antes de enforcement. |
-| **Cloud Function 5xx Internal** | Cloud Run Revision / Functions | **SIM** ✅ | ⚠️ PENDENTE | **SEV-2** | Identificar exceção não tratada, dependência externa ou bug de backend. |
+| **App Check invalid / rejected** | Firebase App Check Metrics | **SIM** ✅ (Console) | ❌ NÃO (Manual) | **SEV-2** | Auditar clientes desatualizados ou tráfego malicioso antes de enforcement. |
+| **Cloud Function 5xx Internal** | Cloud Run Revision / Functions | **SIM** ✅ | **SIM** ✅ (`ALERT_WEBHOOK_MP_5XX` / `PREFERENCE`) | **SEV-2** | Identificar exceção não tratada, dependência externa ou bug de backend. |
 | **Cloud Function 4xx abnormal rate** | Cloud Run HTTP logs | **SIM** ✅ | ❌ NÃO | **SEV-3** | Avaliar se é tentativa de abuso/brute force ou quebra de payload do cliente. |
 | **Function Latency P95 Degradation** | Cloud Run Metrics / `latencyMs` | **SIM** ✅ | ❌ NÃO | **SEV-3** | Investigar degradação no upstream (Mercado Pago / Firestore). |
 | **Function Instance Saturation** | Cloud Run Container Metrics | **SIM** ✅ | ❌ NÃO | **SEV-2** | Verificar enfileiramento ou necessidade de ajuste no `maxInstances`. |
-| **Rate-Limit / Cooldown Rejection** | `reserveApiActionAttempt` logs | **SIM** ✅ | ❌ NÃO | **SEV-3** | Informação operacional de anti-abuso. Sem ação se pontual; investigar se massivo. |
-| **Delete-Account Failure / Stall** | `deleteUserAccount` logs | **SIM** ✅ | ⚠️ PENDENTE | **SEV-2** | Verificar falha em lote de exclusão ou stale lock em `/account_operations`. |
-| **Webhook Signature Invalid** | `paymentWebhookMercadoPago` logs | **SIM** ✅ | ⚠️ PENDENTE | **SEV-2** | Verificar expiração de segredo (`MERCADOPAGO_WEBHOOK_SECRET`) ou tentativa de ataque. |
-| **Webhook Processing Failure (500)** | `paymentWebhookMercadoPago` logs | **SIM** ✅ | ⚠️ PENDENTE | **SEV-2** | Acionar Runbook 1, reconciliar pagamento manual via `admin.firestore()`. |
+| **Rate-Limit / Cooldown Rejection** | `reserveApiActionAttempt` logs | **SIM** ✅ | **SIM** ✅ (`ALERT_RATE_LIMIT_FLOOD`) | **SEV-3** | Informação operacional de anti-abuso. Sem ação se pontual; investigar se massivo. |
+| **Delete-Account Failure / Stall** | `deleteUserAccount` logs | **SIM** ✅ | **SIM** ✅ (`ALERT_ACCOUNT_DELETION_FAIL`) | **SEV-2** | Verificar falha em lote de exclusão ou stale lock em `/account_operations`. |
+| **Webhook Signature Invalid** | `paymentWebhookMercadoPago` logs | **SIM** ✅ | ❌ NÃO | **SEV-2** | Verificar expiração de segredo (`MERCADOPAGO_WEBHOOK_SECRET`) ou tentativa de ataque. |
+| **Webhook Processing Failure (500)** | `paymentWebhookMercadoPago` logs | **SIM** ✅ | **SIM** ✅ (`ALERT_WEBHOOK_MP_5XX`) | **SEV-2** | Acionar Runbook 1, reconciliar pagamento manual via `admin.firestore()`. |
 | **Payment Replay (Idempotency)** | `paymentWebhookMercadoPago` logs | **SIM** ✅ | ❌ NÃO | **INFO / SEV-3** | Operação normal de proteção contra duplicação de crédito. |
 | **Firestore Read Volume Spike** | Cloud Firestore Metrics | **SIM** ✅ (Console) | ❌ NÃO | **SEV-3** | Investigar listener vazando no frontend (`onSnapshot` duplicado). |
 | **Firestore Write Volume Spike** | Cloud Firestore Metrics | **SIM** ✅ (Console) | ❌ NÃO | **SEV-3** | Investigar loop de gravação ou atividade massiva de usuário. |
@@ -62,7 +62,7 @@ Este documento descreve a infraestrutura de observabilidade, inventário de sina
 
 | FUNÇÃO | ESTADO OPERACIONAL | TIPO | MEMÓRIA / TIMEOUT | INSTÂNCIAS / CONCORRÊNCIA | LOGGING ESTRUTURADO | SINAIS CHAVE |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| `createMercadoPagoPreference` | **DEPLOYED ✅** | `onCall` (Gen2) | 256 MiB / 60s | max 3 / conc 10 | `stage`, `result`, `latencyMs`, `userHash` | `unauthenticated`, `invalid_argument`, `failed_precondition_email_unverified`, `rate_limited_*`, `success`, `error` |
+| `createMercadoPagoPreference` | **DEPLOYED ✅** | `onCall` (Gen2) | 256 MiB / 60s | max 3 / conc 10 | `stage`, `result`, `latencyMs`, `userHash` | `unauthenticated`, `invalid_argument`, `failed_precondition_email_unverified`, `rate_limited_*`, `success`, `fail_closed_error`, `error` |
 | `paymentWebhookMercadoPago` | **DEPLOYED ✅** | `onRequest` (Gen2) | 256 MiB / 60s | max 3 / conc 20 | `stage`, `result`, `mpLatencyMs`, `paymentStatus` | `WEBHOOK_SIGNATURE_INVALID`, `WEBHOOK_BODY_QUERY_MISMATCH`, `idempotent_skip`, `pro_granted`, `pro_revoked`, `error` |
 | `deleteUserAccount` | **DEPLOYED ✅** | `onCall` (Gen2) | 256 MiB / 60s | max 2 / conc 2 | `stage`, `result`, `userHash` | `ACCOUNT_DELETION_LOCKED`, `lock_acquisition_error`, `success`, `error` |
 | `reportClientError` | **DEPLOYED ✅** | `onCall` (Gen2) | 256 MiB / 30s | max 2 / conc 20 | `stage`, `event`, `errorType`, `component`, `route` | `FRONTEND_ERROR_REPORTED`, in-memory sliding window rate limit |
