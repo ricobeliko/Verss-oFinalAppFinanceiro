@@ -4,9 +4,19 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
-  { ignores: ['dist', 'node_modules', '.firebase', 'functions'] },
+  {
+    ignores: [
+      'dist',
+      'node_modules',
+      '.firebase',
+      'functions/node_modules',
+    ],
+  },
+
   {
     files: ['**/*.{js,jsx}'],
+    ignores: ['functions/**'],
+
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -16,17 +26,50 @@ export default [
         sourceType: 'module',
       },
     },
+
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
     },
+
     rules: {
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]' }],
+
+      'no-unused-vars': [
+        'warn',
+        {
+          varsIgnorePattern: '^[A-Z_]',
+        },
+      ],
+
       'react-refresh/only-export-components': [
         'warn',
-        { allowConstantExport: true },
+        {
+          allowConstantExport: true,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['functions/**/*.js'],
+
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+      },
+    },
+
+    rules: {
+      ...js.configs.recommended.rules,
+
+      'no-restricted-globals': [
+        'error',
+        'name',
+        'length',
       ],
     },
   },
