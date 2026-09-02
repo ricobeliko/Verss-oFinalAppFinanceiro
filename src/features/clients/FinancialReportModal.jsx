@@ -201,7 +201,7 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                     backgroundColor: '#141414', 
                     scale: 2 
                 });
-                const { default: jsPDF } = await import('jspdf');
+                const { jsPDF } = await import('jspdf');
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
