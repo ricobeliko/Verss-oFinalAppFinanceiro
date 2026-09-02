@@ -43,7 +43,8 @@ vi.mock('firebase/firestore', () => ({
     serverTimestamp: vi.fn(() => new Date()),
 }));
 
-import { setupAuthLifecycle, AppProvider } from '../src/context/AppContext.jsx';
+import { setupAuthLifecycle } from '../src/context/authLifecycle.js';
+import { AppProvider } from '../src/context/AppProvider.jsx';
 import Toast from '../src/components/Toast.jsx';
 import {
     subscribeToFirestoreQuery,

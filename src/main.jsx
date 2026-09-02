@@ -2,7 +2,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { AppProvider } from './context/AppContext'; 
+import { AppProvider } from './context/AppProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import App from './App';
 import './index.css';
