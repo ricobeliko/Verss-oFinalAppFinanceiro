@@ -37,10 +37,10 @@ jobs:
 
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Configurar Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -82,7 +82,7 @@ jobs:
 
       # Preserva o dist para o job de E2E reutilizar (opcional)
       - name: Upload do build (artefato)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: dist-build
           path: dist/
@@ -100,10 +100,10 @@ jobs:
 
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Configurar Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
           cache: 'npm'
@@ -126,7 +126,7 @@ jobs:
         run: npm ci --prefix functions
 
       - name: Configurar Java 21 (necessário para Firebase Emulators)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6.0.0
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -199,7 +199,7 @@ jobs:
 
       # Preserva evidências de falha para diagnóstico
       - name: Upload de relatório E2E (em caso de falha)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         if: failure()
         with:
           name: playwright-report
