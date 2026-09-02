@@ -9,8 +9,8 @@ Este documento define o processo formal de gestão de incidentes operacionais, n
 | Nível | Descrição | Impacto | Tempo de Resposta (SLA) | Tempo de Mitigação |
 | :--- | :--- | :--- | :--- | :--- |
 | **SEV-1 (Crítico)** | Sistema indisponível, perda de dados ou quebra total de pagamentos. | Todos os usuários afetados ou falha no processamento financeiro. | < 15 minutos | < 2 horas |
-| **SEV-2 (Alto)** | Recurso crítico degradado (ex: cadastro de compras falhando, webhook com erro). | Subconjunto significativo de usuários ou reconciliação atrasada. | < 30 minutos | < 4 horas |
-| **SEV-3 (Médio)** | Funcionalidade secundária inoperante (ex: IA indisponível, export CSV lento). | Usuários pontuais sem impacto na integridade financeira. | < 2 horas | < 24 horas |
+| **SEV-2 (Alto)** | Recurso crítico degradado (ex: cadastro de compras falhando, webhook com erro, anomalia crítica de custos). | Subconjunto significativo de usuários, reconciliação atrasada ou risco financeiro. | < 30 minutos | < 4 horas |
+| **SEV-3 (Médio)** | Funcionalidade secundária inoperante (ex: IA indisponível, export CSV lento, alerta de 90% budget). | Usuários pontuais sem impacto na integridade financeira. | < 2 horas | < 24 horas |
 | **SEV-4 (Baixo)** | Problema cosmético, warning de log ou pequena inconsistência de layout. | Baixo ou nulo. | < 24 horas | Próximo sprint |
 
 ---
@@ -21,11 +21,11 @@ Este documento define o processo formal de gestão de incidentes operacionais, n
 [1. DETECTAR] ──> [2. CONTER] ──> [3. DIAGNOSTICAR] ──> [4. CORRIGIR] ──> [5. VALIDAR] ──> [6. COMUNICAR] ──> [7. POST-MORTEM]
 ```
 
-1. **Detectar:** Identificação via Cloud Logging, telemetria frontend (`reportClientError`), alertas ou relatório de usuário.
-2. **Conter:** Isolar o componente em falha para estancar o impacto (ex: ativar modo de manutenção, fallback determinístico, desativar webhook temporariamente).
+1. **Detectar:** Identificação via Cloud Logging, Cloud Monitoring, Cloud Billing alerts, telemetria frontend (`reportClientError`), alertas ou relatório de usuário.
+2. **Conter:** Isolar o componente em falha para estancar o impacto (ex: ativar modo de manutenção, fallback determinístico, desativar webhook temporariamente, conter tráfego anômalo).
 3. **Diagnosticar:** Analisar logs estruturados, correlacionar por `stage`, `userHash` e timestamps.
 4. **Corrigir:** Aplicar hotfix mínimo, revert ou ajuste de configuração no GCP/Firebase.
-5. **Validar:** Executar bateria de testes automatizados (`npm test`, `npm run test:e2e`, `npm run test:rules`) antes do deploy.
+5. **Validar:** Executar bateria de testes automatizados (`npm test`, `npm run lint`, `npm run build`) antes do deploy.
 6. **Comunicar:** Informar status aos canais operacionais e usuários afetados com clareza e transparência.
 7. **Post-Mortem:** Documentar causa raiz, lições aprendidas e ações preventivas em até 48h.
 
@@ -117,3 +117,45 @@ Este documento define o processo formal de gestão de incidentes operacionais, n
   1. O sistema já possui fallback determinístico nativo (`deterministic-engine-v1`) que assume imediatamente a síntese sem quebrar a experiência do usuário.
   2. Para forçar o fallback para 100% dos usuários temporariamente:
      - Definir variável de ambiente / secret `AI_PROVIDER_ENABLED="false"`.
+
+---
+
+### Runbook 7: Alerta de Consumo & Gestão de Orçamento (Cloud Billing & Cost Guardrails)
+
+#### A. Estado Operacional Verificado no Google Cloud
+* **Cloud Billing API:** `billingbudgets.googleapis.com` habilitada no projeto.
+* **Orçamento Ativo:** 1 orçamento mensal com valor fixado em **R$ 25,00** (`amount: 25.00 BRL`, `calendarPeriod: MONTH`).
+* **Escopo:** Exclusivo do projeto `controle-de-cartao` (`target project number: 364725310124`).
+* **Thresholds de Gasto Real (CURRENT_SPEND):**
+  - **50%** (R$ 12,50): Acompanhamento informativo de consumo.
+  - **90%** (R$ 22,50): Alerta de atenção para investigação operacional.
+  - **100%** (R$ 25,00): Alerta de alcance do teto orçamentário mensal.
+* **Canais de Notificação:** Destinatários padrão de IAM (`DEFAULT_IAM_RECIPIENTS_ENABLED=true` com rota de e-mail ativa para administradores de faturamento).
+* **Configurações Opcionais / Backlog P3:**
+  - Inclusão do threshold de 75% e de alertas projetados (*FORECASTED_SPEND*) constituem melhorias incrementais não bloqueadoras.
+  - O orçamento opera puramente via notificações assíncronas de e-mail (sem Pub/Sub ou Monitoring Notification Channel vinculados ao budget).
+
+> [!IMPORTANT]
+> **Natureza do Orçamento de Billing:**
+> O orçamento do Cloud Billing é um mecanismo de **DETECÇÃO E ALERTA**, e **NÃO interrompe automaticamente os serviços nem impõe um hard cap físico de desligamento**.
+> Da mesma forma, os guardrails de aplicação e infraestrutura (`maxInstances: 2 a 3`, `concurrency: 2 a 20`, rate limits no Firestore) são limitadores de taxa e concorrência para prevenir abusos pontuais, **mas não substituem o monitoramento de faturamento**.
+
+#### B. Diagnóstico de Anomalias de Custo
+1. Ao receber notificação de threshold (> 50%, > 90% ou > 100%), acessar:
+   - **GCP Console -> Billing -> Reports:** Filtrar por SKU e Serviço para isolar os maiores ofensores (Cloud Functions, Cloud Firestore, Cloud Logging, Network Egress).
+   - **Cloud Monitoring -> Metrics Explorer:** Inspecionar taxa de invocações (`cloud_function/executions`), requisições no Cloud Run (`cloud_run_revision/request_count`) e instâncias ativas (`cloud_run_revision/instance_count`).
+   - **Cloud Logging Explorer:** Verificar picos anômalos de erro ou chamadas externas:
+     ```text
+     resource.type="cloud_run_revision"
+     severity>=WARNING
+     ```
+
+#### C. Mitigação & Contenção Operacional
+1. **Flooding externo contra Cloud Functions:**
+   - As funções de produção possuem tetos rígidos (`maxInstances: 3` em webhook e preferência; `maxInstances: 2` nas demais), limitando o número simultâneo de containers em execução.
+   - Em caso de rajada maliciosa volumosa, avaliar bloqueio por IP ou proteção de borda na CDN.
+2. **Consumo excessivo no Cloud Firestore:**
+   - Com App Check `ENFORCED` em produção, requisições diretas não autorizadas são bloqueadas na borda antes de atingir o banco.
+   - Caso o aumento decorra de clientes oficiais, auditar o ciclo de vida dos listeners (`firestoreSubscriptionRegistry`) para identificar eventuais vazamentos de subscrição.
+3. **Ingestão de telemetria no Cloud Logging:**
+   - O rate limiter backend do `reportClientError` (máx. 10 relatórios/min por IP/UID) impede tempestades de logs de erro do frontend que possam exceder a franquia gratuita de 50 GB/mês.
