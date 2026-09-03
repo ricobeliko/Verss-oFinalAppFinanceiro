@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:production": "node scripts/validate-firebase-environment.mjs production && vite build --mode production",
+    "build:staging": "node scripts/validate-firebase-environment.mjs staging && vite build --mode staging",
     "test": "vitest run",
     "test:rules": "vitest run tests/firestoreRules.test.js",
     "test:functions": "vitest run tests/cloudFunctions.test.js",
