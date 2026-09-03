@@ -29,7 +29,7 @@ ENVIRONMENT_BUILD_GUARD: IMPLEMENTED
 > O projeto `fincontrol-teste-cartao` é o ambiente isolado oficial de testes do FinControl, acessível em `https://fincontrol-teste-cartao.web.app`.
 >
 > **Estado Operacional e Guardrails Ativos:**
-> - **Faturamento & Proteção Financeira:** Plano Blaze vinculado a conta dedicada isolada com **Budget de Alerta de R$ 10,00/mês** (50%, 90%, 100%) e **Spend Cap em R$ 10,00** para Cloud Run / Cloud Run Functions.
+> - **Faturamento & Proteção Financeira:** Plano Blaze vinculado a conta dedicada isolada com **Budget de Alerta de R$ 10,00/mês** (50%, 90%, 100%) e **Spend Cap de R$ 10,00** para Cloud Run Functions.
 > - **Primeira Cloud Function:** `reportClientError` (Gen2, Node.js 22, `southamerica-east1`, 256MiB, timeout 30s, maxInstances=2, concurrency=20).
 > - **App Check:** Registrado para o Web App de staging. Na Cloud Function `reportClientError`, o App Check está **estritamente enforced no backend** (`enforceAppCheck: true`), comprovado por teste negativo com rejeição HTTP 401 UNAUTHENTICATED. *Nota: Não há enforcement global declarado em outros recursos do projeto*. Replay protection (`consumeAppCheckToken`) não está ativado.
 > - **Otimização de Custos de Armazenamento:** Política de limpeza do Artifact Registry (`southamerica-east1`) ativa com retenção de **1 dia** para imagens transitórias de build.
