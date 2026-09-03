@@ -8,18 +8,25 @@ Este documento estabelece o modelo oficial de homologação, testes intermediár
 
 ```text
 STAGING_FIREBASE_PROJECT: fincontrol-teste-cartao
-STAGING_PROJECT_STATUS: PROVISIONED_CORE
-STAGING_BILLING: NOT_LINKED
+STAGING_PROJECT_STATUS: OPERATIONAL_FRONTEND_AND_SECURITY_BASELINE
+STAGING_RULES: DEPLOYED
+STAGING_HOSTING: DEPLOYED
+STAGING_APP_CHECK: CONFIGURED_UNENFORCED
 STAGING_FUNCTIONS: NOT_DEPLOYED
-STAGING_APP_CHECK: NOT_CONFIGURED
+STAGING_BILLING: NOT_LINKED
+STAGING_REAL_DATA: NONE
+STAGING_EXTERNAL_PAID_APIS: DISABLED
 ENVIRONMENT_BUILD_GUARD: IMPLEMENTED
 ```
 
 > [!IMPORTANT]
-> **Ambiente de Staging Dedicado Provisionado (Fase 8.2 Change Set 3):**
-> O projeto `fincontrol-teste-cartao` foi criado como ambiente isolado de testes e homologação em nuvem.
-> **Estado Atual:** A infraestrutura de base (Firestore Native `(default)` em `southamerica-east1`, Web App, Authentication Email/Password e Hosting) está provisionada.
-> **Aviso de Limitação:** O ambiente de staging **AINDA NÃO replica totalmente a produção**: Billing/Blaze não está vinculado, Cloud Functions v2 não foram implantadas, App Check não foi configurado e integrações externas (Mercado Pago e Gemini) estão desligadas. O projeto `controle-de-cartao` permanece intocado como ambiente único de Produção.
+> **Ambiente de Staging Operacional & Baseline de Segurança (Fase 8.2 Change Set 4):**
+> O projeto `fincontrol-teste-cartao` teve seu primeiro deploy seguro de frontend concluído com sucesso e está acessível em `https://fincontrol-teste-cartao.web.app`.
+> **Segurança Ativa:**
+> - **Firestore Rules:** Versão canônica idêntica à produção implantada no Firestore Nativo `(default)` em `southamerica-east1`.
+> - **App Check:** reCAPTCHA Enterprise configurado e registrado para o Web App de staging em modo **não-enforcement** (atestação e observação ativas, sem bloqueio restritivo).
+> - **Hosting:** Primeiro frontend compilado via `npm run build:staging` publicado e validado com smoke tests (Landing Page e tela de autenticação operacionais, zero erros fatais).
+> **Aviso de Limitação:** O ambiente de staging **AINDA NÃO replica totalmente a produção**: Billing/Blaze não está vinculado, Cloud Functions v2 não foram implantadas, e integrações externas (Mercado Pago e Gemini) permanecem desligadas. O projeto `controle-de-cartao` permanece intocado como ambiente único de Produção.
 
 ---
 
