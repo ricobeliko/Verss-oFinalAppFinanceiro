@@ -36,7 +36,8 @@ function sanitizeErrorMessage(str) {
 }
 
 const { reserveApiActionAttempt, releaseApiActionInFlight } = require("./security/rateLimit");
-const { acquireAccountOperationLock, updateAccountOperationStatus, releaseAccountOperationLock } = require("./security/accountOperationLock");
+const accountOperationLock = require("./security/accountOperationLock");
+const { acquireAccountOperationLock, updateAccountOperationStatus, releaseAccountOperationLock } = accountOperationLock;
 
 // ============================================================
 // HELPERS DO WEBHOOK MERCADO PAGO
@@ -802,11 +803,47 @@ DIRETRIZES RÍGIDAS DE CONDUTA:
 );
 
 // ============================================================
+// POLÍTICA DE REAUTENTICAÇÃO RECENTE (RECENT AUTH GATE)
+// Operações destrutivas ou de alto privilégio exigem que o usuário
+// tenha se autenticado recentemente (request.auth.token.auth_time).
+// Tolerância padrão: 5 minutos (300 segundos).
+// Tolerância contra clock drift no futuro: 60 segundos.
+// ============================================================
+const MAX_AUTH_AGE_SECONDS = 5 * 60;
+const CLOCK_DRIFT_TOLERANCE_SECONDS = 60;
+
+function validateRecentAuthentication(auth, maxAgeSeconds = MAX_AUTH_AGE_SECONDS, clockDriftSeconds = CLOCK_DRIFT_TOLERANCE_SECONDS, nowMs = Date.now()) {
+    if (!auth) {
+        return { valid: false, reason: "unauthenticated" };
+    }
+    const token = auth.token;
+    if (!token || token.auth_time === undefined || token.auth_time === null) {
+        return { valid: false, reason: "missing_auth_time" };
+    }
+    const authTime = Number(token.auth_time);
+    if (!Number.isFinite(authTime) || authTime <= 0) {
+        return { valid: false, reason: "invalid_auth_time" };
+    }
+    const nowSeconds = Math.floor(nowMs / 1000);
+    if (authTime > nowSeconds + clockDriftSeconds) {
+        return { valid: false, reason: "future_auth_time" };
+    }
+    const ageSeconds = nowSeconds - authTime;
+    if (ageSeconds > maxAgeSeconds) {
+        return { valid: false, reason: "stale_auth", ageSeconds };
+    }
+    return { valid: true, ageSeconds };
+}
+
+// ============================================================
 // FUNÇÃO 4: deleteUserAccount
 // Exclusão de conta de usuário (LGPD/GDPR): processo sequencial, paginado e idempotente
 // quando retomado; não constitui transação distribuída atômica.
 // Exclui subcoleções financeiras, documentos de rate limit, documento raiz e Auth record por último.
-// Protegida por lock persistente e distribuído em /account_operations/{uid}.
+// Protegida por:
+// 1. App Check Enforcement (enforceAppCheck: true)
+// 2. Recent Auth Gate (auth_time <= 5 minutos)
+// 3. Lock persistente e distribuído em /account_operations/{uid}
 // ============================================================
 exports.deleteUserAccount = onCall(
     {
@@ -815,16 +852,35 @@ exports.deleteUserAccount = onCall(
         concurrency: 2,
         timeoutSeconds: 60,
         memory: "256MiB",
+        enforceAppCheck: true,
     },
     async (request) => {
         const stage = "deleteUserAccount";
 
+        // 1. Autenticação obrigatória
         if (!request.auth) {
             logger.warn(`[${stage}] Tentativa não autenticada rejeitada.`, {
                 stage,
                 result: "unauthenticated",
             });
             throw new HttpsError("unauthenticated", "Você precisa estar autenticado para excluir sua conta.");
+        }
+
+        // 2. Validação de Autenticação Recente (Recent Auth Gate)
+        // Rejeita sessões antigas ou sequestradas ANTES de qualquer lock ou efeito colateral no banco.
+        const recentAuthCheck = validateRecentAuthentication(request.auth);
+        if (!recentAuthCheck.valid) {
+            logger.warn(`[${stage}] Reautenticação recente necessária para exclusão de conta.`, {
+                stage,
+                userHash: hashUid(request.auth.uid),
+                reason: recentAuthCheck.reason,
+                result: "recent_auth_required",
+            });
+            throw new HttpsError(
+                "failed-precondition",
+                "Esta operação requer autenticação recente. Por favor, faça login novamente antes de prosseguir com a exclusão da conta.",
+                { reason: "recent-auth-required" }
+            );
         }
 
         const userId = request.auth.uid;
@@ -841,7 +897,7 @@ exports.deleteUserAccount = onCall(
         let leaseId = null;
 
         try {
-            const lockResult = await acquireAccountOperationLock(db, {
+            const lockResult = await accountOperationLock.acquireAccountOperationLock(db, {
                 userId,
                 operation: "deleteUserAccount",
                 staleThresholdMs: 75 * 1000,
@@ -910,7 +966,7 @@ exports.deleteUserAccount = onCall(
             await admin.auth().deleteUser(userId);
 
             // 6. Marcar lock de operação de conta como concluído com Compare-and-Set
-            await updateAccountOperationStatus(db, operationRef, leaseId, "completed");
+            await accountOperationLock.updateAccountOperationStatus(db, operationRef, leaseId, "completed");
 
             logger.info(`[${stage}] Conta excluída com sucesso em todos os armazenamentos.`, {
                 stage,
@@ -925,7 +981,7 @@ exports.deleteUserAccount = onCall(
             };
         } catch (error) {
             if (operationRef && leaseId) {
-                await updateAccountOperationStatus(db, operationRef, leaseId, "failed").catch(() => {});
+                await accountOperationLock.updateAccountOperationStatus(db, operationRef, leaseId, "failed").catch(() => {});
             }
             logger.error(`[${stage}] Erro ao processar exclusão de conta de usuário.`, {
                 stage,
@@ -938,30 +994,91 @@ exports.deleteUserAccount = onCall(
     }
 );
 
-// In-memory sliding window rate limit para telemetria frontend (máx 10 por minuto por IP/UID)
-const clientErrorReportLimits = new Map();
+// ============================================================
+// RATE LIMITING EM MEMÓRIA LIMITADO (BOUNDED IN-MEMORY LRU)
+// Para telemetria de reportClientError sem persistência em Firestore.
+// Capacidade máxima: 1.000 identificadores rastreados.
+// Janela deslizante: 10 requisições por minuto por identificador.
+// Complexidade:
+// - Evicção LRU: O(1) em Map JS (chaves re-inseridas no acesso).
+// - Cleanup oportunista de inativos: O(n), com n limitado a MAX_TRACKED_ERROR_IDENTIFIERS.
+// ============================================================
+const MAX_TRACKED_ERROR_IDENTIFIERS = 1000;
+const CLIENT_ERROR_WINDOW_MS = 60 * 1000;
+const CLIENT_ERROR_MAX_PER_WINDOW = 10;
 
-function isClientErrorReportAllowed(identifier) {
-    const now = Date.now();
-    const windowMs = 60 * 1000;
-    const maxPerMin = 10;
-
-    let timestamps = clientErrorReportLimits.get(identifier) || [];
-    timestamps = timestamps.filter(t => (now - t) < windowMs);
-
-    if (timestamps.length >= maxPerMin) {
-        return false;
+class BoundedClientErrorRateLimiter {
+    constructor(options = {}) {
+        this.windowMs = options.windowMs || CLIENT_ERROR_WINDOW_MS;
+        this.maxPerWindow = options.maxPerWindow || CLIENT_ERROR_MAX_PER_WINDOW;
+        this.maxTracked = options.maxTracked || MAX_TRACKED_ERROR_IDENTIFIERS;
+        this.limits = new Map();
     }
 
-    timestamps.push(now);
-    clientErrorReportLimits.set(identifier, timestamps);
-    return true;
+    cleanup(now) {
+        for (const [key, entry] of this.limits) {
+            const active = entry.timestamps.filter(t => (now - t) < this.windowMs);
+            if (active.length === 0) {
+                this.limits.delete(key);
+            } else {
+                entry.timestamps = active;
+            }
+        }
+    }
+
+    isAllowed(rawIdentifier, now = Date.now()) {
+        const identifier = String(rawIdentifier || "anonymous").slice(0, 128);
+
+        let entry = this.limits.get(identifier);
+        let timestamps = entry ? entry.timestamps.filter(t => (now - t) < this.windowMs) : [];
+
+        if (timestamps.length >= this.maxPerWindow) {
+            // Atualiza posição LRU no Map sem permitir nova requisição
+            this.limits.delete(identifier);
+            this.limits.set(identifier, { timestamps, lastSeen: now });
+            return false;
+        }
+
+        // Se identificador novo e limite de capacidade atingido, executa limpeza oportunista
+        if (!entry && this.limits.size >= this.maxTracked) {
+            this.cleanup(now);
+            // Se ainda atingir o teto após purgar inativos, evicta deterministicamente o mais antigo (LRU)
+            if (this.limits.size >= this.maxTracked) {
+                const oldestKey = this.limits.keys().next().value;
+                if (oldestKey !== undefined) {
+                    this.limits.delete(oldestKey);
+                }
+            }
+        }
+
+        timestamps.push(now);
+        this.limits.delete(identifier);
+        this.limits.set(identifier, { timestamps, lastSeen: now });
+        return true;
+    }
+
+    reset() {
+        this.limits.clear();
+    }
+
+    get size() {
+        return this.limits.size;
+    }
+}
+
+const clientErrorReportLimiter = new BoundedClientErrorRateLimiter();
+
+function isClientErrorReportAllowed(identifier, now = Date.now()) {
+    return clientErrorReportLimiter.isAllowed(identifier, now);
 }
 
 // ============================================================
 // FUNÇÃO 5: reportClientError
 // Observabilidade Frontend: Recebe relatórios sanitizados de erros do cliente.
 // Rate-limited no backend para evitar flooding de logs. Whitelist estrita.
+// Protegida por:
+// 1. App Check Enforcement (enforceAppCheck: true)
+// 2. Bounded In-Memory Rate Limiting (10 req/min por IP/UID, máx 1.000 identificadores)
 // ============================================================
 exports.reportClientError = onCall(
     {
@@ -970,6 +1087,7 @@ exports.reportClientError = onCall(
         concurrency: 20,
         timeoutSeconds: 30,
         memory: "256MiB",
+        enforceAppCheck: true,
     },
     async (request) => {
         const stage = "reportClientError";
@@ -1024,3 +1142,8 @@ exports.releaseAccountOperationLock = releaseAccountOperationLock;
 exports.extractWebhookQueryDataId = extractWebhookQueryDataId;
 exports.parseXSignature = parseXSignature;
 exports.validateMercadoPagoWebhookSignature = validateMercadoPagoWebhookSignature;
+exports.validateRecentAuthentication = validateRecentAuthentication;
+exports.BoundedClientErrorRateLimiter = BoundedClientErrorRateLimiter;
+exports.isClientErrorReportAllowed = isClientErrorReportAllowed;
+exports.MAX_AUTH_AGE_SECONDS = MAX_AUTH_AGE_SECONDS;
+exports.MAX_TRACKED_ERROR_IDENTIFIERS = MAX_TRACKED_ERROR_IDENTIFIERS;
