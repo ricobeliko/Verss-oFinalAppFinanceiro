@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "controle-de-cartao"
+    "default": "controle-de-cartao",
+    "production": "controle-de-cartao",
+    "staging": "fincontrol-teste-cartao"
   },
   "targets": {},
   "etags": {}

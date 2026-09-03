@@ -7,14 +7,19 @@ Este documento estabelece o modelo oficial de homologação, testes intermediár
 ## 1. Mapeamento de Ambientes
 
 ```text
-STAGING_FIREBASE_PROJECT: NOT AVAILABLE
+STAGING_FIREBASE_PROJECT: fincontrol-teste-cartao
+STAGING_PROJECT_STATUS: PROVISIONED_CORE
+STAGING_BILLING: NOT_LINKED
+STAGING_FUNCTIONS: NOT_DEPLOYED
+STAGING_APP_CHECK: NOT_CONFIGURED
 ENVIRONMENT_BUILD_GUARD: IMPLEMENTED
 ```
 
 > [!IMPORTANT]
-> **O FinControl não possui um projeto Firebase secundário ou exclusivo para Staging.**
-> O único projeto de nuvem existente é `controle-de-cartao` (Produção).
-> Qualquer tentativa de criar projetos ou recursos na nuvem sem autorização expressa é proibida.
+> **Ambiente de Staging Dedicado Provisionado (Fase 8.2 Change Set 3):**
+> O projeto `fincontrol-teste-cartao` foi criado como ambiente isolado de testes e homologação em nuvem.
+> **Estado Atual:** A infraestrutura de base (Firestore Native `(default)` em `southamerica-east1`, Web App, Authentication Email/Password e Hosting) está provisionada.
+> **Aviso de Limitação:** O ambiente de staging **AINDA NÃO replica totalmente a produção**: Billing/Blaze não está vinculado, Cloud Functions v2 não foram implantadas, App Check não foi configurado e integrações externas (Mercado Pago e Gemini) estão desligadas. O projeto `controle-de-cartao` permanece intocado como ambiente único de Produção.
 
 ---
 
