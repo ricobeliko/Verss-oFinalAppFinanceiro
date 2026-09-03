@@ -8,25 +8,47 @@ Este documento estabelece o modelo oficial de homologação, testes intermediár
 
 ```text
 STAGING_FIREBASE_PROJECT: fincontrol-teste-cartao
-STAGING_PROJECT_STATUS: OPERATIONAL_FRONTEND_AND_SECURITY_BASELINE
+STAGING_PROJECT_STATUS: OPERATIONAL_WITH_FIRST_FUNCTION
 STAGING_RULES: DEPLOYED
 STAGING_HOSTING: DEPLOYED
-STAGING_APP_CHECK: CONFIGURED_UNENFORCED
-STAGING_FUNCTIONS: NOT_DEPLOYED
-STAGING_BILLING: NOT_LINKED
+STAGING_BILLING: BLAZE
+STAGING_ALERT_BUDGET: BRL_10_ACTIVE
+STAGING_SPEND_CAP: BRL_10_CLOUD_RUN_FUNCTIONS_ACTIVE
+STAGING_FUNCTIONS: reportClientError_ONLY
+STAGING_APP_CHECK: CONFIGURED
+REPORT_CLIENT_ERROR_APP_CHECK: ENFORCED
+REPORT_CLIENT_ERROR_REPLAY_PROTECTION: NOT_ENABLED
+STAGING_ARTIFACT_CLEANUP: 1_DAY
 STAGING_REAL_DATA: NONE
 STAGING_EXTERNAL_PAID_APIS: DISABLED
 ENVIRONMENT_BUILD_GUARD: IMPLEMENTED
 ```
 
 > [!IMPORTANT]
-> **Ambiente de Staging Operacional & Baseline de Segurança (Fase 8.2 Change Set 4):**
-> O projeto `fincontrol-teste-cartao` teve seu primeiro deploy seguro de frontend concluído com sucesso e está acessível em `https://fincontrol-teste-cartao.web.app`.
-> **Segurança Ativa:**
-> - **Firestore Rules:** Versão canônica idêntica à produção implantada no Firestore Nativo `(default)` em `southamerica-east1`.
-> - **App Check:** reCAPTCHA Enterprise configurado e registrado para o Web App de staging em modo **não-enforcement** (atestação e observação ativas, sem bloqueio restritivo).
-> - **Hosting:** Primeiro frontend compilado via `npm run build:staging` publicado e validado com smoke tests (Landing Page e tela de autenticação operacionais, zero erros fatais).
-> **Aviso de Limitação:** O ambiente de staging **AINDA NÃO replica totalmente a produção**: Billing/Blaze não está vinculado, Cloud Functions v2 não foram implantadas, e integrações externas (Mercado Pago e Gemini) permanecem desligadas. O projeto `controle-de-cartao` permanece intocado como ambiente único de Produção.
+> **Ambiente de Staging Operacional & Primeira Function Ativa (Fase 8.2 Change Set 9):**
+> O projeto `fincontrol-teste-cartao` é o ambiente isolado oficial de testes do FinControl, acessível em `https://fincontrol-teste-cartao.web.app`.
+>
+> **Estado Operacional e Guardrails Ativos:**
+> - **Faturamento & Proteção Financeira:** Plano Blaze vinculado a conta dedicada isolada com **Budget de Alerta de R$ 10,00/mês** (50%, 90%, 100%) e **Spend Cap em R$ 10,00** para Cloud Run / Cloud Run Functions.
+> - **Primeira Cloud Function:** `reportClientError` (Gen2, Node.js 22, `southamerica-east1`, 256MiB, timeout 30s, maxInstances=2, concurrency=20).
+> - **App Check:** Registrado para o Web App de staging. Na Cloud Function `reportClientError`, o App Check está **estritamente enforced no backend** (`enforceAppCheck: true`), comprovado por teste negativo com rejeição HTTP 401 UNAUTHENTICATED. *Nota: Não há enforcement global declarado em outros recursos do projeto*. Replay protection (`consumeAppCheckToken`) não está ativado.
+> - **Otimização de Custos de Armazenamento:** Política de limpeza do Artifact Registry (`southamerica-east1`) ativa com retenção de **1 dia** para imagens transitórias de build.
+> - **Firestore Rules & Hosting:** Rules canônicas idênticas à produção e frontend staging compilado via `npm run build:staging`.
+>
+> **Limitações Críticas do Staging:**
+> O ambiente de staging **AINDA NÃO replica a produção totalmente**. Permanecem rigorosamente **fora de escopo e não implantados**:
+> 1. `deleteUserAccount` (não implantada em staging)
+> 2. `createMercadoPagoPreference` (não implantada em staging)
+> 3. `paymentWebhookMercadoPago` (não implantada em staging)
+> 4. `generateAiMonthlyBriefing` (não implantada em staging)
+> 5. Integrações de pagamento reais do Mercado Pago (desabilitadas)
+> 6. Chamadas à API Gemini (desabilitadas)
+> 7. Replay protection de App Check
+>
+> **Owner Cost Policy:**
+> - `STRICT_LOW_COST = true`
+> - Qualquer nova Function ou recurso com potencial de custo: **REQUIRES_OWNER_APPROVAL**.
+> - O projeto `controle-de-cartao` permanece intocado como ambiente único e exclusivo de Produção.
 
 ---
 
