@@ -36,7 +36,8 @@ function sanitizeErrorMessage(str) {
 }
 
 const { reserveApiActionAttempt, releaseApiActionInFlight } = require("./security/rateLimit");
-const { acquireAccountOperationLock, updateAccountOperationStatus, releaseAccountOperationLock } = require("./security/accountOperationLock");
+const accountOperationLock = require("./security/accountOperationLock");
+const { acquireAccountOperationLock, updateAccountOperationStatus, releaseAccountOperationLock } = accountOperationLock;
 
 // ============================================================
 // HELPERS DO WEBHOOK MERCADO PAGO
@@ -896,7 +897,7 @@ exports.deleteUserAccount = onCall(
         let leaseId = null;
 
         try {
-            const lockResult = await acquireAccountOperationLock(db, {
+            const lockResult = await accountOperationLock.acquireAccountOperationLock(db, {
                 userId,
                 operation: "deleteUserAccount",
                 staleThresholdMs: 75 * 1000,
@@ -965,7 +966,7 @@ exports.deleteUserAccount = onCall(
             await admin.auth().deleteUser(userId);
 
             // 6. Marcar lock de operação de conta como concluído com Compare-and-Set
-            await updateAccountOperationStatus(db, operationRef, leaseId, "completed");
+            await accountOperationLock.updateAccountOperationStatus(db, operationRef, leaseId, "completed");
 
             logger.info(`[${stage}] Conta excluída com sucesso em todos os armazenamentos.`, {
                 stage,
@@ -980,7 +981,7 @@ exports.deleteUserAccount = onCall(
             };
         } catch (error) {
             if (operationRef && leaseId) {
-                await updateAccountOperationStatus(db, operationRef, leaseId, "failed").catch(() => {});
+                await accountOperationLock.updateAccountOperationStatus(db, operationRef, leaseId, "failed").catch(() => {});
             }
             logger.error(`[${stage}] Erro ao processar exclusão de conta de usuário.`, {
                 stage,
@@ -996,9 +997,11 @@ exports.deleteUserAccount = onCall(
 // ============================================================
 // RATE LIMITING EM MEMÓRIA LIMITADO (BOUNDED IN-MEMORY LRU)
 // Para telemetria de reportClientError sem persistência em Firestore.
-// Capacidade máxima: 1.000 identificadores ativos (~200 KB de memória máxima).
+// Capacidade máxima: 1.000 identificadores rastreados.
 // Janela deslizante: 10 requisições por minuto por identificador.
-// Evicção determinística O(1): LRU em Map JS (chaves re-inseridas no acesso).
+// Complexidade:
+// - Evicção LRU: O(1) em Map JS (chaves re-inseridas no acesso).
+// - Cleanup oportunista de inativos: O(n), com n limitado a MAX_TRACKED_ERROR_IDENTIFIERS.
 // ============================================================
 const MAX_TRACKED_ERROR_IDENTIFIERS = 1000;
 const CLIENT_ERROR_WINDOW_MS = 60 * 1000;
@@ -1075,7 +1078,7 @@ function isClientErrorReportAllowed(identifier, now = Date.now()) {
 // Rate-limited no backend para evitar flooding de logs. Whitelist estrita.
 // Protegida por:
 // 1. App Check Enforcement (enforceAppCheck: true)
-// 2. Bounded In-Memory Rate Limiting (10 req/min por IP/UID, máx 1000 IDs)
+// 2. Bounded In-Memory Rate Limiting (10 req/min por IP/UID, máx 1.000 identificadores)
 // ============================================================
 exports.reportClientError = onCall(
     {

@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import admin from '../functions/node_modules/firebase-admin';
+import accountOperationLock from '../functions/security/accountOperationLock.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +22,20 @@ import {
 describe('FinControl — First Callables Code Hardening (Fase 8.2 Change Set 6)', () => {
 
     describe('deleteUserAccount — Recent Auth Policy & Zero Side Effects', () => {
+        let firestoreSpy;
+        let authSpy;
+        let lockSpy;
+
+        beforeEach(() => {
+            vi.restoreAllMocks();
+            firestoreSpy = vi.spyOn(admin, 'firestore');
+            authSpy = vi.spyOn(admin, 'auth');
+            lockSpy = vi.spyOn(accountOperationLock, 'acquireAccountOperationLock');
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
 
         it('deve rejeitar se auth estiver ausente', () => {
             const res = validateRecentAuthentication(null);
@@ -91,17 +107,86 @@ describe('FinControl — First Callables Code Hardening (Fase 8.2 Change Set 6)'
             expect(res.ageSeconds).toBe(60);
         });
 
-        it('GATE CRÍTICO: rejeição de recent auth não deve causar nenhum efeito colateral no banco ou Auth', async () => {
-            const nowSec = Math.floor(Date.now() / 1000);
-            const expiredAuthRequest = {
+        it('CASO A — auth_time ausente: rejeita e assegura ZERO side effects na infraestrutura', async () => {
+            const request = {
                 auth: {
-                    uid: 'user-stale-attack',
+                    uid: 'user-missing-auth-time',
+                    token: {} // Sem auth_time
+                }
+            };
+
+            await expect(deleteUserAccount.run(request))
+                .rejects.toThrow('Esta operação requer autenticação recente');
+
+            expect(firestoreSpy).not.toHaveBeenCalled();
+            expect(authSpy).not.toHaveBeenCalled();
+            expect(lockSpy).not.toHaveBeenCalled();
+        });
+
+        it('CASO B — auth_time stale (> 300s): rejeita e assegura ZERO side effects na infraestrutura', async () => {
+            const nowSec = Math.floor(Date.now() / 1000);
+            const request = {
+                auth: {
+                    uid: 'user-stale-auth',
                     token: { auth_time: nowSec - 600 } // 10 minutos atrás
                 }
             };
 
-            await expect(deleteUserAccount.run(expiredAuthRequest))
+            await expect(deleteUserAccount.run(request))
                 .rejects.toThrow('Esta operação requer autenticação recente');
+
+            expect(firestoreSpy).not.toHaveBeenCalled();
+            expect(authSpy).not.toHaveBeenCalled();
+            expect(lockSpy).not.toHaveBeenCalled();
+        });
+
+        it('CASO C — requisição sem autenticação: rejeita com unauthenticated e ZERO side effects', async () => {
+            const request = { auth: null };
+
+            await expect(deleteUserAccount.run(request))
+                .rejects.toThrow('Você precisa estar autenticado para excluir sua conta.');
+
+            expect(firestoreSpy).not.toHaveBeenCalled();
+            expect(authSpy).not.toHaveBeenCalled();
+            expect(lockSpy).not.toHaveBeenCalled();
+        });
+
+        it('CASO D — auth_time recente (60s): gate de autenticação recente passa com sucesso', () => {
+            const nowMs = 1700000000000;
+            const nowSec = Math.floor(nowMs / 1000);
+            const recentAuth = {
+                token: {
+                    auth_time: nowSec - 60,
+                    email_verified: false
+                }
+            };
+
+            const result = validateRecentAuthentication(recentAuth, 300, 60, nowMs);
+            expect(result.valid).toBe(true);
+            expect(result.ageSeconds).toBe(60);
+        });
+
+        it('ASSERTION ESTRUTURAL: validateRecentAuthentication é invocado antes de qualquer acesso ao Firestore, Lock ou Auth', () => {
+            const sourcePath = path.resolve(__dirname, '../functions/index.js');
+            const sourceCode = fs.readFileSync(sourcePath, 'utf8');
+
+            const deleteFnStart = sourceCode.indexOf('exports.deleteUserAccount = onCall(');
+            expect(deleteFnStart).toBeGreaterThan(-1);
+
+            const recentAuthIdx = sourceCode.indexOf('validateRecentAuthentication(request.auth)', deleteFnStart);
+            const firestoreIdx = sourceCode.indexOf('admin.firestore()', deleteFnStart);
+            const lockIdx = sourceCode.indexOf('accountOperationLock.acquireAccountOperationLock(', deleteFnStart);
+            const authDeleteIdx = sourceCode.indexOf('admin.auth().deleteUser(', deleteFnStart);
+
+            expect(recentAuthIdx).toBeGreaterThan(-1);
+            expect(firestoreIdx).toBeGreaterThan(-1);
+            expect(lockIdx).toBeGreaterThan(-1);
+            expect(authDeleteIdx).toBeGreaterThan(-1);
+
+            // Prova matemática/estrutural: o gate de recent auth ocorre antes de qualquer infraestrutura
+            expect(recentAuthIdx).toBeLessThan(firestoreIdx);
+            expect(recentAuthIdx).toBeLessThan(lockIdx);
+            expect(recentAuthIdx).toBeLessThan(authDeleteIdx);
         });
     });
 
