@@ -4,6 +4,7 @@ import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from '
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { calculateInstallments, calculateRemainingAmount, calculatePaymentStatus } from '../../services/financialService';
+import { hasPaymentHistory, isStructuralFinancialEdit, buildLoanSavePayload } from './loanIntegrityHelpers';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import { useLoans } from '../../hooks/useLoans';
@@ -158,70 +159,79 @@ function LoanManagement() {
             return;
         }
 
-        setIsLoading(true);
-        const loanData = { 
-            description: description.trim(), 
-            totalValue, 
-            installmentsCount: installmentsNumber, 
-            purchaseDate, 
-            cardId: selectedCardId, 
-            userId, 
-            valuePaidClient: 0, 
-            balanceDueClient: totalValue, 
-            statusPaymentClient: 'Pendente' 
-        };
+        const person1Share = purchaseType === 'shared' ? parseCurrencyInput(person1ShareInput) : 0;
+        const person2Share = purchaseType === 'shared' ? parseFloat((totalValue - person1Share).toFixed(2)) : 0;
 
         if (purchaseType === 'normal') {
             if (!selectedClientId) {
                 showToast('Selecione uma pessoa para a compra.', 'warning');
-                setIsLoading(false);
                 return;
             }
-            loanData.clientId = selectedClientId;
-            loanData.isShared = false;
-            loanData.installments = calculateInstallments({ totalValue, count: installmentsNumber, startDate: firstDueDate });
         } else {
-            const person1Share = parseCurrencyInput(person1ShareInput);
-            const person2Share = parseFloat((totalValue - person1Share).toFixed(2));
-
             if (!selectedClient1Id || !selectedClient2Id || person1Share <= 0 || person2Share < 0) {
                 showToast('Preencha todos os campos da compra compartilhada.', 'warning');
-                setIsLoading(false);
                 return;
             }
             if (selectedClient1Id === selectedClient2Id) {
                 showToast('As pessoas 1 e 2 devem ser diferentes.', 'warning');
-                setIsLoading(false);
                 return;
             }
-            
-            loanData.isShared = true;
-            loanData.installments = calculateInstallments({ totalValue, count: installmentsNumber, startDate: firstDueDate });
-            loanData.sharedDetails = {
-                person1: { 
-                    clientId: selectedClient1Id, 
-                    shareAmount: person1Share, 
-                    installments: calculateInstallments({ totalValue: person1Share, count: installmentsNumber, startDate: firstDueDate }), 
-                    valuePaid: 0, 
-                    balanceDue: person1Share, 
-                    statusPayment: 'Pendente' 
-                },
-                person2: { 
-                    clientId: selectedClient2Id, 
-                    shareAmount: person2Share, 
-                    installments: person2Share > 0 ? calculateInstallments({ totalValue: person2Share, count: installmentsNumber, startDate: firstDueDate }) : [], 
-                    valuePaid: 0, 
-                    balanceDue: person2Share, 
-                    statusPayment: person2Share > 0 ? 'Pendente' : 'Pago Total' 
-                }
-            };
         }
+
+        // Bloqueio fail-closed se a compra já possui histórico de pagamento e foi tentada alteração estrutural
+        if (editingLoan && hasPaymentHistory(editingLoan)) {
+            const structuralCheckParams = {
+                purchaseType,
+                totalValue,
+                installmentsCount: installmentsNumber,
+                firstDueDate,
+                selectedClientId,
+                selectedClient1Id,
+                selectedClient2Id,
+                person1Share,
+                person2Share,
+            };
+
+            if (isStructuralFinancialEdit(editingLoan, structuralCheckParams)) {
+                showToast('Esta compra possui pagamentos registrados. Para preservar o histórico financeiro, valores e parcelas não podem ser reestruturados após uma quitação.', 'warning');
+                return;
+            }
+        }
+
+        setIsLoading(true);
+
+        const formParams = {
+            description: description.trim(),
+            totalValue,
+            installmentsCount: installmentsNumber,
+            purchaseDate,
+            cardId: selectedCardId,
+            purchaseType,
+            selectedClientId,
+            selectedClient1Id,
+            selectedClient2Id,
+            person1Share,
+            person2Share,
+            firstDueDate,
+            calculatedInstallments: calculateInstallments({ totalValue, count: installmentsNumber, startDate: firstDueDate }),
+            calculatedP1Installments: purchaseType === 'shared' ? calculateInstallments({ totalValue: person1Share, count: installmentsNumber, startDate: firstDueDate }) : [],
+            calculatedP2Installments: (purchaseType === 'shared' && person2Share > 0) ? calculateInstallments({ totalValue: person2Share, count: installmentsNumber, startDate: firstDueDate }) : [],
+        };
+
+        const loanData = buildLoanSavePayload({ editingLoan, formParams, userId });
 
         try {
             if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
-                const newLoan = { id: `loan-e2e-${Date.now()}`, ...loanData, userId };
-                window.__FINCONTROL_E2E_MOCK_DATA__.loans = [...(window.__FINCONTROL_E2E_MOCK_DATA__.loans || []), newLoan];
-                showToast('Compra adicionada com sucesso!', 'success');
+                if (editingLoan) {
+                    window.__FINCONTROL_E2E_MOCK_DATA__.loans = (window.__FINCONTROL_E2E_MOCK_DATA__.loans || []).map(l =>
+                        l.id === editingLoan.id ? { ...l, ...loanData, id: l.id, userId, updatedAt: new Date() } : l
+                    );
+                    showToast('Compra atualizada com sucesso!', 'success');
+                } else {
+                    const newLoan = { id: `loan-e2e-${Date.now()}`, ...loanData, userId };
+                    window.__FINCONTROL_E2E_MOCK_DATA__.loans = [...(window.__FINCONTROL_E2E_MOCK_DATA__.loans || []), newLoan];
+                    showToast('Compra adicionada com sucesso!', 'success');
+                }
                 handleCloseModal();
                 setIsLoading(false);
                 return;
