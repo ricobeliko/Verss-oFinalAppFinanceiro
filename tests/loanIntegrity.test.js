@@ -177,7 +177,7 @@ describe('Loan Integrity & Payment History Preservation (Fase 8.1)', () => {
             ]
         };
 
-        it('deve retornar false quando apenas metadados são alterados (descrição, cliente, cartão)', () => {
+        it('Caso 1 — metadados permitidos: deve retornar false quando apenas descrição e cartão são alterados', () => {
             const formParams = {
                 purchaseType: 'normal',
                 totalValue: 3000,
@@ -185,9 +185,22 @@ describe('Loan Integrity & Payment History Preservation (Fase 8.1)', () => {
                 firstDueDate: '2026-10-10',
                 description: 'Notebook Dell Inspiron Atualizado',
                 cardId: 'card-2',
-                selectedClientId: 'client-99'
+                selectedClientId: 'client-1' // Mantém o mesmo clientId original
             };
             expect(isStructuralFinancialEdit(originalLoan, formParams)).toBe(false);
+        });
+
+        it('Caso 2 — troca de cliente: deve retornar true se selectedClientId for alterado em compra normal', () => {
+            const formParams = {
+                purchaseType: 'normal',
+                totalValue: 3000,
+                installmentsCount: 3,
+                firstDueDate: '2026-10-10',
+                description: 'Notebook Dell',
+                cardId: 'card-1',
+                selectedClientId: 'client-99' // Alterado de client-1 para client-99
+            };
+            expect(isStructuralFinancialEdit(originalLoan, formParams)).toBe(true);
         });
 
         it('deve retornar true se totalValue for alterado', () => {
@@ -543,6 +556,53 @@ describe('Loan Integrity & Payment History Preservation (Fase 8.1)', () => {
                 firstDueDate: '2026-08-10'
             };
             expect(isStructuralFinancialEdit(loanWithPayment, attemptChangeType)).toBe(true);
+        });
+
+        // CASO E2: Troca de cliente em compra parcialmente paga deve ser bloqueada (FAIL CLOSED)
+        it('Caso E2 (Payload / Save): Compra normal parcialmente paga. Tentativa de alterar clientId (client-A -> client-B) deve bloquear save', () => {
+            const loanWithPayment = {
+                id: 'loan-e2',
+                clientId: 'client-A',
+                totalValue: 300,
+                installmentsCount: 3,
+                valuePaidClient: 100,
+                balanceDueClient: 200,
+                statusPaymentClient: 'Pago Parcial',
+                isShared: false,
+                installments: [
+                    { number: 1, value: 100, dueDate: '2026-08-10', status: 'Paga' },
+                    { number: 2, value: 100, dueDate: '2026-09-10', status: 'Pendente' },
+                    { number: 3, value: 100, dueDate: '2026-10-10', status: 'Pendente' }
+                ]
+            };
+
+            expect(hasPaymentHistory(loanWithPayment)).toBe(true);
+
+            // Tentativa de alterar cliente devedor
+            const attemptChangeClient = {
+                purchaseType: 'normal',
+                totalValue: 300,
+                installmentsCount: 3,
+                firstDueDate: '2026-08-10',
+                selectedClientId: 'client-B'
+            };
+
+            const isStructural = isStructuralFinancialEdit(loanWithPayment, attemptChangeClient);
+            expect(isStructural).toBe(true);
+
+            // Simulação da guarda fail-closed em handleSaveLoan
+            let updateDocCalled = false;
+            let saveBlocked = false;
+
+            if (hasPaymentHistory(loanWithPayment) && isStructuralFinancialEdit(loanWithPayment, attemptChangeClient)) {
+                saveBlocked = true;
+                // Save é interrompido sem chamar updateDoc
+            } else {
+                updateDocCalled = true;
+            }
+
+            expect(saveBlocked).toBe(true);
+            expect(updateDocCalled).toBe(false);
         });
 
         // CASO F

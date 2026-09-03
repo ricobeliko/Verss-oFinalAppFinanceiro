@@ -114,6 +114,11 @@ export function isStructuralFinancialEdit(editingLoan, formParams) {
 
         if (origP1?.clientId !== formParams.selectedClient1Id) return true;
         if (origP2?.clientId !== formParams.selectedClient2Id) return true;
+    } else {
+        // 6. Verificação de cliente devedor em compra normal
+        if (editingLoan.clientId !== formParams.selectedClientId) {
+            return true;
+        }
     }
 
     return false;

@@ -164,7 +164,8 @@ async function setupSessionWithPartiallyPaidLoan(page, uid = 'e2e-write-financia
             expenses: [],
             subscriptions: [],
             clients: [
-                { id: 'client-e2e-1', name: 'Pessoa E2E Teste', phone: '11999990000', userId: uid }
+                { id: 'client-e2e-1', name: 'Pessoa E2E Teste', phone: '11999990000', userId: uid },
+                { id: 'client-e2e-2', name: 'Outra Pessoa E2E', phone: '11988880000', userId: uid }
             ],
             incomes: [],
         };
@@ -225,6 +226,35 @@ test.describe('E2E Write-Path — Edição e Integridade de Compras (Fase 8.1)',
         await expect(page.getByText(/Esta compra possui pagamentos registrados/i)).toBeVisible({ timeout: 5000 });
         const modal = page.getByRole('dialog');
         await expect(modal).toBeVisible();
+    });
+
+    test('deve bloquear troca de cliente em compra normal parcialmente paga', async ({ page }) => {
+        await expect(page.getByText('Smartphone Parcelado')).toBeVisible({ timeout: 10000 });
+
+        const editBtn = page.getByRole('button', { name: /Editar compra Smartphone Parcelado/i });
+        await editBtn.click();
+
+        // Tenta trocar o cliente devedor (de Pessoa E2E Teste para Outra Pessoa E2E)
+        await page.locator('#selectedClientId').selectOption({ label: 'Outra Pessoa E2E' });
+
+        const saveBtn = page.getByRole('button', { name: /Salvar Compra|Atualizar Compra/i });
+        await saveBtn.click();
+
+        // Deve exibir aviso e manter o modal aberto
+        await expect(page.getByText(/Esta compra possui pagamentos registrados/i)).toBeVisible({ timeout: 5000 });
+        const modal = page.getByRole('dialog');
+        await expect(modal).toBeVisible();
+
+        // Validação forense de persistência: confirma que o clientId original e o histórico NÃO foram modificados
+        const savedLoan = await page.evaluate(() => {
+            return window.__FINCONTROL_E2E_MOCK_DATA__.loans.find(l => l.id === 'loan-partially-paid');
+        });
+
+        expect(savedLoan.clientId).toBe('client-e2e-1');
+        expect(savedLoan.valuePaidClient).toBe(100);
+        expect(savedLoan.balanceDueClient).toBe(200);
+        expect(savedLoan.statusPaymentClient).toBe('Pago Parcial');
+        expect(savedLoan.installments[0].status).toBe('Paga');
     });
 });
 
