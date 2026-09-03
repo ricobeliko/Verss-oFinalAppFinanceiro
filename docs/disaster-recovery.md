@@ -9,7 +9,8 @@ Este documento estabelece a política operacional, arquitetura, rotinas de cópi
 - **Projeto Google Cloud / Firebase:** `controle-de-cartao`
 - **Banco de Dados Principal:** Cloud Firestore (Modo Nativo)
 - **Região Principal:** `southamerica-east1` (São Paulo)
-- **Bucket de Armazenamento de Backups:** `gs://controle-de-cartao-backups/`
+- **Mecanismo de Backup Principal:** Firestore Native Scheduled Backups (`backupSchedules/20403673-4b8e-4a20-adb9-11f483db7922`)
+- **Point-in-Time Recovery (PITR):** Habilitado nativamente no Cloud Firestore (janela contínua de 7 dias / `604800s`)
 - **Coleções Críticas do Sistema:**
   - `users_fallback/{userId}/*` (e subcoleções `cards`, `loans`, `expenses`, `incomes`, `subscriptions`, `paidSubscriptions`, `clients`)
   - `users_fallback/{userId}/payments/*` (Histórico de transações)
@@ -24,88 +25,53 @@ Este documento estabelece a política operacional, arquitetura, rotinas de cópi
 | **RPO (Recovery Point Objective)** | **≤ 24 Horas** | Perda máxima tolerável de dados em caso de desastre catastrófico. (Com PITR ativo no Firestore, o RPO efetivo é de até 1 minuto nos últimos 7 dias). |
 | **RTO (Recovery Time Objective)** | **≤ 2 Horas** | Tempo máximo estimado para conclusão do processo de importação e validação da integridade após declaração de desastre. |
 
-### RPO e RTO — Estado Real vs. Documentado
+### RPO e RTO — Estado Real Comprovado em Produção
 
-| Métrica | Documentado | Real (Fase 6) |
-|---------|:-----------:|:-------------:|
-| RPO | ≤ 24h (backup) / ~1min (PITR) | ⚠️ **DESCONHECIDO** — PITR e backup precisam ser verificados |
-| RTO | ≤ 2 horas | ⚠️ **DESCONHECIDO** — procedimento nunca foi testado |
+| Métrica | Meta Documentada | Estado Real Comprovado (Fase 7.10) |
+|---------|:----------------:|:----------------------------------:|
+| **RPO** | ≤ 24h (backup) / ~1min (PITR) | ✅ **COMPROVADO** — Rotina nativa diária em estado `READY` + PITR ativo (7 dias) |
+| **RTO** | ≤ 2 horas | ⚠️ **META OPERACIONAL** — Restauração granular documentada para database isolado |
 
-> [!WARNING]
-> Os valores documentados são aspiracionais. Para torná-los comprovados, é necessário:
-> 1. Verificar que PITR está ATIVO no console GCP
-> 2. Verificar que o bucket de backup existe e tem arquivos
-> 3. Executar um restore drill em ambiente isolado (ver Seção 7)
+> [!NOTE]
+> **Evidência Operacional de RPO:** A auditoria ao vivo na Fase 7.10 comprovou que o Firestore Native Scheduled Backups gera snapshots diários automáticos na região `southamerica-east1`, mantendo múltiplos backups válidos e com retenção de 14 dias, garantindo estritamente a meta de RPO $\le 24\text{h}$.
 
 ---
 
 ## 3. Arquitetura de Backup
 
 ```text
-┌─────────────────────────┐
-│     Cloud Firestore     │
-│ (controle-de-cartao)    │
-└───────────┬─────────────┘
-            │
-            │  Rotina Diária (03:00 BRT via Firestore Scheduled Backups / Cloud Scheduler)
-            ▼
-┌─────────────────────────┐
-│      Cloud Storage      │
-│ gs://controle-de-cartao │  Política de Ciclo de Vida:
-│       -backups/         │  - Retenção ativa: 30 dias
-└───────────┬─────────────┘  - Transição para Coldline/Delete: > 30 dias
-            │
-            ▼ (Em caso de incidente)
-┌─────────────────────────┐
-│ Restauração Controlada  │
-│ (em ambiente ISOLADO)   │
-└─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Cloud Firestore (Nativo)                            │
+│                      (controle-de-cartao)                               │
+└────────────────────┬──────────────────────────────┬─────────────────────┘
+                     │                              │
+                     │ (Snapshot Diário Automático) │ (Log Contínuo de Mutações)
+                     ▼                              ▼
+┌──────────────────────────────────────┐  ┌───────────────────────────────┐
+│   Firestore Native Scheduled Backup  │  │  Point-in-Time Recovery (PITR)│
+│  - Schedule diário automático        │  │  - Retenção ativa: 7 dias     │
+│  - Retenção: 14 dias                 │  │  - Granularidade: minuto      │
+│  - Região: southamerica-east1        │  │    a minuto                   │
+└──────────────────┬───────────────────┘  └───────────────┬───────────────┘
+                   │                                      │
+                   └──────────────────┬───────────────────┘
+                                      ▼ (Em caso de incidente)
+                   ┌──────────────────────────────────────┐
+                   │        Restauração Controlada        │
+                   │        (em ambiente ISOLADO)         │
+                   └──────────────────────────────────────┘
 ```
 
 ### 3.1 Frequência e Janela Operacional
-- **Frequência:** Execução diária automática às 03:00 (horário de Brasília), período de menor tráfego de usuários.
-- **Retenção:** 30 dias para backups diários.
+- **Frequência dos Snapshots:** Execução diária automática gerenciada nativamente pelo Google Cloud Firestore.
+- **Retenção dos Backups:** 14 dias para snapshots agendados.
+- **Janela do PITR:** Recuperação pontual a qualquer timestamp dos últimos 7 dias (`VersionRetentionPeriod: 604800s`).
 
 ---
 
-## 4. Como Configurar a Rotina Automática no GCP
+## 4. Como Auditar a Rotina no Google Cloud
 
-### Passo 1: Verificar se o bucket existe
-
-```bash
-gcloud storage buckets describe gs://controle-de-cartao-backups \
-  --project=controle-de-cartao
-```
-
-Se não existir, criar:
-
-```bash
-gcloud storage buckets create gs://controle-de-cartao-backups \
-  --project=controle-de-cartao \
-  --location=southamerica-east1 \
-  --default-storage-class=STANDARD
-```
-
-### Passo 2: Configurar política de retenção (30 dias)
-
-```bash
-cat > /tmp/lifecycle.json << 'EOF'
-{
-  "lifecycle": {
-    "rule": [
-      {
-        "action": {"type": "Delete"},
-        "condition": {"age": 30}
-      }
-    ]
-  }
-}
-EOF
-gcloud storage buckets update gs://controle-de-cartao-backups \
-  --lifecycle-file=/tmp/lifecycle.json
-```
-
-### Passo 3: Verificar se o Backup Agendado Nativo existe
+### Passo 1: Verificar o Agendamento de Backup Nativo
 
 ```bash
 gcloud firestore backups schedules list \
@@ -113,58 +79,41 @@ gcloud firestore backups schedules list \
   --project=controle-de-cartao
 ```
 
-Se não existir, criar:
+Esperado: schedule ativo com periodicidade diária e retenção de 14 dias (`1209600s`).
+
+### Passo 2: Listar os Snapshots Disponíveis
 
 ```bash
-gcloud firestore backups schedules create \
+gcloud firestore backups list \
   --database='(default)' \
-  --recurrence=daily \
-  --retention=30d \
+  --location=southamerica-east1 \
   --project=controle-de-cartao
 ```
 
-### Passo 4: Verificar status do PITR
+Esperado: lista de backups em estado `READY` com timestamp e prazo de expiração.
+
+### Passo 3: Verificar Status do PITR
 
 ```bash
 gcloud firestore databases describe \
   --database='(default)' \
   --project=controle-de-cartao \
-  --format="json" | grep -i "pointInTimeRecovery"
+  --format="json"
 ```
 
-Se não estiver ativo:
-
-```bash
-gcloud firestore databases update \
-  --database='(default)' \
-  --enable-point-in-time-recovery \
-  --project=controle-de-cartao
-```
-
-### Passo 5: Verificar último backup disponível
-
-```bash
-gcloud firestore backups list \
-  --database='(default)' \
-  --project=controle-de-cartao
-```
+Confirmar que `pointInTimeRecoveryEnablement` está como `POINT_IN_TIME_RECOVERY_ENABLED`.
 
 ---
 
-## 5. Status Operacional Atual
+## 5. Status Operacional Atual (Comprovado na Fase 7.10)
 
-> [!CAUTION]
-> Os itens abaixo precisam ser verificados manualmente no GCP Console ou via gcloud CLI.
-> A documentação NÃO é evidência de execução.
-
-| Item | Status | Como verificar |
-|------|:------:|----------------|
-| Bucket `gs://controle-de-cartao-backups/` | ⚠️ A VERIFICAR | `gcloud storage buckets describe ...` |
-| Política de retenção 30d | ⚠️ A VERIFICAR | `gcloud storage buckets describe ... --format=json` |
-| Backup agendado nativo | ⚠️ A VERIFICAR | `gcloud firestore backups schedules list ...` |
-| Último backup executado | ⚠️ A VERIFICAR | `gcloud firestore backups list ...` |
-| PITR ativo | ⚠️ A VERIFICAR | `gcloud firestore databases describe ...` |
-| Restore drill executado | ❌ NÃO | Ver Seção 7 |
+| Item | Status | Evidência Operacional |
+|------|:------:|-----------------------|
+| **Firestore Scheduled Backup Nativo** | ✅ ATIVO | Schedule `backupSchedules/20403673-4b8e-4a20-adb9-11f483db7922` |
+| **Frequência / Retenção** | ✅ DIÁRIA / 14 DIAS | Snapshot diário automático; retenção de 14 dias (`1209600s`) |
+| **Último backup executado** | ✅ COMPROVADO | Múltiplos backups em estado `READY` em `southamerica-east1` |
+| **PITR (Point-in-Time Recovery)** | ✅ ATIVO | Habilitado com retenção de 7 dias (`604800s`) |
+| **Restore drill periódico** | ⚠️ PLANEJADO | Procedimento seguro documentado na Seção 7 |
 
 ---
 
@@ -254,19 +203,19 @@ Após a conclusão da importação:
 
 ---
 
-## 9. PITR vs. Backup Independente — Diferença Operacional
+## 9. PITR vs. Scheduled Backup Nativo — Diferença Operacional
 
-| Dimensão | PITR | Export/Backup Independente |
-|----------|------|--------------------------|
-| Granularidade | Minuto a minuto (últimos 7 dias) | Snapshot diário |
-| Cobertura temporal | Até 7 dias atrás | Até 30 dias |
-| Caso de uso ideal | Exclusão acidental recente | Desastre completo, migração |
-| Destino de restore | Novo database no mesmo projeto | Import para qualquer projeto |
-| Risco não coberto | Erros silenciosos > 7 dias | Janela de até 24h de perda |
+| Dimensão | PITR (Point-in-Time Recovery) | Firestore Scheduled Backup Nativo |
+|----------|-------------------------------|----------------------------------|
+| **Granularidade** | Minuto a minuto (últimos 7 dias) | Snapshot diário automático |
+| **Cobertura temporal** | Até 7 dias atrás (`604800s`) | Até 14 dias (`1209600s`) |
+| **Caso de uso ideal** | Exclusão acidental ou corrupção recente | Desastre completo ou corrupção > 7 dias |
+| **Destino de restore** | Novo database no mesmo projeto | Novo database no mesmo projeto |
+| **Risco não coberto** | Erros silenciosos > 7 dias | Janela de até 24h entre snapshots |
 
-**Conclusão:** PITR e backup independente são **complementares**, não substitutos.
+**Conclusão:** PITR e Scheduled Backups nativos são **complementares**, não substitutos.
 
 ---
 
-*Documento atualizado na Fase 6 — Production Readiness & Operação Confiável.*  
-*Última atualização: 2026-08-24*
+*Documento atualizado na Fase 7.10 — Consolidação Final de Produção.*
+*Última atualização: 2026-09-02*
