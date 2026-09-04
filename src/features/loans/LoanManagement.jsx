@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
-import { calculateInstallments, calculateRemainingAmount, calculatePaymentStatus } from '../../services/financialService';
+import { calculateInstallments, calculateRemainingAmount, calculatePaymentStatus, calculateInvoiceDueDate, mapDomainStatusToLoanStatus, toCents, fromCents } from '../../services/financialService';
 import { hasPaymentHistory, isStructuralFinancialEdit, buildLoanSavePayload } from './loanIntegrityHelpers';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
@@ -51,30 +51,10 @@ function LoanManagement() {
         if (purchaseDate && selectedCardId && allCards.length > 0) {
             const selectedCard = allCards.find(card => card.id === selectedCardId);
             if (selectedCard && selectedCard.closingDay && selectedCard.dueDay) {
-                const dateOfPurchase = new Date(purchaseDate + "T12:00:00Z");
-                let dueMonth = dateOfPurchase.getUTCMonth();
-                let dueYear = dateOfPurchase.getUTCFullYear();
-
-                if (selectedCard.closingDay < selectedCard.dueDay) {
-                     if (dateOfPurchase.getUTCDate() >= selectedCard.closingDay) {
-                        dueMonth += 1;
-                    }
-                } else {
-                    const closingDate = new Date(Date.UTC(dateOfPurchase.getUTCFullYear(), dateOfPurchase.getUTCMonth(), selectedCard.closingDay));
-                    if (dateOfPurchase >= closingDate) {
-                        dueMonth += 2;
-                    } else {
-                        dueMonth += 1;
-                    }
+                const finalDueDate = calculateInvoiceDueDate(purchaseDate, selectedCard);
+                if (finalDueDate) {
+                    setFirstDueDate(finalDueDate.toISOString().split('T')[0]);
                 }
-
-                if (dueMonth > 11) {
-                    dueYear += Math.floor(dueMonth / 12);
-                    dueMonth %= 12;
-                }
-                
-                const finalDueDate = new Date(Date.UTC(dueYear, dueMonth, selectedCard.dueDay));
-                setFirstDueDate(finalDueDate.toISOString().split('T')[0]);
             }
         }
     }, [purchaseDate, selectedCardId, allCards]);
@@ -308,13 +288,14 @@ function LoanManagement() {
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
         
-        const newValuePaid = installmentsList
+        const paidCents = installmentsList
             .filter(installment => installment.status === 'Paga')
-            .reduce((sum, installment) => sum + installment.value, 0);
+            .reduce((sum, installment) => sum + toCents(installment.value || 0), 0);
 
+        const newValuePaid = fromCents(paidCents);
         const newBalanceDue = calculateRemainingAmount(originalAmount, newValuePaid);
         const calculatedStatus = calculatePaymentStatus(originalAmount, newValuePaid);
-        const finalStatus = calculatedStatus === 'Pago' ? 'Pago Total' : (calculatedStatus === 'Parcial' ? 'Pago Parcial' : 'Pendente');
+        const finalStatus = mapDomainStatusToLoanStatus(calculatedStatus);
 
         const fieldsToUpdate = {
             userId: userId,

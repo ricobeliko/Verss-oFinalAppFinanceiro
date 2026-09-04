@@ -11,6 +11,7 @@ import html2canvas from 'html2canvas';
 import { useLoans } from '../../hooks/useLoans';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
+import { calculateClientFinancialReportSummary } from '../../services/financialService';
 
 // --- Ícones ---
 const XIcon = () => (
@@ -31,113 +32,18 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
     const reportData = useMemo(() => {
         if (!client) return null;
 
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        const clientLoans = allLoans.filter(loan => 
-            loan.isShared 
-            ? loan.sharedDetails?.person1?.clientId === client.id || loan.sharedDetails?.person2?.clientId === client.id
-            : loan.clientId === client.id
-        );
-        const clientExpenses = allExpenses.filter(exp => exp.clientId === client.id);
-        const clientSubscriptions = allSubscriptions.filter(sub => sub.clientId === client.id);
-
-        const monthlyInstallments = clientLoans.flatMap(loan => {
-            let installments = [];
-            if (loan.isShared) {
-                if (loan.sharedDetails?.person1?.clientId === client.id) installments = loan.sharedDetails.person1.installments;
-                else if (loan.sharedDetails?.person2?.clientId === client.id) installments = loan.sharedDetails.person2.installments;
-            } else {
-                installments = loan.installments;
-            }
-            return Array.isArray(installments) ? installments : [];
-        }).filter(inst => {
-            const dueDate = new Date(inst.dueDate + 'T00:00:00');
-            return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
-        });
-
-        const monthlyExpenses = clientExpenses.filter(exp => {
-            const expDate = exp.date?.toDate ? exp.date.toDate() : new Date(exp.date + 'T00:00:00');
-            return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-        });
-
-        const monthlyLoansValue = monthlyInstallments.reduce((sum, inst) => sum + inst.value, 0);
-        const monthlyExpensesValue = monthlyExpenses.reduce((sum, exp) => sum + exp.value, 0);
-        const monthlySubscriptionsValue = clientSubscriptions.filter(sub => sub.isActive).reduce((sum, sub) => sum + sub.amount, 0);
-        
-        const monthlySpendingByCategory = {};
-        
-        monthlyExpenses.forEach(exp => {
-            const category = exp.category || 'Outros';
-            monthlySpendingByCategory[category] = (monthlySpendingByCategory[category] || 0) + exp.value;
-        });
-
-        if (monthlyLoansValue > 0) {
-            monthlySpendingByCategory['Compras Parceladas'] = (monthlySpendingByCategory['Compras Parceladas'] || 0) + monthlyLoansValue;
-        }
-
-        if (monthlySubscriptionsValue > 0) {
-            monthlySpendingByCategory['Assinaturas'] = (monthlySpendingByCategory['Assinaturas'] || 0) + monthlySubscriptionsValue;
-        }
-
-        const futureInstallments = {};
-        clientLoans.forEach(loan => {
-            let installmentsToProcess = [];
-            if (loan.isShared) {
-                if (loan.sharedDetails?.person1?.clientId === client.id) installmentsToProcess = loan.sharedDetails.person1.installments;
-                else if (loan.sharedDetails?.person2?.clientId === client.id) installmentsToProcess = loan.sharedDetails.person2.installments;
-            } else {
-                installmentsToProcess = loan.installments;
-            }
-            
-            if (Array.isArray(installmentsToProcess)) {
-                installmentsToProcess.forEach(inst => {
-                    if (inst.status === 'Pendente' || inst.status === 'Atrasado') {
-                        const dueDate = new Date(inst.dueDate + 'T00:00:00');
-                        const monthYear = `${dueDate.toLocaleString('pt-BR', { month: 'long' })} de ${dueDate.getFullYear()}`;
-                        futureInstallments[monthYear] = (futureInstallments[monthYear] || 0) + inst.value;
-                    }
-                });
-            }
-        });
-        
-        const openLoans = [];
-        let totalDebt = 0;
-
-        clientLoans.forEach(loan => {
-            let balanceDueForClient = 0;
-            let statusForClient = '';
-            
-            if (loan.isShared) {
-                if (loan.sharedDetails?.person1?.clientId === client.id) {
-                    balanceDueForClient = loan.sharedDetails.person1.balanceDue || 0;
-                    statusForClient = loan.sharedDetails.person1.statusPayment;
-                } else if (loan.sharedDetails?.person2?.clientId === client.id) {
-                    balanceDueForClient = loan.sharedDetails.person2.balanceDue || 0;
-                    statusForClient = loan.sharedDetails.person2.statusPayment;
-                }
-            } else {
-                balanceDueForClient = loan.balanceDueClient || 0;
-                statusForClient = loan.statusPaymentClient;
-            }
-
-            if (statusForClient !== 'Pago Total') {
-                openLoans.push({ ...loan, balanceDueClient: balanceDueForClient });
-                totalDebt += balanceDueForClient;
-            }
+        const summary = calculateClientFinancialReportSummary({
+            clientId: client.id,
+            loans: allLoans,
+            expenses: allExpenses,
+            subscriptions: allSubscriptions,
+            referenceDate: new Date()
         });
 
         return {
             generationDate: new Date().toLocaleString('pt-BR'),
             clientName: client.name,
-            monthlyInvoice: monthlyLoansValue + monthlyExpensesValue,
-            monthlySubscriptions: monthlySubscriptionsValue,
-            monthlyExpenses: monthlyExpensesValue,
-            monthlySpendingByCategory,
-            futureInstallments,
-            openLoans,
-            totalDebt
+            ...summary
         };
     }, [client, allLoans, allExpenses, allSubscriptions]);
 

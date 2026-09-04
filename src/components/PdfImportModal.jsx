@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { formatCurrencyDisplay } from '../utils/currency';
 import { extractTextLinesFromPdf, parseInvoiceTransactions, matchAndDeduplicate } from '../utils/pdfParser';
+import { toCents, fromCents, calculateRemainingAmount, calculatePaymentStatus, mapDomainStatusToLoanStatus } from '../services/financialService';
 import Spinner from './Spinner';
 
 // --- Ícones ---
@@ -191,13 +192,15 @@ export default function PdfImportModal({
                 const itemDateStr = item.date || new Date().toISOString().split('T')[0];
                 const [iYear, iMonth, iDay] = itemDateStr.split('-').map(Number);
 
-                // Valor total da compra baseado na quantidade de parcelas
-                const totalVal = parseFloat((item.value * totalCount).toFixed(2));
+                // Valor total da compra baseado na quantidade de parcelas (cent-safe)
+                const observedCents = toCents(item.value);
+                const totalValCents = observedCents * totalCount;
+                const totalVal = fromCents(totalValCents);
                 const newLoanRef = doc(loansRef);
 
                 // Projeta as parcelas da compra com tratamento exato de fim de mês
                 const installmentsList = [];
-                let totalPaidSoFar = 0;
+                let priorPaidCents = 0;
 
                 for (let index = 0; index < totalCount; index++) {
                     const instNumber = index + 1;
@@ -219,7 +222,7 @@ export default function PdfImportModal({
                     const paidDate = isPriorInstallment ? dueDateStr : null;
 
                     if (isPriorInstallment) {
-                        totalPaidSoFar += item.value;
+                        priorPaidCents += observedCents;
                     }
 
                     installmentsList.push({
@@ -231,8 +234,9 @@ export default function PdfImportModal({
                     });
                 }
 
-                const balanceDue = parseFloat(Math.max(0, totalVal - totalPaidSoFar).toFixed(2));
-                const statusPayment = balanceDue <= 0.01 ? 'Pago Total' : (totalPaidSoFar > 0 ? 'Pago Parcial' : 'Pendente');
+                const totalPaidSoFar = fromCents(priorPaidCents);
+                const balanceDue = calculateRemainingAmount(totalVal, totalPaidSoFar);
+                const statusPayment = mapDomainStatusToLoanStatus(calculatePaymentStatus(totalVal, totalPaidSoFar));
 
                 batch.set(newLoanRef, {
                     description: item.description,

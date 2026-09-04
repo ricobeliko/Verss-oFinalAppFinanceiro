@@ -5,7 +5,7 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import CarbonCard from '../../components/CarbonCard';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
-import { calculateCardLimitIntelligence } from '../../services/financialService';
+import { calculateCardLimitIntelligence, calculateCardInvoiceDetails } from '../../services/financialService';
 import { useCards } from '../../hooks/useCards';
 import { useLoans } from '../../hooks/useLoans';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
@@ -17,25 +17,6 @@ const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
-
-// Função de cálculo de data da fatura, 100% alinhada com o Dashboard
-const getInvoiceDueDate = (transactionDate, card) => {
-    if (!card || !card.closingDay || !card.dueDay) return transactionDate;
-    let dueMonth = transactionDate.getUTCMonth();
-    let dueYear = transactionDate.getUTCFullYear();
-    if (card.closingDay < card.dueDay) {
-         if (transactionDate.getUTCDate() >= card.closingDay) dueMonth += 1;
-    } else {
-        const closingDate = new Date(Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), card.closingDay));
-        if (transactionDate >= closingDate) dueMonth += 2;
-        else dueMonth += 1;
-    }
-    if (dueMonth > 11) {
-        dueYear += Math.floor(dueMonth / 12);
-        dueMonth %= 12;
-    }
-    return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
-};
 
 export default function CardManagement() {
     const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
@@ -56,51 +37,14 @@ export default function CardManagement() {
     });
     
     const calculateInvoiceDetails = useCallback((card, selectedMonth) => {
-        if (!card || !card.closingDay || !selectedMonth) return { total: 0, isPending: false };
-        const [year, month] = selectedMonth.split('-').map(Number);
-        let totalInvoice = 0;
-        let isInvoicePending = false;
-        
-        const invoiceDateForPeriod = getInvoiceDueDate(new Date(Date.UTC(year, month - 1, 1)), card);
-
-        allLoans.forEach(loan => {
-            if (loan.cardId !== card.id) return;
-            const processInstallments = (installments) => {
-                if (!Array.isArray(installments)) return;
-                installments.forEach(inst => {
-                    const instDueDate = new Date(inst.dueDate + "T00:00:00Z");
-                    if (instDueDate.getUTCFullYear() === invoiceDateForPeriod.getUTCFullYear() && instDueDate.getUTCMonth() === invoiceDateForPeriod.getUTCMonth()) {
-                        totalInvoice += inst.value;
-                        if (inst.status !== 'Paga') isInvoicePending = true;
-                    }
-                });
-            };
-
-            if (loan.isShared && loan.sharedDetails) {
-                if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments);
-                if (loan.sharedDetails.person2) processInstallments(loan.sharedDetails.person2.installments);
-            } else {
-                processInstallments(loan.installments);
-            }
+        return calculateCardInvoiceDetails({
+            card,
+            selectedMonth,
+            loans: allLoans,
+            expenses: allExpenses,
+            subscriptions: allSubscriptions,
+            paidSubscriptions
         });
-
-        allExpenses.forEach(expense => {
-            if (expense.cardId !== card.id) return;
-            const expenseDate = expense.date?.toDate ? expense.date.toDate() : new Date(expense.date + "T00:00:00Z");
-            if (expenseDate.getUTCFullYear() === year && expenseDate.getUTCMonth() === month - 1) {
-                totalInvoice += expense.value;
-                if (expense.status !== 'Paga') isInvoicePending = true;
-            }
-        });
-        
-        allSubscriptions.forEach(sub => {
-            if (sub.cardId !== card.id || !sub.isActive) return;
-            totalInvoice += sub.amount;
-            const isPaid = paidSubscriptions.some(p => p.subscriptionId === sub.id && p.month === selectedMonth);
-            if (!isPaid) isInvoicePending = true;
-        });
-
-        return { total: totalInvoice, isPending: isInvoicePending };
     }, [allLoans, allExpenses, allSubscriptions, paidSubscriptions]);
     
     const handleOpenModal = (card = null) => {
