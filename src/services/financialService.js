@@ -1,5 +1,5 @@
 // src/services/financialService.js
-import { formatCurrencyDisplay } from '../utils/currency';
+import { formatCurrencyDisplay, parseCurrencyInput } from '../utils/currency';
 
 /**
  * Converte um valor monetário (número float ou string) para centavos inteiros.
@@ -10,25 +10,11 @@ import { formatCurrencyDisplay } from '../utils/currency';
 export function toCents(value) {
     if (value === null || value === undefined) return 0;
     if (typeof value === 'number') {
-        if (isNaN(value) || !isFinite(value)) return 0;
+        if (isNaN(value) || !Number.isFinite(value)) return 0;
         return Math.round(value * 100);
     }
-    const cleanStr = String(value)
-        .replace(/[R$\s]/g, '')
-        .trim();
-    if (!cleanStr) return 0;
-
-    let parsedNum = 0;
-    if (cleanStr.includes(',')) {
-        // Formato brasileiro: 1.234,56 ou 1234,56
-        const standard = cleanStr.replace(/\./g, '').replace(',', '.');
-        parsedNum = parseFloat(standard);
-    } else {
-        // Formato decimal padrão: 1234.56
-        parsedNum = parseFloat(cleanStr);
-    }
-
-    if (isNaN(parsedNum) || !isFinite(parsedNum)) return 0;
+    const parsedNum = parseCurrencyInput(value);
+    if (!parsedNum || !Number.isFinite(parsedNum)) return 0;
     return Math.round(parsedNum * 100);
 }
 
