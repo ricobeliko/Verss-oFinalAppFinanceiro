@@ -195,6 +195,43 @@ describe('pdfParser — Segurança e Validações', () => {
             const result = parseInvoiceTransactions(lines, '2026');
             expect(result.length).toBe(0);
         });
+
+        it('deve extrair valores monetários canônicos (10,50, 1.000,50, 1000.50) e preservar formato de saída', async () => {
+            const { parseInvoiceTransactions } = await import('../src/utils/pdfParser.js');
+            const lines = [
+                '15/08 PADARIA 10,50',
+                '16/08 SUPERMERCADO 1.000,50',
+                '17/08 LOJA ONLINE 1000.50'
+            ];
+            const result = parseInvoiceTransactions(lines, '2026');
+            expect(result.length).toBe(3);
+            expect(result[0].value).toBe(10.5);
+            expect(result[1].value).toBe(1000.5);
+            expect(result[2].value).toBe(1000.5);
+
+            // Valida estabilidade do shape retornado (OUTPUT_SHAPE_UNCHANGED)
+            result.forEach(item => {
+                expect(item).toHaveProperty('id');
+                expect(item).toHaveProperty('description');
+                expect(item).toHaveProperty('value');
+                expect(item).toHaveProperty('date');
+                expect(item).toHaveProperty('currentInstallment');
+                expect(item).toHaveProperty('totalInstallments');
+                expect(item).toHaveProperty('isShared');
+                expect(item).toHaveProperty('clientId');
+                expect(item).toHaveProperty('selected', true);
+            });
+        });
+
+        it('deve descartar linha onde valor monetário é sintaticamente inválido ou não positivo', async () => {
+            const { parseInvoiceTransactions } = await import('../src/utils/pdfParser.js');
+            const lines = [
+                '15/08 ITEM SEM PRECO abc',
+                '15/08 ITEM VALOR ZERO 0,00'
+            ];
+            const result = parseInvoiceTransactions(lines, '2026');
+            expect(result.length).toBe(0);
+        });
     });
 
     // ============================================================
