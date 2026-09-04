@@ -6,6 +6,7 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
+import { isValidFinancialValue } from '../../services/financialService';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
 import { useCards } from '../../hooks/useCards';
 import { useClients } from '../../hooks/useClients';
@@ -74,7 +75,7 @@ export default function SubscriptionManagement() {
     const handleSaveSubscription = async () => {
         if (isSubmitting) return;
         const val = parseCurrencyInput(valueInput);
-        if (!name.trim() || !val || !dueDate || !cardId) {
+        if (!name.trim() || !isValidFinancialValue(val) || !dueDate || !cardId) {
             showToast('Por favor, preencha todos os campos obrigatórios (Nome, Valor, Dia de Cobrança e Cartão).', 'warning');
             return;
         }

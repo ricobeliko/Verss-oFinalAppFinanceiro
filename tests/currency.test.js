@@ -241,4 +241,110 @@ describe('FinControl — Canonical Money Parser (Fase 8.3 Change Set 2)', () => 
             expect(formatCurrencyDisplay(NaN)).toBe("R$ 0,00");
         });
     });
+
+    describe('10. CategoryBudgets — Digitação Progressiva e Sanitização de Metas', () => {
+        it('deve simular digitação progressiva para orçamento por categoria', () => {
+            let budgetState = '';
+            const setBudgetState = (val) => { budgetState = val; };
+            const handler = handleCurrencyInputChange(setBudgetState);
+
+            handler({ target: { value: "1" } });
+            expect(budgetState).toBe("0,01");
+
+            handler({ target: { value: "10" } });
+            expect(budgetState).toBe("0,10");
+
+            handler({ target: { value: "100" } });
+            expect(budgetState).toBe("1,00");
+
+            handler({ target: { value: "1000" } });
+            expect(budgetState).toBe("10,00");
+
+            handler({ target: { value: "123456" } });
+            expect(budgetState).toBe("1.234,56");
+
+            handler({ target: { value: "" } });
+            expect(budgetState).toBe("");
+        });
+
+        it('deve sanitizar orçamentos salvando apenas valores estritamente positivos e descartando vazios/zeros', () => {
+            const budgetMap = {
+                'Alimentação': '500,00',
+                'Transporte': '150,50',
+                'Lazer': '',             // Vazio -> Sem meta
+                'Saúde': '0,00',         // Zero -> Sem meta (não persistir R$ 0,00)
+                'Educação': 'abc',       // Inválido -> Sem meta
+            };
+
+            const sanitized = {};
+            Object.entries(budgetMap).forEach(([cat, val]) => {
+                const parsed = parseCurrencyInput(val);
+                if (isValidFinancialValue(parsed)) {
+                    sanitized[cat] = parsed;
+                }
+            });
+
+            expect(sanitized).toEqual({
+                'Alimentação': 500,
+                'Transporte': 150.5
+            });
+            expect(sanitized['Lazer']).toBeUndefined();
+            expect(sanitized['Saúde']).toBeUndefined();
+            expect(sanitized['Educação']).toBeUndefined();
+        });
+    });
+
+    describe('11. Income & Subscription — Gate de Validação Positiva (isValidFinancialValue)', () => {
+        it('deve permitir receitas com valores estritamente positivos', () => {
+            const validValues = ['0,01', '1,00', '1000,00', '2.500,50'];
+            validValues.forEach(str => {
+                const val = parseCurrencyInput(str);
+                expect(isValidFinancialValue(val)).toBe(true);
+            });
+        });
+
+        it('deve bloquear receitas com zero, negativos, NaN ou valores malformados', () => {
+            const blockedValues = ['', '   ', '0', '0,00', '-50,00', 'abc', 'abc100', '1e25'];
+            blockedValues.forEach(str => {
+                const val = parseCurrencyInput(str);
+                expect(isValidFinancialValue(val)).toBe(false);
+            });
+        });
+
+        it('deve permitir assinaturas com valores estritamente positivos', () => {
+            const validValues = ['9,90', '29,90', '149,90'];
+            validValues.forEach(str => {
+                const val = parseCurrencyInput(str);
+                expect(isValidFinancialValue(val)).toBe(true);
+            });
+        });
+
+        it('deve bloquear assinaturas com zero, negativos ou strings inválidas', () => {
+            const blockedValues = ['', '0,00', '-29,90', 'Infinity', 'NaN', 'xyz'];
+            blockedValues.forEach(str => {
+                const val = parseCurrencyInput(str);
+                expect(isValidFinancialValue(val)).toBe(false);
+            });
+        });
+    });
+
+    describe('12. FinancialSandboxSimulator — Input Harmony', () => {
+        it('deve manter sincronia entre estado formatado e parseCurrencyInput no simulador', () => {
+            let simPurchaseValue = '1.200,00';
+            const setSimPurchase = (val) => { simPurchaseValue = val; };
+            const purchaseHandler = handleCurrencyInputChange(setSimPurchase);
+
+            expect(parseCurrencyInput(simPurchaseValue)).toBe(1200);
+
+            // Altera valor via digitação progressiva
+            purchaseHandler({ target: { value: "250000" } });
+            expect(simPurchaseValue).toBe("2.500,00");
+            expect(parseCurrencyInput(simPurchaseValue)).toBe(2500);
+
+            // Limpa valor
+            purchaseHandler({ target: { value: "" } });
+            expect(simPurchaseValue).toBe("");
+            expect(parseCurrencyInput(simPurchaseValue)).toBe(0);
+        });
+    });
 });

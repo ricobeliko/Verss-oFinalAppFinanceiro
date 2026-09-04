@@ -5,6 +5,7 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
+import { isValidFinancialValue } from '../../services/financialService';
 import { useIncomes } from '../../hooks/useIncomes';
 import { useClients } from '../../hooks/useClients';
 
@@ -63,7 +64,7 @@ function IncomeManagement() {
         if (isSubmitting) return;
 
         const value = parseCurrencyInput(valueInput);
-        if (!description.trim() || !value || !date || !clientId) {
+        if (!description.trim() || !isValidFinancialValue(value) || !date || !clientId) {
             showToast('Por favor, preencha todos os campos obrigatórios.', 'warning');
             return;
         }

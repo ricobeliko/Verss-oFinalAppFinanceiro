@@ -1,9 +1,25 @@
 // src/components/CategoryBudgetsModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GenericModal from './GenericModal';
-import { formatCurrencyForInput, parseCurrencyInput } from '../utils/currency';
+import { formatCurrencyForInput, parseCurrencyInput, handleCurrencyInputChange } from '../utils/currency';
+import { isValidFinancialValue } from '../services/financialService';
 
 const DEFAULT_CATEGORIES = ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Educação', 'Outros'];
+
+const buildInitialBudgetMap = (budgets = {}) => {
+    const map = {};
+    DEFAULT_CATEGORIES.forEach(cat => {
+        const val = budgets[cat];
+        map[cat] = (val !== undefined && val !== null && val !== '') ? formatCurrencyForInput(val) : '';
+    });
+    Object.keys(budgets).forEach(cat => {
+        if (map[cat] === undefined) {
+            const val = budgets[cat];
+            map[cat] = (val !== undefined && val !== null && val !== '') ? formatCurrencyForInput(val) : '';
+        }
+    });
+    return map;
+};
 
 /**
  * Modal para Configurar Metas de Orçamento por Categoria.
@@ -14,17 +30,14 @@ export default function CategoryBudgetsModal({
     currentBudgets = {},
     onSaveBudgets
 }) {
-    const [budgetMap, setBudgetMap] = useState(() => {
-        const initial = { ...currentBudgets };
-        DEFAULT_CATEGORIES.forEach(cat => {
-            if (initial[cat] === undefined) {
-                initial[cat] = '';
-            }
-        });
-        return initial;
-    });
-
+    const [budgetMap, setBudgetMap] = useState(() => buildInitialBudgetMap(currentBudgets));
     const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setBudgetMap(buildInitialBudgetMap(currentBudgets));
+        }
+    }, [isOpen, currentBudgets]);
 
     const handleChange = (category, value) => {
         setBudgetMap(prev => ({
@@ -40,7 +53,7 @@ export default function CategoryBudgetsModal({
             const sanitized = {};
             Object.entries(budgetMap).forEach(([cat, val]) => {
                 const parsed = parseCurrencyInput(val);
-                if (parsed > 0) {
+                if (isValidFinancialValue(parsed)) {
                     sanitized[cat] = parsed;
                 }
             });
@@ -77,10 +90,11 @@ export default function CategoryBudgetsModal({
                                     <input
                                         id={inputId}
                                         type="text"
-                                        value={formatCurrencyForInput(budgetMap[cat])}
-                                        onChange={(e) => handleChange(cat, e.target.value)}
+                                        value={budgetMap[cat] || ''}
+                                        onChange={handleCurrencyInputChange((val) => handleChange(cat, val))}
                                         placeholder="Sem meta"
                                         aria-label={`Meta de orçamento para ${cat}`}
+                                        inputMode="decimal"
                                         className="w-28 p-2 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-xs font-bold focus:outline-none focus:border-gold text-right"
                                     />
                                 </div>

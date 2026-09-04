@@ -1,7 +1,7 @@
 // src/components/FinancialSandboxSimulatorModal.jsx
 import React, { useState, useMemo } from 'react';
 import GenericModal from './GenericModal';
-import { formatCurrencyDisplay, parseCurrencyInput, formatCurrencyForInput } from '../utils/currency';
+import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange } from '../utils/currency';
 import { calculateInstallments, calculateFutureCommitments } from '../services/financialService';
 
 /**
@@ -18,7 +18,7 @@ export default function FinancialSandboxSimulatorModal({
     const [scenario, setScenario] = useState('new_purchase'); // 'new_purchase' | 'cancel_sub' | 'simulated_income'
 
     // Cenário 1: Nova Compra Parcelada
-    const [simPurchaseValue, setSimPurchaseValue] = useState('1200');
+    const [simPurchaseValue, setSimPurchaseValue] = useState('1.200,00');
     const [simInstallmentsCount, setSimInstallmentsCount] = useState('12');
     const simPurchaseDesc = 'Nova Compra Hipotética';
 
@@ -26,7 +26,7 @@ export default function FinancialSandboxSimulatorModal({
     const [selectedSubToCancel, setSelectedSubToCancel] = useState('');
 
     // Cenário 3: Renda Simulada
-    const [simIncomeValue, setSimIncomeValue] = useState('8000');
+    const [simIncomeValue, setSimIncomeValue] = useState('8.000,00');
 
     const startMonth = selectedMonth || new Date().toISOString().slice(0, 7);
 
@@ -162,10 +162,11 @@ export default function FinancialSandboxSimulatorModal({
                                 <input
                                     id="simPurchaseVal"
                                     type="text"
-                                    value={formatCurrencyForInput(simPurchaseValue)}
-                                    onChange={(e) => setSimPurchaseValue(e.target.value)}
+                                    value={simPurchaseValue}
+                                    onChange={handleCurrencyInputChange(setSimPurchaseValue)}
                                     className="w-full p-2.5 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-sm font-bold focus:outline-none focus:border-gold"
                                     placeholder="1.200,00"
+                                    inputMode="decimal"
                                 />
                             </div>
                             <div>
@@ -250,10 +251,11 @@ export default function FinancialSandboxSimulatorModal({
                             <input
                                 id="simIncome"
                                 type="text"
-                                value={formatCurrencyForInput(simIncomeValue)}
-                                onChange={(e) => setSimIncomeValue(e.target.value)}
+                                value={simIncomeValue}
+                                onChange={handleCurrencyInputChange(setSimIncomeValue)}
                                 className="w-full p-2.5 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-sm font-bold focus:outline-none focus:border-gold"
                                 placeholder="8.000,00"
+                                inputMode="decimal"
                             />
                         </div>
 

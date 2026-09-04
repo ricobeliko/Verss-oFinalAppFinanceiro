@@ -1,6 +1,7 @@
 // src/utils/pdfParser.js
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { parseCurrencyInput } from './currency';
 
 // Configuração do Worker do PDF.js para processamento assíncrono seguro no navegador
 if (pdfjsLib?.GlobalWorkerOptions) {
@@ -125,30 +126,6 @@ export const extractTextLinesFromPdf = async (fileData) => {
 };
 
 /**
- * Converte valor em formato de moeda ("1.234,56" ou "24,90") para Number (float)
- */
-const parseMonetaryValue = (valStr) => {
-    if (!valStr) return null;
-    // Remove "R$", espaços, etc.
-    const cleaned = valStr.replace(/R\$|\s/gi, '');
-    
-    // Se tiver ponto e vírgula: "1.234,56"
-    if (cleaned.includes('.') && cleaned.includes(',')) {
-        return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
-    }
-    // Se tiver apenas vírgula: "120,00"
-    if (cleaned.includes(',')) {
-        return parseFloat(cleaned.replace(',', '.'));
-    }
-    // Se for apenas número com ponto decimal: "120.00"
-    if (cleaned.includes('.')) {
-        return parseFloat(cleaned);
-    }
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? null : num;
-};
-
-/**
  * Analisa as linhas de texto da fatura e extrai as transações individuais
  * @param {string[]} lines 
  * @param {string} fallbackYear 
@@ -185,7 +162,7 @@ export const parseInvoiceTransactions = (lines, fallbackYear = new Date().getFul
         }
 
         const valueString = valueMatch[1];
-        const value = parseMonetaryValue(valueString);
+        const value = parseCurrencyInput(valueString);
         if (!value || value <= 0) return;
 
         // Linha sem o valor para facilitar extração de descrição e data
