@@ -6,7 +6,17 @@ import { useAppContext } from '../../context/AppContext';
 import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../services/firestoreSubscriptionRegistry';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { generateTransactionsCsv, generateAnnualReportCsv, downloadCsvFile } from '../../services/csvExportService';
-import { calculateMonthlyComparisonSummary, generateDeterministicFinancialInsights, generateFinancialAlerts } from '../../services/financialService';
+import {
+    calculateMonthlyComparisonSummary,
+    generateDeterministicFinancialInsights,
+    generateFinancialAlerts,
+    calculateInvoiceDueDate,
+    toCents,
+    fromCents,
+    calculateRemainingAmount,
+    calculatePaymentStatus,
+    mapDomainStatusToLoanStatus
+} from '../../services/financialService';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
 import FutureCommitmentsCard from '../../components/FutureCommitmentsCard';
@@ -288,12 +298,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
         
-        const newValuePaid = installmentsList
+        const paidCents = installmentsList
             .filter(installment => installment.status === 'Paga')
-            .reduce((sum, installment) => sum + installment.value, 0);
+            .reduce((sum, installment) => sum + toCents(installment.value || 0), 0);
 
-        const newBalanceDue = parseFloat((originalAmount - newValuePaid).toFixed(2));
-        const finalStatus = newBalanceDue <= 0.01 ? 'Pago Total' : (newValuePaid > 0 ? 'Pago Parcial' : 'Pendente');
+        const newValuePaid = fromCents(paidCents);
+        const newBalanceDue = calculateRemainingAmount(originalAmount, newValuePaid);
+        const finalStatus = mapDomainStatusToLoanStatus(calculatePaymentStatus(originalAmount, newValuePaid));
 
         const fieldsToUpdate = {
             userId: userId,
@@ -411,24 +422,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             todayAtMidnight.setHours(0, 0, 0, 0);
             let allItems = [];
 
-            const getInvoiceDueDate = (transactionDate, card) => {
-                if (!card || !card.closingDay || !card.dueDay) return transactionDate;
-                let dueMonth = transactionDate.getUTCMonth();
-                let dueYear = transactionDate.getUTCFullYear();
-                if (card.closingDay < card.dueDay) {
-                    if (transactionDate.getUTCDate() >= card.closingDay) dueMonth += 1;
-                } else {
-                    const closingDate = new Date(Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), card.closingDay));
-                    if (transactionDate >= closingDate) dueMonth += 2;
-                    else dueMonth += 1;
-                }
-                if (dueMonth > 11) {
-                    dueYear += Math.floor(dueMonth / 12);
-                    dueMonth %= 12;
-                }
-                return new Date(Date.UTC(dueYear, dueMonth, card.dueDay));
-            };
-
             const safeLoans = Array.isArray(loans) ? loans : [];
             const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
             const safeExpenses = Array.isArray(expenses) ? expenses : [];
@@ -483,7 +476,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
                     [-1, 0].forEach(monthOffset => {
                         const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
-                        const invoiceDueDate = getInvoiceDueDate(chargeDate, card);
+                        const invoiceDueDate = calculateInvoiceDueDate(chargeDate, card);
                         
                         if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
                             const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
@@ -516,7 +509,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
                 ) {
                     const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
-                    const relevantDate = card ? getInvoiceDueDate(expenseDate, card) : expenseDate;
+                    const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
                     
                     if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
                         allItems.push({ 
@@ -552,8 +545,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     : String(bValue).localeCompare(String(aValue));
             });
 
-            const newTotalFatura = allItems.reduce((sum, item) => sum + (item.value || 0), 0);
-            const newTotalRecebido = allItems.filter(item => item.currentStatus === 'Paga').reduce((sum, item) => sum + (item.value || 0), 0);
+            const faturaCents = allItems.reduce((sum, item) => sum + toCents(item.value || 0), 0);
+            const recebidoCents = allItems.filter(item => item.currentStatus === 'Paga').reduce((sum, item) => sum + toCents(item.value || 0), 0);
+            const pendenteCents = Math.max(0, faturaCents - recebidoCents);
 
             return {
                 displayableItems: allItems,
@@ -561,9 +555,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
                 filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
                 summary: {
-                    totalFatura: newTotalFatura,
-                    totalRecebido: newTotalRecebido,
-                    totalPendente: newTotalFatura - newTotalRecebido,
+                    totalFatura: fromCents(faturaCents),
+                    totalRecebido: fromCents(recebidoCents),
+                    totalPendente: fromCents(pendenteCents),
                 }
             };
         } catch (error) {
@@ -742,9 +736,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     if (loanData.sharedDetails[pKey]) {
                         const insts = Array.isArray(loanData.sharedDetails[pKey].installments) ? loanData.sharedDetails[pKey].installments : [];
                         const origAmount = loanData.sharedDetails[pKey].shareAmount || 0;
-                        const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
-                        const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));
-                        const finalStatus = balDue <= 0.01 ? 'Pago Total' : (valPaid > 0 ? 'Pago Parcial' : 'Pendente');
+                        const paidCents = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + toCents(i.value || 0), 0);
+                        const valPaid = fromCents(paidCents);
+                        const balDue = calculateRemainingAmount(origAmount, valPaid);
+                        const finalStatus = mapDomainStatusToLoanStatus(calculatePaymentStatus(origAmount, valPaid));
 
                         fieldsToUpdate[`sharedDetails.${pKey}.installments`] = insts;
                         fieldsToUpdate[`sharedDetails.${pKey}.valuePaid`] = valPaid;
@@ -755,9 +750,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             } else if (!loanData.isShared) {
                 const insts = Array.isArray(loanData.installments) ? loanData.installments : [];
                 const origAmount = loanData.totalValue || 0;
-                const valPaid = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + (i.value || 0), 0);
-                const balDue = parseFloat(Math.max(0, origAmount - valPaid).toFixed(2));
-                const finalStatus = balDue <= 0.01 ? 'Pago Total' : (valPaid > 0 ? 'Pago Parcial' : 'Pendente');
+                const paidCents = insts.filter(i => i.status === 'Paga').reduce((sum, i) => sum + toCents(i.value || 0), 0);
+                const valPaid = fromCents(paidCents);
+                const balDue = calculateRemainingAmount(origAmount, valPaid);
+                const finalStatus = mapDomainStatusToLoanStatus(calculatePaymentStatus(origAmount, valPaid));
 
                 fieldsToUpdate.installments = insts;
                 fieldsToUpdate.valuePaidClient = valPaid;

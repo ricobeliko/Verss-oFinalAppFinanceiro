@@ -42,7 +42,7 @@ export function isValidFinancialValue(value) {
  * Calcula a divisão exata de parcelas garantindo que a soma de todas seja 100% igual ao total.
  * O centavo residual é compensado na última parcela.
  * Trata rolagem de meses e anos, respeitando o número máximo de dias de cada mês (ex: 28/29 em Fev, 30 em Abr).
- * 
+ *
  * @param {Object} params
  * @param {number|string} params.totalValue - Valor total da compra
  * @param {number} params.count - Quantidade de parcelas (inteiro positivo)
@@ -75,9 +75,9 @@ export function calculateInstallments({ totalValue, count, startDate }) {
 
     for (let index = 0; index < installmentsCount; index++) {
         const isLast = index === installmentsCount - 1;
-        
+
         // A última parcela absorve a diferença exata de centavos residuais
-        const installmentCents = isLast 
+        const installmentCents = isLast
             ? (totalCents - accumulatedCents)
             : baseCentsPerInstallment;
 
@@ -110,7 +110,7 @@ export function calculateInstallments({ totalValue, count, startDate }) {
  * Retorna o valor fornecido se for um Array legítimo; caso contrário, retorna array vazio [].
  * Proteção determinística e fail-safe contra shapes legados inválidos ({}, string, number, null).
  * NUNCA converte objetos com Object.values ou Array.from para evitar distorção financeira de dados legados.
- * 
+ *
  * @template T
  * @param {T} value
  * @returns {Array}
@@ -132,8 +132,8 @@ export function calculateRemainingAmount(totalValue, valuePaid) {
 
 /**
  * Determina o status de pagamento baseado no total e no valor pago.
- * @param {number|string} totalValue 
- * @param {number|string} valuePaid 
+ * @param {number|string} totalValue
+ * @param {number|string} valuePaid
  * @returns {'Pago'|'Parcial'|'Pendente'}
  */
 export function calculatePaymentStatus(totalValue, valuePaid) {
@@ -149,10 +149,10 @@ export function calculatePaymentStatus(totalValue, valuePaid) {
 /**
  * Calcula o saldo líquido geral: Receitas - (Despesas + Parcelas de Cartão).
  * Utiliza centavos inteiros em toda a redução.
- * 
- * @param {Array<{value: number}>} incomes 
- * @param {Array<{value: number}>} expenses 
- * @param {Array<{value: number}>} cardInstallments 
+ *
+ * @param {Array<{value: number}>} incomes
+ * @param {Array<{value: number}>} expenses
+ * @param {Array<{value: number}>} cardInstallments
  * @returns {{ totalIncomes: number, totalExpenses: number, totalCardDebt: number, netBalance: number }}
  */
 export function calculateNetBalance(incomes = [], expenses = [], cardInstallments = []) {
@@ -177,7 +177,7 @@ export function calculateNetBalance(incomes = [], expenses = [], cardInstallment
 
 /**
  * Calcula o consolidado de dívidas, valores pagos e saldo devedor de um cliente/pessoa.
- * 
+ *
  * @param {Array<Object>} clientLoans - Compras ou parcelas do cliente
  * @param {Array<Object>} [clientExpenses] - Despesas avulsas vinculadas
  * @param {Array<Object>} [clientSubscriptions] - Assinaturas vinculadas
@@ -229,7 +229,7 @@ export function calculateClientDebt(clientLoans = [], clientExpenses = [], clien
 
 /**
  * Calcula o valor total da fatura de um cartão em um mês de competência específico.
- * 
+ *
  * @param {Array<Object>} loans - Lista de compras com parcelas
  * @param {string} targetMonth - Mês no formato 'YYYY-MM'
  * @param {string} [cardId] - ID do cartão (opcional para filtrar cartão específico)
@@ -260,7 +260,7 @@ export function calculateCardInvoiceTotal(loans = [], targetMonth, cardId = null
 
 /**
  * Agrupa itens financeiros por categoria e soma os valores com precisão em centavos.
- * 
+ *
  * @param {Array<Object>} items - Lista de despesas ou receitas
  * @returns {Array<{ category: string, total: number }>} Lista ordenada pelo total decrescente
  */
@@ -286,7 +286,7 @@ export function aggregateByCategory(items = []) {
 /**
  * Calcula a projeção de compromissos conhecidos mês a mês a partir de um mês de referência.
  * Considera parcelas de compras (incluindo compartilhadas) e assinaturas ativas.
- * 
+ *
  * @param {Object} params
  * @param {Array<Object>} params.loans - Lista de compras parceladas
  * @param {Array<Object>} [params.subscriptions=[]] - Lista de assinaturas
@@ -328,7 +328,7 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
             const processInstallmentList = (instList, isSharedPortion = false) => {
                 const safeInstList = asArray(instList);
                 if (safeInstList.length === 0) return;
-                
+
                 const instThisMonth = safeInstList.find(inst => inst?.dueDate && inst.dueDate.startsWith(targetMonthString));
                 if (instThisMonth) {
                     installmentsCents += toCents(instThisMonth.value || 0);
@@ -346,7 +346,7 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
             if (loan.isShared && loan.sharedDetails) {
                 if (loan.sharedDetails.person1) processInstallmentList(loan.sharedDetails.person1.installments, true);
                 if (loan.sharedDetails.person2) processInstallmentList(loan.sharedDetails.person2.installments, true);
-                
+
                 const allInsts = asArray(loan.installments);
                 if (allInsts.length > 0) {
                     const lastInst = allInsts[allInsts.length - 1];
@@ -379,7 +379,7 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
 /**
  * Calcula a curva de descompressão financeira em um determinado horizonte de meses.
  * Identifica o valor mensal total que deixa de ser cobrado e o total de compras finalizadas.
- * 
+ *
  * @param {Object} params
  * @param {Array<Object>} params.loans - Lista de compras
  * @param {string} params.startMonth - Mês inicial 'YYYY-MM'
@@ -389,7 +389,7 @@ export function calculateFutureCommitments({ loans = [], subscriptions = [], sta
 export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCount = 4 }) {
     const safeLoans = asArray(loans);
     const commitments = calculateFutureCommitments({ loans: safeLoans, subscriptions: [], startMonth, monthsCount });
-    
+
     let totalLoansEnding = 0;
     let totalMonthlyReliefCents = 0;
     const timeline = [];
@@ -417,9 +417,9 @@ export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCoun
 /**
  * Consolida os repasses de terceiros (valores que amigos/familiares devem ao titular)
  * para um mês específico e projeta o saldo devedor futuro total por pessoa.
- * 
+ *
  * Garante proteção estrita contra contagem dupla em compras compartilhadas.
- * 
+ *
  * @param {Object} params
  * @param {Array<Object>} params.loans - Compras/parcelas
  * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
@@ -587,7 +587,7 @@ export function calculateConsolidatedClientReceivables({
 /**
  * Retorna o mês de competência anterior no formato 'YYYY-MM'.
  * Trata corretamente viradas de ano (ex: '2027-01' -> '2026-12').
- * 
+ *
  * @param {string} monthStr - Mês 'YYYY-MM'
  * @returns {string} Mês anterior 'YYYY-MM'
  */
@@ -595,7 +595,7 @@ export function getPreviousMonthString(monthStr) {
     if (!monthStr || typeof monthStr !== 'string' || !monthStr.includes('-')) return '';
     const [year, month] = monthStr.split('-').map(Number);
     if (isNaN(year) || isNaN(month)) return '';
-    
+
     if (month === 1) {
         return `${year - 1}-12`;
     }
@@ -605,7 +605,7 @@ export function getPreviousMonthString(monthStr) {
 /**
  * Calcula a variação absoluta e percentual entre o valor atual e o anterior.
  * Nunca retorna NaN ou Infinity.
- * 
+ *
  * @param {number} currentValue - Valor do mês atual
  * @param {number} previousValue - Valor do mês anterior
  * @returns {{ delta: number, percentage: number, direction: 'up'|'down'|'neutral', label: string }}
@@ -638,7 +638,7 @@ export function calculateMonthOverMonthDelta(currentValue = 0, previousValue = 0
 /**
  * Calcula o comparativo mensal de métricas-chave entre o mês atual e o anterior.
  * Utiliza apenas os dados em memória já carregados (zero novas leituras no Firestore).
- * 
+ *
  * @param {Object} params
  * @param {string} params.selectedMonth - Mês atual 'YYYY-MM'
  * @param {Array<Object>} [params.loans=[]] - Compras/faturas
@@ -720,10 +720,10 @@ export function calculateMonthlyComparisonSummary({
 
 /**
  * Motor de Insights Determinísticos do FinControl.
- * 
+ *
  * Gera no máximo 1 a 3 insights baseados estritamente em cálculos matemáticos puros
  * dos dados existentes. Proibido julgamentos morais, conselhos de investimento ou uso de IA.
- * 
+ *
  * @param {Object} params
  * @param {string} params.selectedMonth - Mês de competência 'YYYY-MM'
  * @param {Array<Object>} [params.loans=[]] - Compras parceladas
@@ -867,10 +867,10 @@ export function generateDeterministicFinancialInsights({
 /**
  * Calcula a inteligência de limite e comprometimento de um cartão no FinControl.
  * Opera estritamente com dados locais cadastrados (centavos inteiros).
- * 
+ *
  * NOTA SEMÂNTICA: Os valores são estimativas baseadas exclusivamente nos lançamentos do FinControl,
  * e não refletem conexões diretas ou limites bancários reais externos.
- * 
+ *
  * @param {Object} params
  * @param {Object} params.card - Objeto do cartão ({ id, limit, name, closingDay, dueDay })
  * @param {Array<Object>} [params.loans=[]] - Compras parceladas
@@ -966,10 +966,10 @@ export function calculateCardLimitIntelligence({ card, loans = [], expenses = []
 
 /**
  * Motor de Alertas Financeiros Internos do FinControl.
- * 
+ *
  * Gera alertas determinísticos e objetivos com prioridades e deduplicação.
  * Proibido push notifications, popups intrusivos ou chamadas externas.
- * 
+ *
  * @param {Object} params
  * @param {string} params.selectedMonth - Mês de competência 'YYYY-MM'
  * @param {Array<Object>} [params.loans=[]] - Compras parceladas
@@ -1153,7 +1153,7 @@ export function generateFinancialAlerts({
 /**
  * Detecta anomalias determinísticas de gastos por categoria comparando o mês atual contra a média móvel dos últimos 3 meses.
  * Aplica piso absoluto (mínimo R$ 150 de diferença) para evitar alertas em variações pequenas.
- * 
+ *
  * @param {Object} params
  * @param {string} params.selectedMonth - Mês no formato 'YYYY-MM'
  * @param {Array<Object>} [params.expenses=[]]
@@ -1256,7 +1256,7 @@ export function detectExpenseAnomalies({
 
 /**
  * Gera um resumo executivo semanal determinístico (últimos 7 dias corridos + próximos 7 dias).
- * 
+ *
  * @param {Object} params
  * @param {Array<Object>} [params.loans=[]]
  * @param {Array<Object>} [params.expenses=[]]
@@ -1370,7 +1370,7 @@ export function generateWeeklyFinancialSummary({
 /**
  * Gera um resumo executivo mensal determinístico combinando comparativo MoM,
  * top categorias, repasses de terceiros e alívio de fluxo de caixa.
- * 
+ *
  * @param {Object} params
  * @param {string} params.selectedMonth - Mês no formato 'YYYY-MM'
  * @param {Array<Object>} [params.loans=[]]
@@ -1490,7 +1490,7 @@ export function generateMonthlyFinancialSummary({
 
 /**
  * Calcula o progresso de orçamentos (budgets) por categoria para o mês selecionado.
- * 
+ *
  * @param {Object} params
  * @param {Object} [params.budgets={}] - Mapa de limites por categoria { [categoria]: limiteEmReais }
  * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
@@ -1573,3 +1573,355 @@ export function calculateCategoryBudgetsProgress({
 
 // Alias para compatibilidade retroativa
 export const detectCategorySpendingAnomalies = detectExpenseAnomalies;
+
+/**
+ * Calcula a data de vencimento da fatura do cartão para uma transação ou cobrança.
+ * Regra canônica do produto:
+ * - Se card, closingDay ou dueDay estiverem ausentes: retorna a própria data de transação.
+ * - Se closingDay < dueDay: se dia da transação >= closingDay, avança para o próximo mês.
+ * - Se closingDay >= dueDay: se transação >= data de fechamento no mesmo mês, avança 2 meses; senão avança 1 mês.
+ * - Trata virada de ano e compensa dias de meses mais curtos (ex: 28/29 em Fev, 30 em Abr).
+ *
+ * @param {Date|string} transactionDate
+ * @param {Object} card - Objeto de cartão com closingDay e dueDay
+ * @returns {Date} Data de vencimento da fatura em UTC
+ */
+export function calculateInvoiceDueDate(transactionDate, card) {
+    if (!transactionDate) return null;
+    let dateObj;
+    if (transactionDate instanceof Date) {
+        dateObj = transactionDate;
+    } else if (typeof transactionDate === 'string') {
+        dateObj = new Date(transactionDate.includes('T') ? transactionDate : `${transactionDate}T12:00:00Z`);
+    } else {
+        return transactionDate;
+    }
+
+    if (isNaN(dateObj.getTime())) return transactionDate;
+    if (!card || !card.closingDay || !card.dueDay) return dateObj;
+
+    const closingDay = parseInt(card.closingDay, 10);
+    const dueDay = parseInt(card.dueDay, 10);
+    if (isNaN(closingDay) || isNaN(dueDay)) return dateObj;
+
+    let dueMonth = dateObj.getUTCMonth();
+    let dueYear = dateObj.getUTCFullYear();
+
+    if (closingDay < dueDay) {
+        if (dateObj.getUTCDate() >= closingDay) {
+            dueMonth += 1;
+        }
+    } else {
+        const closingDate = new Date(Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), closingDay));
+        if (dateObj >= closingDate) {
+            dueMonth += 2;
+        } else {
+            dueMonth += 1;
+        }
+    }
+
+    if (dueMonth > 11) {
+        dueYear += Math.floor(dueMonth / 12);
+        dueMonth %= 12;
+    }
+
+    // Compensa dias em meses mais curtos (Fevereiro 28/29, meses de 30 dias)
+    const maxDaysInDueMonth = new Date(Date.UTC(dueYear, dueMonth + 1, 0)).getUTCDate();
+    const actualDueDay = Math.min(dueDay, maxDaysInDueMonth);
+
+    return new Date(Date.UTC(dueYear, dueMonth, actualDueDay));
+}
+
+/**
+ * Mapeia o status do domínio ('Pago' | 'Parcial' | 'Pendente') para o status persistido do documento loan.
+ * Preserva compatibilidade total com o modelo de dados existente ('Pago Total' | 'Pago Parcial' | 'Pendente').
+ *
+ * @param {'Pago'|'Parcial'|'Pendente'} domainStatus
+ * @returns {'Pago Total'|'Pago Parcial'|'Pendente'}
+ */
+export function mapDomainStatusToLoanStatus(domainStatus) {
+    if (domainStatus === 'Pago') return 'Pago Total';
+    if (domainStatus === 'Parcial') return 'Pago Parcial';
+    return 'Pendente';
+}
+
+/**
+ * Calcula o total e o status de pendência de uma fatura de cartão em um mês de competência específico ('YYYY-MM').
+ * Opera 100% em centavos inteiros para prevenir drift de ponto flutuante.
+ *
+ * @param {Object} params
+ * @param {Object} params.card - Cartão com id, closingDay, dueDay
+ * @param {string} params.selectedMonth - Mês no formato 'YYYY-MM'
+ * @param {Array<Object>} [params.loans] - Compras/empréstimos (normais e compartilhados)
+ * @param {Array<Object>} [params.expenses] - Despesas vinculadas a cartões
+ * @param {Array<Object>} [params.subscriptions] - Assinaturas vinculadas a cartões
+ * @param {Array<Object>} [params.paidSubscriptions] - Registro de assinaturas pagas
+ * @returns {{ total: number, isPending: boolean }}
+ */
+export function calculateCardInvoiceDetails({
+    card,
+    selectedMonth,
+    loans = [],
+    expenses = [],
+    subscriptions = [],
+    paidSubscriptions = []
+}) {
+    if (!card || !card.id || !selectedMonth || typeof selectedMonth !== 'string') {
+        return { total: 0, isPending: false };
+    }
+
+    const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
+    if (isNaN(filterYear) || isNaN(filterMonth)) {
+        return { total: 0, isPending: false };
+    }
+
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubscriptions = asArray(subscriptions);
+    const safePaidSubs = asArray(paidSubscriptions);
+
+    let totalCents = 0;
+    let isInvoicePending = false;
+
+    // 1. Parcelas de compras (normais e compartilhadas)
+    safeLoans.forEach(loan => {
+        if (!loan || loan.cardId !== card.id) return;
+
+        const processInstallments = (installments) => {
+            if (!Array.isArray(installments)) return;
+            installments.forEach(inst => {
+                if (!inst || !inst.dueDate) return;
+                const instDate = new Date(inst.dueDate + (inst.dueDate.includes('T') ? '' : 'T00:00:00Z'));
+                if (isNaN(instDate.getTime())) return;
+
+                if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth) {
+                    totalCents += toCents(inst.value || 0);
+                    if (inst.status !== 'Paga') {
+                        isInvoicePending = true;
+                    }
+                }
+            });
+        };
+
+        if (loan.isShared && loan.sharedDetails) {
+            if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments);
+            if (loan.sharedDetails.person2) processInstallments(loan.sharedDetails.person2.installments);
+        } else {
+            processInstallments(loan.installments);
+        }
+    });
+
+    // 2. Despesas avulsas atribuídas ao cartão
+    safeExpenses.forEach(expense => {
+        if (!expense || expense.cardId !== card.id) return;
+        const rawDate = expense.date?.toDate ? expense.date.toDate() : (expense.date instanceof Date ? expense.date : new Date(expense.date + (typeof expense.date === 'string' && !expense.date.includes('T') ? 'T00:00:00Z' : '')));
+        if (isNaN(rawDate.getTime())) return;
+
+        const relevantDate = calculateInvoiceDueDate(rawDate, card);
+        if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
+            totalCents += toCents(expense.value || 0);
+            if (expense.status !== 'Paga') {
+                isInvoicePending = true;
+            }
+        }
+    });
+
+    // 3. Assinaturas ativas no cartão com competência de fatura
+    const addedSubKeys = new Set();
+    safeSubscriptions.forEach(sub => {
+        if (!sub || sub.cardId !== card.id || !sub.isActive) return;
+        const subDueDay = parseInt(sub.dueDate, 10) || 1;
+
+        [-1, 0].forEach(monthOffset => {
+            const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, subDueDay));
+            const invoiceDueDate = calculateInvoiceDueDate(chargeDate, card);
+
+            if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
+                if (!addedSubKeys.has(uniqueKey)) {
+                    totalCents += toCents(sub.amount || 0);
+                    const isPaid = safePaidSubs.some(ps => ps && ps.subscriptionId === sub.id && ps.month === selectedMonth);
+                    if (!isPaid) {
+                        isInvoicePending = true;
+                    }
+                    addedSubKeys.add(uniqueKey);
+                }
+            }
+        });
+    });
+
+    return {
+        total: fromCents(totalCents),
+        isPending: isInvoicePending
+    };
+}
+
+/**
+ * Calcula o resumo financeiro consolidado de um cliente para o relatório financeiro individual.
+ * Opera 100% em centavos inteiros em todas as reduções.
+ *
+ * @param {Object} params
+ * @param {string} params.clientId - ID do cliente
+ * @param {Array<Object>} [params.loans] - Lista completa de compras
+ * @param {Array<Object>} [params.expenses] - Lista de despesas
+ * @param {Array<Object>} [params.subscriptions] - Lista de assinaturas
+ * @param {Date|string} [params.referenceDate] - Data de referência (mês atual)
+ * @returns {Object} Resumo com monthlyInvoice, monthlySubscriptions, monthlyExpenses, monthlySpendingByCategory, futureInstallments, openLoans, totalDebt
+ */
+export function calculateClientFinancialReportSummary({
+    clientId,
+    loans = [],
+    expenses = [],
+    subscriptions = [],
+    referenceDate = new Date()
+}) {
+    if (!clientId) {
+        return {
+            monthlyInvoice: 0,
+            monthlySubscriptions: 0,
+            monthlyExpenses: 0,
+            monthlySpendingByCategory: {},
+            futureInstallments: {},
+            openLoans: [],
+            totalDebt: 0
+        };
+    }
+
+    const refDate = referenceDate instanceof Date
+        ? referenceDate
+        : new Date(typeof referenceDate === 'string' && !referenceDate.includes('T') ? `${referenceDate}T12:00:00Z` : referenceDate);
+
+    const currentMonth = refDate.getMonth();
+    const currentYear = refDate.getFullYear();
+
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubscriptions = asArray(subscriptions);
+
+    // Filtra compras do cliente (normais ou compartilhadas como person1 ou person2)
+    const clientLoans = safeLoans.filter(loan => {
+        if (!loan) return false;
+        if (loan.isShared) {
+            return loan.sharedDetails?.person1?.clientId === clientId || loan.sharedDetails?.person2?.clientId === clientId;
+        }
+        return loan.clientId === clientId;
+    });
+
+    const clientExpenses = safeExpenses.filter(exp => exp && exp.clientId === clientId);
+    const clientSubscriptions = safeSubscriptions.filter(sub => sub && sub.clientId === clientId);
+
+    // 1. Parcelas do mês atual
+    const monthlyInstallments = clientLoans.flatMap(loan => {
+        let installments = [];
+        if (loan.isShared) {
+            if (loan.sharedDetails?.person1?.clientId === clientId) installments = loan.sharedDetails.person1.installments;
+            else if (loan.sharedDetails?.person2?.clientId === clientId) installments = loan.sharedDetails.person2.installments;
+        } else {
+            installments = loan.installments;
+        }
+        return Array.isArray(installments) ? installments : [];
+    }).filter(inst => {
+        if (!inst || !inst.dueDate) return false;
+        const dueDate = new Date(inst.dueDate + (inst.dueDate.includes('T') ? '' : 'T00:00:00'));
+        return !isNaN(dueDate.getTime()) && dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
+    });
+
+    // 2. Despesas do mês atual
+    const monthlyExpensesList = clientExpenses.filter(exp => {
+        if (!exp || !exp.date) return false;
+        const expDate = exp.date?.toDate ? exp.date.toDate() : (exp.date instanceof Date ? exp.date : new Date(exp.date + (typeof exp.date === 'string' && !exp.date.includes('T') ? 'T00:00:00' : '')));
+        return !isNaN(expDate.getTime()) && expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+    });
+
+    // Somas do mês em centavos
+    const monthlyLoansCents = monthlyInstallments.reduce((sum, inst) => sum + toCents(inst?.value || 0), 0);
+    const monthlyExpensesCents = monthlyExpensesList.reduce((sum, exp) => sum + toCents(exp?.value || 0), 0);
+    const monthlySubscriptionsCents = clientSubscriptions.filter(sub => sub?.isActive).reduce((sum, sub) => sum + toCents(sub?.amount || 0), 0);
+
+    // 3. Gastos por categoria em centavos
+    const categoryCents = {};
+    monthlyExpensesList.forEach(exp => {
+        const category = exp.category || 'Outros';
+        categoryCents[category] = (categoryCents[category] || 0) + toCents(exp.value || 0);
+    });
+
+    if (monthlyLoansCents > 0) {
+        categoryCents['Compras Parceladas'] = (categoryCents['Compras Parceladas'] || 0) + monthlyLoansCents;
+    }
+
+    if (monthlySubscriptionsCents > 0) {
+        categoryCents['Assinaturas'] = (categoryCents['Assinaturas'] || 0) + monthlySubscriptionsCents;
+    }
+
+    const monthlySpendingByCategory = {};
+    Object.entries(categoryCents).forEach(([cat, cents]) => {
+        monthlySpendingByCategory[cat] = fromCents(cents);
+    });
+
+    // 4. Próximas parcelas a vencer (sua parte) em centavos
+    const futureInstallmentsCents = {};
+    clientLoans.forEach(loan => {
+        let installmentsToProcess = [];
+        if (loan.isShared) {
+            if (loan.sharedDetails?.person1?.clientId === clientId) installmentsToProcess = loan.sharedDetails.person1.installments;
+            else if (loan.sharedDetails?.person2?.clientId === clientId) installmentsToProcess = loan.sharedDetails.person2.installments;
+        } else {
+            installmentsToProcess = loan.installments;
+        }
+
+        if (Array.isArray(installmentsToProcess)) {
+            installmentsToProcess.forEach(inst => {
+                if (inst && (inst.status === 'Pendente' || inst.status === 'Atrasado')) {
+                    if (!inst.dueDate) return;
+                    const dueDate = new Date(inst.dueDate + (inst.dueDate.includes('T') ? '' : 'T00:00:00'));
+                    if (isNaN(dueDate.getTime())) return;
+                    const monthYear = `${dueDate.toLocaleString('pt-BR', { month: 'long' })} de ${dueDate.getFullYear()}`;
+                    futureInstallmentsCents[monthYear] = (futureInstallmentsCents[monthYear] || 0) + toCents(inst.value || 0);
+                }
+            });
+        }
+    });
+
+    const futureInstallments = {};
+    Object.entries(futureInstallmentsCents).forEach(([my, cents]) => {
+        futureInstallments[my] = fromCents(cents);
+    });
+
+    // 5. Compras em aberto e Saldo devedor total em centavos
+    const openLoans = [];
+    let totalDebtCents = 0;
+
+    clientLoans.forEach(loan => {
+        let balanceDueForClient = 0;
+        let statusForClient = '';
+
+        if (loan.isShared) {
+            if (loan.sharedDetails?.person1?.clientId === clientId) {
+                balanceDueForClient = loan.sharedDetails.person1.balanceDue || 0;
+                statusForClient = loan.sharedDetails.person1.statusPayment;
+            } else if (loan.sharedDetails?.person2?.clientId === clientId) {
+                balanceDueForClient = loan.sharedDetails.person2.balanceDue || 0;
+                statusForClient = loan.sharedDetails.person2.statusPayment;
+            }
+        } else {
+            balanceDueForClient = loan.balanceDueClient || 0;
+            statusForClient = loan.statusPaymentClient;
+        }
+
+        if (statusForClient !== 'Pago Total') {
+            const balCents = toCents(balanceDueForClient);
+            openLoans.push({ ...loan, balanceDueClient: fromCents(balCents) });
+            totalDebtCents += balCents;
+        }
+    });
+
+    return {
+        monthlyInvoice: fromCents(monthlyLoansCents + monthlyExpensesCents),
+        monthlySubscriptions: fromCents(monthlySubscriptionsCents),
+        monthlyExpenses: fromCents(monthlyExpensesCents),
+        monthlySpendingByCategory,
+        futureInstallments,
+        openLoans,
+        totalDebt: fromCents(totalDebtCents)
+    };
+}

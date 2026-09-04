@@ -24,7 +24,11 @@ import {
     detectExpenseAnomalies,
     generateWeeklyFinancialSummary,
     generateMonthlyFinancialSummary,
-    calculateCategoryBudgetsProgress
+    calculateCategoryBudgetsProgress,
+    calculateInvoiceDueDate,
+    mapDomainStatusToLoanStatus,
+    calculateCardInvoiceDetails,
+    calculateClientFinancialReportSummary
 } from '../src/services/financialService';
 import { generateAnnualReportCsv, generateTransactionsCsv } from '../src/services/csvExportService';
 import { parseCurrencyInput, formatCurrencyDisplay } from '../src/utils/currency';
@@ -1173,9 +1177,100 @@ describe('Financial Service - Compatibilidade com Shapes Legados e Arrays Invál
     });
 });
 
+describe('Financial Service - Funções Canônicas Harmonizadas (Fase 8.3 CS4)', () => {
+    describe('calculateInvoiceDueDate', () => {
+        it('deve calcular a data de vencimento correta respeitando ciclo do cartão', () => {
+            const card = { closingDay: 25, dueDay: 5 };
+            const beforeClosing = new Date(Date.UTC(2026, 4, 20));
+            const afterClosing = new Date(Date.UTC(2026, 4, 26));
 
+            expect(calculateInvoiceDueDate(beforeClosing, card).toISOString().slice(0, 10)).toBe('2026-06-05');
+            expect(calculateInvoiceDueDate(afterClosing, card).toISOString().slice(0, 10)).toBe('2026-07-05');
+        });
 
+        it('deve retornar a data original se faltar card ou configurações', () => {
+            const date = new Date(Date.UTC(2026, 4, 10));
+            expect(calculateInvoiceDueDate(date, null)).toBe(date);
+            expect(calculateInvoiceDueDate(date, { closingDay: 25 })).toBe(date);
+        });
+    });
 
+    describe('calculateRemainingAmount', () => {
+        it('deve calcular saldo remanescente com exatidão em centavos', () => {
+            expect(calculateRemainingAmount(100.00, 0)).toBe(100);
+            expect(calculateRemainingAmount(100.00, 30.00)).toBe(70);
+            expect(calculateRemainingAmount(100.00, 99.99)).toBe(0.01);
+            expect(calculateRemainingAmount(100.00, 100.00)).toBe(0);
+            expect(calculateRemainingAmount(100.00, 150.00)).toBe(0); // Não permite saldo negativo
+        });
+    });
 
+    describe('calculatePaymentStatus', () => {
+        it('deve determinar status do domínio com quitação total exigindo estritamente saldo zero', () => {
+            expect(calculatePaymentStatus(100.00, 0)).toBe('Pendente');
+            expect(calculatePaymentStatus(100.00, 50.00)).toBe('Parcial');
+            // REGRA A (APPROVED_DOMAIN_CHANGE): R$ 0,01 residual é dívida -> status 'Parcial'
+            expect(calculatePaymentStatus(100.00, 99.99)).toBe('Parcial');
+            // Somente saldo 0 resulta em 'Pago'
+            expect(calculatePaymentStatus(100.00, 100.00)).toBe('Pago');
+            expect(calculatePaymentStatus(0, 0)).toBe('Pago');
+        });
+    });
 
+    describe('mapDomainStatusToLoanStatus', () => {
+        it('deve mapear status de domínio para o formato persistido', () => {
+            expect(mapDomainStatusToLoanStatus('Pago')).toBe('Pago Total');
+            expect(mapDomainStatusToLoanStatus('Parcial')).toBe('Pago Parcial');
+            expect(mapDomainStatusToLoanStatus('Pendente')).toBe('Pendente');
+            expect(mapDomainStatusToLoanStatus(null)).toBe('Pendente');
+        });
+    });
+
+    describe('calculateCardInvoiceDetails', () => {
+        it('deve calcular fatura de cartão em centavos inteiros com status de pendência', () => {
+            const card = { id: 'card-1', closingDay: 25, dueDay: 5 };
+            const loans = [
+                {
+                    cardId: 'card-1',
+                    installments: [
+                        { value: 150.25, dueDate: '2026-06-05', status: 'Pendente' }
+                    ]
+                }
+            ];
+            const expenses = [
+                { cardId: 'card-1', value: 49.75, date: new Date('2026-05-10T12:00:00Z'), status: 'Paga' }
+            ];
+
+            const result = calculateCardInvoiceDetails({
+                card,
+                selectedMonth: '2026-06',
+                loans,
+                expenses
+            });
+
+            expect(result.total).toBe(200.00);
+            expect(result.isPending).toBe(true);
+        });
+    });
+
+    describe('calculateClientFinancialReportSummary', () => {
+        it('deve retornar estrutura esperada pelo relatório individual', () => {
+            const result = calculateClientFinancialReportSummary({
+                clientId: 'c1',
+                loans: [],
+                expenses: [],
+                subscriptions: []
+            });
+
+            expect(result).toHaveProperty('monthlyInvoice');
+            expect(result).toHaveProperty('monthlySubscriptions');
+            expect(result).toHaveProperty('monthlyExpenses');
+            expect(result).toHaveProperty('monthlySpendingByCategory');
+            expect(result).toHaveProperty('futureInstallments');
+            expect(result).toHaveProperty('openLoans');
+            expect(result).toHaveProperty('totalDebt');
+            expect(result.totalDebt).toBe(0);
+        });
+    });
+});
 
