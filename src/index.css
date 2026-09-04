@@ -3,6 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
   body {
     @apply bg-[#1A1A1A] text-gray-300 font-sans antialiased transition-colors duration-300;
   }
