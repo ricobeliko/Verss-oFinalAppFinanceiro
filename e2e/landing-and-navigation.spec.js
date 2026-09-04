@@ -23,8 +23,8 @@ test.describe('E2E Real Browser - Landing Page e Navegação Pública', () => {
         await page.goto('/');
 
         // Verifica elementos da landing page
-        await expect(page.getByText('O controle financeiro para seus cartões')).toBeVisible();
-        await expect(page.getByRole('button', { name: /Comece agora, é grátis!/i })).toBeVisible();
+        await expect(page.getByText('Suas faturas sob controle.')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Criar conta gratuita/i }).first()).toBeVisible();
         await expect(page.getByText('Tudo o que você precisa em um só lugar')).toBeVisible();
     });
 });
