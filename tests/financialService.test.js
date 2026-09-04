@@ -1195,6 +1195,28 @@ describe('Financial Service - Funções Canônicas Harmonizadas (Fase 8.3 CS4)',
         });
     });
 
+    describe('calculateRemainingAmount', () => {
+        it('deve calcular saldo remanescente com exatidão em centavos', () => {
+            expect(calculateRemainingAmount(100.00, 0)).toBe(100);
+            expect(calculateRemainingAmount(100.00, 30.00)).toBe(70);
+            expect(calculateRemainingAmount(100.00, 99.99)).toBe(0.01);
+            expect(calculateRemainingAmount(100.00, 100.00)).toBe(0);
+            expect(calculateRemainingAmount(100.00, 150.00)).toBe(0); // Não permite saldo negativo
+        });
+    });
+
+    describe('calculatePaymentStatus', () => {
+        it('deve determinar status do domínio com quitação total exigindo estritamente saldo zero', () => {
+            expect(calculatePaymentStatus(100.00, 0)).toBe('Pendente');
+            expect(calculatePaymentStatus(100.00, 50.00)).toBe('Parcial');
+            // REGRA A (APPROVED_DOMAIN_CHANGE): R$ 0,01 residual é dívida -> status 'Parcial'
+            expect(calculatePaymentStatus(100.00, 99.99)).toBe('Parcial');
+            // Somente saldo 0 resulta em 'Pago'
+            expect(calculatePaymentStatus(100.00, 100.00)).toBe('Pago');
+            expect(calculatePaymentStatus(0, 0)).toBe('Pago');
+        });
+    });
+
     describe('mapDomainStatusToLoanStatus', () => {
         it('deve mapear status de domínio para o formato persistido', () => {
             expect(mapDomainStatusToLoanStatus('Pago')).toBe('Pago Total');

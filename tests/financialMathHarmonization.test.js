@@ -103,7 +103,7 @@ describe('FinControl — Fase 8.3 CS4: Financial Math Harmonization & Parity Gat
             expect(calculateInvoiceDueDate(decLate2, card2).toISOString().slice(0, 10)).toBe('2027-02-05');
         });
 
-        it('trata meses mais curtos (dias 28/29/30/31)', () => {
+        it('trata meses mais curtos (dias 28/29/30/31) — divergência comprovada da implementação legada', () => {
             const card31 = { closingDay: 15, dueDay: 31 };
 
             // Compra em Março pós fechamento -> vence em Abril (30 dias) -> 2026-04-30
@@ -112,11 +112,27 @@ describe('FinControl — Fase 8.3 CS4: Financial Math Harmonization & Parity Gat
 
             // Compra em Janeiro pós fechamento -> vence em Fevereiro 2025 (28 dias) -> 2025-02-28
             const jan16_2025 = new Date(Date.UTC(2025, 0, 16));
-            expect(calculateInvoiceDueDate(jan16_2025, card31).toISOString().slice(0, 10)).toBe('2025-02-28');
+            const canonicalFeb2025 = calculateInvoiceDueDate(jan16_2025, card31);
+            expect(canonicalFeb2025.toISOString().slice(0, 10)).toBe('2025-02-28');
+
+            // Divergência histórica explícita (SHORT_MONTH_CLAMP_CLASSIFICATION = APPROVED_DOMAIN_CHANGE):
+            // A implementação JavaScript legada baseada diretamente em new Date(Date.UTC(year, month, 31))
+            // rolava Fevereiro 31 para Março 03, avançando artificialmente para o mês seguinte.
+            // A regra canônica aprovada pelo proprietário faz clamp para o último dia válido do mês de destino.
+            const legacyFeb2025 = legacyGetInvoiceDueDate(jan16_2025, card31);
+            expect(legacyFeb2025.toISOString().slice(0, 10)).toBe('2025-03-03');
+            expect(canonicalFeb2025).not.toEqual(legacyFeb2025);
+            // DUE_DATE_CLAMP_LEGACY_PARITY = false
+            // DUE_DATE_CLAMP_APPROVED_DOMAIN_CHANGE = true
 
             // Compra em Janeiro pós fechamento -> vence em Fevereiro 2024 (ano bissexto: 29 dias) -> 2024-02-29
             const jan16_2024 = new Date(Date.UTC(2024, 0, 16));
-            expect(calculateInvoiceDueDate(jan16_2024, card31).toISOString().slice(0, 10)).toBe('2024-02-29');
+            const canonicalFeb2024 = calculateInvoiceDueDate(jan16_2024, card31);
+            expect(canonicalFeb2024.toISOString().slice(0, 10)).toBe('2024-02-29');
+
+            const legacyFeb2024 = legacyGetInvoiceDueDate(jan16_2024, card31);
+            expect(legacyFeb2024.toISOString().slice(0, 10)).toBe('2024-03-02');
+            expect(canonicalFeb2024).not.toEqual(legacyFeb2024);
         });
     });
 
@@ -158,14 +174,45 @@ describe('FinControl — Fase 8.3 CS4: Financial Math Harmonization & Parity Gat
             expect(newBalanceDue).toBe(legacy.newBalanceDue);
         });
 
-        it('100 / pago 100 -> Pago Total / saldo 0', () => {
-            const { newBalanceDue, finalStatus } = canonicalStatus(100, 100);
-            expect(newBalanceDue).toBe(0);
-            expect(finalStatus).toBe('Pago Total');
+        it('REGRA A: 100 / pago 99.99 -> Pago Parcial / saldo 0.01 (saldo residual de 1 centavo é dívida)', () => {
+            const total = 100.00;
+            const paid = 99.99;
 
-            const legacy = legacyDashboardStatus(100, 100);
-            expect(finalStatus).toBe(legacy.finalStatus);
-            expect(newBalanceDue).toBe(legacy.newBalanceDue);
+            const remainingAmount = calculateRemainingAmount(total, paid);
+            const domainStatus = calculatePaymentStatus(total, paid);
+            const persistedStatus = mapDomainStatusToLoanStatus(domainStatus);
+
+            expect(remainingAmount).toBe(0.01);
+            expect(domainStatus).toBe('Parcial');
+            expect(persistedStatus).toBe('Pago Parcial');
+
+            // Prova explícita de alteração em relação à tolerância legada:
+            // Na implementação antiga de Dashboard.jsx: newBalanceDue <= 0.01 resultava em 'Pago Total', perdoando R$ 0,01.
+            // A decisão canônica aprovada pelo proprietário (APPROVED_DOMAIN_CHANGE):
+            // PAID_TOTAL_REQUIRES_ZERO_BALANCE = true
+            // ONE_CENT_REMAINING_IS_PARTIAL = true
+            // LEGACY_THRESHOLD_0_01_CHANGED = true
+            const legacy = legacyDashboardStatus(total, paid);
+            expect(legacy.newBalanceDue).toBe(0.01);
+            expect(legacy.finalStatus).toBe('Pago Total'); // tolerância legada perdoava 1 centavo
+            expect(persistedStatus).not.toBe(legacy.finalStatus); // divergência intencional aprovada
+        });
+
+        it('REGRA A: 100 / pago 100 -> Pago Total / saldo 0 (somente saldo zero é Pago Total)', () => {
+            const total = 100.00;
+            const paid = 100.00;
+
+            const remainingAmount = calculateRemainingAmount(total, paid);
+            const domainStatus = calculatePaymentStatus(total, paid);
+            const persistedStatus = mapDomainStatusToLoanStatus(domainStatus);
+
+            expect(remainingAmount).toBe(0);
+            expect(domainStatus).toBe('Pago');
+            expect(persistedStatus).toBe('Pago Total');
+
+            const legacy = legacyDashboardStatus(total, paid);
+            expect(persistedStatus).toBe(legacy.finalStatus);
+            expect(remainingAmount).toBe(legacy.newBalanceDue);
         });
 
         it('100 / parcelas 33.33 + 33.33 + 33.34 -> Pago Total / saldo 0 exato (zero drift)', () => {
