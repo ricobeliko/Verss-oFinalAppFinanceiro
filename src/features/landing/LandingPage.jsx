@@ -205,7 +205,7 @@ export default function LandingPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="w-1 h-1 rounded-full bg-[#E5B842]"></span>
-                    Seus dados 100% privados
+                    Acesso autenticado
                   </span>
                 </div>
               </div>
