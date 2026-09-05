@@ -72,7 +72,6 @@ function App() {
               </PublicRoute>
             } 
           />
-
           {/* Rota Protegida para o Dashboard */}
           <Route 
             path="/dashboard/*" 
