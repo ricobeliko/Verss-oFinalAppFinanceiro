@@ -116,19 +116,6 @@
   --landing-header-border: rgba(20, 24, 30, 0.08);
 }
 
-@keyframes finFloat {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-5px) rotate(0.8deg);
-  }
-}
-
-.animate-fin-float {
-  animation: finFloat 3.8s ease-in-out infinite;
-}
-
 @keyframes heroEntrance {
   from {
     opacity: 0;
@@ -145,7 +132,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fin-float,
   .animate-hero-entrance {
     animation: none !important;
     transform: none !important;

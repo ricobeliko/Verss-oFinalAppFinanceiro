@@ -71,7 +71,7 @@ export default function LandingHeader() {
             to="/login?mode=register"
             className="relative group overflow-hidden rounded-xl p-[1px] font-medium text-sm focus:outline-none"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-[#E5B842] via-[#F5D580] to-[#E5B842] transition-all group-hover:opacity-90 animate-pulse" />
+            <span className="absolute inset-0 bg-gradient-to-r from-[#E5B842] via-[#F5D580] to-[#E5B842] transition-all group-hover:opacity-90 motion-safe:animate-pulse" />
             <span className="relative flex items-center gap-2 px-4 py-2 rounded-[11px] bg-[#0D0E11] text-[#F5D580] group-hover:bg-transparent group-hover:text-[#0D0E11] transition-all duration-300 font-semibold shadow-md">
               Criar conta gratuita
               <FiArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />

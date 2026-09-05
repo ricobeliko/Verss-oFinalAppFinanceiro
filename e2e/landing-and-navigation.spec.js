@@ -1,18 +1,7 @@
 // e2e/landing-and-navigation.spec.js
 import { test, expect } from '@playwright/test';
-import fs from 'fs';
-import path from 'path';
-
-const artifactBase = 'C:/Users/Sibelly/.gemini/antigravity-ide/brain/5c91501a-f310-4a40-b9af-9f5d36e610d5';
-const screenshotDir = path.join(artifactBase, 'scratch/screenshots');
 
 test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', () => {
-  test.beforeAll(() => {
-    if (!fs.existsSync(screenshotDir)) {
-      fs.mkdirSync(screenshotDir, { recursive: true });
-    }
-  });
-
   test('deve carregar a Landing Page oficial com Obsidian + Champagne Gold e navegar para Login', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
@@ -84,13 +73,6 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(timelineSection).toBeVisible();
     await expect(timelineSection).toContainText('O Princípio de R$ 0,01');
     await expect(timelineSection).toContainText('Pago Parcial');
-
-    // 5. Capturar screenshot oficial do Desktop Hero (1440x900)
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
-    const heroScreenshotPath = path.join(screenshotDir, 'dark_desktop_1440x900.png');
-    await page.screenshot({ path: heroScreenshotPath, fullPage: false });
-    fs.copyFileSync(heroScreenshotPath, path.join(artifactBase, 'fincontrol_next_desktop_1440x900.png'));
   });
 
   test('deve renderizar o Pricing Canônico (Gratuito R$ 0 + Pro R$ 29,99 Vitalício)', async ({ page }) => {
@@ -100,7 +82,6 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     const pricing = page.locator('#pricing');
     await expect(pricing).toBeVisible();
     await pricing.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(500);
 
     // Card Gratuito
     await expect(pricing.locator('text=Gratuito').first()).toBeVisible();
@@ -127,11 +108,6 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(page.locator('button:has-text("Mensal")')).toHaveCount(0);
     await expect(page.locator('text=2 meses grátis')).toHaveCount(0);
     await expect(page.locator('text=Degustação VIP')).toHaveCount(0);
-
-    // Capturar screenshot oficial do Pricing
-    const pricingScreenshotPath = path.join(screenshotDir, 'fincontrol_next_desktop_pricing.png');
-    await pricing.screenshot({ path: pricingScreenshotPath });
-    fs.copyFileSync(pricingScreenshotPath, path.join(artifactBase, 'fincontrol_next_desktop_pricing.png'));
   });
 
   test('deve garantir ausência total de métricas falsas e marcadores de lab (Search Gates)', async ({ page }) => {
@@ -173,12 +149,5 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
 
     // Fecha drawer clicando no botão toggle
     await page.getByRole('button', { name: /abrir menu de navegação/i }).click();
-
-    // Capturar screenshot oficial do Mobile
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
-    const mobileScreenshotPath = path.join(screenshotDir, 'fincontrol_next_mobile_390x844.png');
-    await page.screenshot({ path: mobileScreenshotPath, fullPage: false });
-    fs.copyFileSync(mobileScreenshotPath, path.join(artifactBase, 'fincontrol_next_mobile_390x844.png'));
   });
 });

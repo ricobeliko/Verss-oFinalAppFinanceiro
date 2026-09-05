@@ -1,5 +1,5 @@
 // src/features/landing/components/LandingHero.jsx
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { FiArrowRight, FiPlay, FiCheck, FiShield } from 'react-icons/fi';
@@ -16,23 +16,46 @@ export default function LandingHero({ prefersReducedMotion }) {
   const supportRef = useRef(null);
   const ctaGroupRef = useRef(null);
   const productContainerRef = useRef(null);
-
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const ledgerRef = useRef(null);
 
   // 5-Plane Depth Pointer Tracking via gsap.quickTo
   useEffect(() => {
-    if (prefersReducedMotion || !heroRef.current) return;
+    const isCoarse = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (prefersReducedMotion || isCoarse || !heroRef.current) return;
 
     const hero = heroRef.current;
     let auraQuickX = null;
     let auraQuickY = null;
+    let deepAtmQuickX = null;
+    let deepAtmQuickY = null;
+    let structQuickX = null;
+    let structQuickY = null;
+    let lightHazeQuickX = null;
+    let lightHazeQuickY = null;
 
-    if (auraRef.current) {
-      auraQuickX = gsap.quickTo(auraRef.current, 'x', { duration: 0.45, ease: 'power2.out' });
-      auraQuickY = gsap.quickTo(auraRef.current, 'y', { duration: 0.45, ease: 'power2.out' });
-    }
+    const ctx = gsap.context(() => {
+      if (auraRef.current) {
+        auraQuickX = gsap.quickTo(auraRef.current, 'x', { duration: 0.45, ease: 'power2.out' });
+        auraQuickY = gsap.quickTo(auraRef.current, 'y', { duration: 0.45, ease: 'power2.out' });
+      }
 
-    const handleMouseMove = (e) => {
+      if (deepAtmosphereRef.current) {
+        deepAtmQuickX = gsap.quickTo(deepAtmosphereRef.current, 'x', { duration: 1.2, ease: 'power1.out' });
+        deepAtmQuickY = gsap.quickTo(deepAtmosphereRef.current, 'y', { duration: 1.2, ease: 'power1.out' });
+      }
+
+      if (structuralLinesRef.current) {
+        structQuickX = gsap.quickTo(structuralLinesRef.current, 'x', { duration: 0.9, ease: 'power1.out' });
+        structQuickY = gsap.quickTo(structuralLinesRef.current, 'y', { duration: 0.9, ease: 'power1.out' });
+      }
+
+      if (lightHazeRef.current) {
+        lightHazeQuickX = gsap.quickTo(lightHazeRef.current, 'x', { duration: 0.7, ease: 'power1.out' });
+        lightHazeQuickY = gsap.quickTo(lightHazeRef.current, 'y', { duration: 0.7, ease: 'power1.out' });
+      }
+    }, heroRef);
+
+    const handlePointerMove = (e) => {
       const rect = hero.getBoundingClientRect();
       const clientX = e.clientX - rect.left;
       const clientY = e.clientY - rect.top;
@@ -41,8 +64,6 @@ export default function LandingHero({ prefersReducedMotion }) {
       const normX = (clientX / rect.width) * 2 - 1;
       const normY = (clientY / rect.height) * 2 - 1;
 
-      setMousePos({ x: normX, y: normY });
-
       // Cursor aura movement
       if (auraQuickX && auraQuickY) {
         auraQuickX(clientX);
@@ -50,41 +71,34 @@ export default function LandingHero({ prefersReducedMotion }) {
       }
 
       // PLANE 1: Deep Atmosphere (1-2px)
-      if (deepAtmosphereRef.current) {
-        gsap.to(deepAtmosphereRef.current, {
-          x: normX * 2,
-          y: normY * 2,
-          duration: 1.2,
-          ease: 'power1.out',
-          overwrite: 'auto',
-        });
+      if (deepAtmQuickX && deepAtmQuickY) {
+        deepAtmQuickX(normX * 2);
+        deepAtmQuickY(normY * 2);
       }
 
       // PLANE 2: Structural Lines (2-4px)
-      if (structuralLinesRef.current) {
-        gsap.to(structuralLinesRef.current, {
-          x: normX * 3.5,
-          y: normY * 3.5,
-          duration: 0.9,
-          ease: 'power1.out',
-          overwrite: 'auto',
-        });
+      if (structQuickX && structQuickY) {
+        structQuickX(normX * 3.5);
+        structQuickY(normY * 3.5);
       }
 
       // PLANE 3: Light Haze behind Product (3-5px)
-      if (lightHazeRef.current) {
-        gsap.to(lightHazeRef.current, {
-          x: normX * 4.5,
-          y: normY * 4,
-          duration: 0.7,
-          ease: 'power1.out',
-          overwrite: 'auto',
-        });
+      if (lightHazeQuickX && lightHazeQuickY) {
+        lightHazeQuickX(normX * 4.5);
+        lightHazeQuickY(normY * 4);
+      }
+
+      // Living Ledger Stage direct pointer dispatch
+      if (ledgerRef.current?.updatePointer) {
+        ledgerRef.current.updatePointer(normX, normY);
       }
     };
 
-    hero.addEventListener('mousemove', handleMouseMove);
-    return () => hero.removeEventListener('mousemove', handleMouseMove);
+    hero.addEventListener('pointermove', handlePointerMove);
+    return () => {
+      hero.removeEventListener('pointermove', handlePointerMove);
+      ctx.revert();
+    };
   }, [prefersReducedMotion]);
 
   // Hero Entrance Choreography (Fluid Staggered Entrance)
@@ -198,7 +212,7 @@ export default function LandingHero({ prefersReducedMotion }) {
               ref={badgeRef}
               className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#161920] border border-[#E5B842]/25 text-xs font-semibold text-[#F5D580] mb-6 shadow-md shadow-black/60"
             >
-              <span className="w-2 h-2 rounded-full bg-[#34D399] animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-[#34D399] motion-safe:animate-ping" />
               <span className="tracking-wide uppercase">Controle Financeiro Inteligente</span>
             </div>
 
@@ -264,7 +278,7 @@ export default function LandingHero({ prefersReducedMotion }) {
           <div className="lg:col-span-6 relative flex flex-col items-center mt-6 lg:mt-0">
             <div ref={productContainerRef} className="w-full">
               <LivingLedgerStage
-                mousePos={mousePos}
+                ref={ledgerRef}
                 prefersReducedMotion={prefersReducedMotion}
               />
             </div>

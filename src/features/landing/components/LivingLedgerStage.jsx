@@ -1,5 +1,5 @@
 // src/features/landing/components/LivingLedgerStage.jsx
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import gsap from 'gsap';
 import { FiCreditCard, FiUsers, FiCheckCircle, FiClock, FiShield } from 'react-icons/fi';
 
@@ -8,7 +8,7 @@ import { FiCreditCard, FiUsers, FiCheckCircle, FiClock, FiShield } from 'react-i
  * Multi-plane financial card stack with high depth separation (20-40px forward feel),
  * realistic invoice cycles, shared purchase breakdown, and exact centavos precision.
  */
-export default function LivingLedgerStage({ mousePos, prefersReducedMotion }) {
+const LivingLedgerStage = forwardRef(function LivingLedgerStage({ prefersReducedMotion }, ref) {
   const stageRef = useRef(null);
   const backplateRef = useRef(null);
   const cardBackRef = useRef(null);
@@ -17,75 +17,75 @@ export default function LivingLedgerStage({ mousePos, prefersReducedMotion }) {
   const chipMathRef = useRef(null);
   const sheenRef = useRef(null);
 
-  // Parallax tilt on mouse move with exact depth ratios:
-  // LEDGER = 4-7px, CHIPS = 6-9px, BACKPLATE = 2-3px
+  // QuickTo setters refs to avoid reallocations
+  const quickSettersRef = useRef(null);
+
   useEffect(() => {
-    if (prefersReducedMotion || !mousePos) return;
+    if (prefersReducedMotion) return;
 
-    const tiltX = mousePos.y * -5;
-    const tiltY = mousePos.x * 6;
+    const ctx = gsap.context(() => {
+      quickSettersRef.current = {
+        cardMainRotX: cardMainRef.current ? gsap.quickTo(cardMainRef.current, 'rotationX', { duration: 0.6, ease: 'power2.out' }) : null,
+        cardMainRotY: cardMainRef.current ? gsap.quickTo(cardMainRef.current, 'rotationY', { duration: 0.6, ease: 'power2.out' }) : null,
+        cardMainX: cardMainRef.current ? gsap.quickTo(cardMainRef.current, 'x', { duration: 0.6, ease: 'power2.out' }) : null,
+        cardMainY: cardMainRef.current ? gsap.quickTo(cardMainRef.current, 'y', { duration: 0.6, ease: 'power2.out' }) : null,
 
-    if (cardMainRef.current) {
-      gsap.to(cardMainRef.current, {
-        rotationX: tiltX,
-        rotationY: tiltY,
-        x: mousePos.x * 6,
-        y: mousePos.y * 5,
-        duration: 0.6,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
+        cardBackRotX: cardBackRef.current ? gsap.quickTo(cardBackRef.current, 'rotationX', { duration: 0.7, ease: 'power2.out' }) : null,
+        cardBackRotY: cardBackRef.current ? gsap.quickTo(cardBackRef.current, 'rotationY', { duration: 0.7, ease: 'power2.out' }) : null,
+        cardBackX: cardBackRef.current ? gsap.quickTo(cardBackRef.current, 'x', { duration: 0.7, ease: 'power2.out' }) : null,
+        cardBackY: cardBackRef.current ? gsap.quickTo(cardBackRef.current, 'y', { duration: 0.7, ease: 'power2.out' }) : null,
+
+        backplateX: backplateRef.current ? gsap.quickTo(backplateRef.current, 'x', { duration: 0.8, ease: 'power2.out' }) : null,
+        backplateY: backplateRef.current ? gsap.quickTo(backplateRef.current, 'y', { duration: 0.8, ease: 'power2.out' }) : null,
+
+        chipSplitX: chipSplitRef.current ? gsap.quickTo(chipSplitRef.current, 'x', { duration: 0.5, ease: 'power2.out' }) : null,
+        chipSplitY: chipSplitRef.current ? gsap.quickTo(chipSplitRef.current, 'y', { duration: 0.5, ease: 'power2.out' }) : null,
+
+        chipMathX: chipMathRef.current ? gsap.quickTo(chipMathRef.current, 'x', { duration: 0.55, ease: 'power2.out' }) : null,
+        chipMathY: chipMathRef.current ? gsap.quickTo(chipMathRef.current, 'y', { duration: 0.55, ease: 'power2.out' }) : null,
+      };
+    }, stageRef);
+
+    return () => {
+      quickSettersRef.current = null;
+      ctx.revert();
+    };
+  }, [prefersReducedMotion]);
+
+  useImperativeHandle(ref, () => ({
+    updatePointer(normX, normY) {
+      if (prefersReducedMotion || !quickSettersRef.current) return;
+      const setters = quickSettersRef.current;
+
+      const tiltX = normY * -5;
+      const tiltY = normX * 6;
+
+      if (setters.cardMainRotX) setters.cardMainRotX(tiltX);
+      if (setters.cardMainRotY) setters.cardMainRotY(tiltY);
+      if (setters.cardMainX) setters.cardMainX(normX * 6);
+      if (setters.cardMainY) setters.cardMainY(normY * 5);
+
+      if (setters.cardBackRotX) setters.cardBackRotX(tiltX * 0.75);
+      if (setters.cardBackRotY) setters.cardBackRotY(tiltY * 0.75);
+      if (setters.cardBackX) setters.cardBackX(normX * 3.5);
+      if (setters.cardBackY) setters.cardBackY(normY * 3);
+
+      if (setters.backplateX) setters.backplateX(normX * 2);
+      if (setters.backplateY) setters.backplateY(normY * 2);
+
+      if (setters.chipSplitX) setters.chipSplitX(normX * 8);
+      if (setters.chipSplitY) setters.chipSplitY(normY * 7);
+
+      if (setters.chipMathX) setters.chipMathX(normX * -8);
+      if (setters.chipMathY) setters.chipMathY(normY * -7);
+
+      if (sheenRef.current) {
+        const sheenX = (50 + normX * 35).toFixed(1);
+        const sheenY = (50 + normY * 35).toFixed(1);
+        sheenRef.current.style.background = `radial-gradient(circle at ${sheenX}% ${sheenY}%, rgba(245, 213, 128, 0.10) 0%, transparent 60%)`;
+      }
     }
-
-    if (cardBackRef.current) {
-      gsap.to(cardBackRef.current, {
-        rotationX: tiltX * 0.75,
-        rotationY: tiltY * 0.75,
-        x: mousePos.x * 3.5,
-        y: mousePos.y * 3,
-        duration: 0.7,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
-    }
-
-    if (backplateRef.current) {
-      gsap.to(backplateRef.current, {
-        x: mousePos.x * 2,
-        y: mousePos.y * 2,
-        duration: 0.8,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
-    }
-
-    if (chipSplitRef.current) {
-      gsap.to(chipSplitRef.current, {
-        x: mousePos.x * 8,
-        y: mousePos.y * 7,
-        duration: 0.5,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
-    }
-
-    if (chipMathRef.current) {
-      gsap.to(chipMathRef.current, {
-        x: mousePos.x * -8,
-        y: mousePos.y * -7,
-        duration: 0.55,
-        ease: 'power2.out',
-        overwrite: 'auto',
-      });
-    }
-
-    // Dynamic diffuse light sheen across the main card
-    if (sheenRef.current) {
-      const sheenX = 50 + mousePos.x * 35;
-      const sheenY = 50 + mousePos.y * 35;
-      sheenRef.current.style.background = `radial-gradient(circle at ${sheenX}% ${sheenY}%, rgba(245, 213, 128, 0.10) 0%, transparent 60%)`;
-    }
-  }, [mousePos, prefersReducedMotion]);
+  }), [prefersReducedMotion]);
 
   return (
     <div
@@ -142,7 +142,7 @@ export default function LivingLedgerStage({ mousePos, prefersReducedMotion }) {
           </div>
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E5B842]/10 border border-[#E5B842]/30 text-xs text-[#F5D580] font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#E5B842] animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#E5B842] motion-safe:animate-pulse" />
             Fatura Aberta
           </div>
         </div>
@@ -282,4 +282,6 @@ export default function LivingLedgerStage({ mousePos, prefersReducedMotion }) {
       </div>
     </div>
   );
-}
+});
+
+export default LivingLedgerStage;

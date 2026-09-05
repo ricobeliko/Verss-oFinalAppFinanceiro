@@ -46,24 +46,23 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 
 ## 3. Arquitetura de Cena em Camadas (Layer Hierarchy)
 
-O palco do Hero não é uma composição estática dividida em duas colunas, mas sim uma **cena tridimensional integrada**:
+O palco do Hero é uma **cena tridimensional integrada** de alta precisão (`LANDING_FIN=false`):
 
 | Camada | Nome | Descrição & Comportamento |
 |---|---|---|
-| **Layer 0** | Atmosphere / Background | Vinheta perimetral, radial glow central, grid sutil e linhas de profundidade em SVG. Parallax suave (2-4px). |
-| **Layer 1** | Typography / Copy | Headline e subheadline com máscara de reveal na entrada. Deslocamento sutil no scroll. |
-| **Layer 2** | Golden Trails / Light Lines | Trajetórias curvas douradas conectando o mascote Fin aos elementos do produto. Parallax intermediário (4-7px). |
-| **Layer 3** | Fin (Visual Mascot) | Personagem SVG articulado de 130-160px. Cabeça e olhar reagem ao cursor via `gsap.quickTo`. Celebração comemorativa em pagamentos. |
-| **Layer 4** | Living Ledger & Stack Layers | Card principal com duas camadas falsas em pilha (`stack-layer-1` e `stack-layer-2`) ao fundo. 3D tilt responsivo (até 3deg) e reflexo luminoso na superfície. |
-| **Layer 5** | Floating Product Proof | Chips flutuantes com ícones e microcopy factual (*Gaste junto*, *Dados protegidos*, *Amigos e viagens*) com profundidade parallax (7-12px). |
-| **Layer 6** | Cursor Aura (Spotlight) | Aura luminosa sutil (250-320px) seguindo o cursor com `gsap.quickTo`. Baixa opacidade. Zero alteração do cursor nativo do SO. |
+| **Layer 0** | Atmosphere / Deep Background | Vinheta perimetral escura, radial glow difuso, grid sutil e linhas de profundidade em SVG. Parallax sutil (1-2px) via `gsap.quickTo`. |
+| **Layer 1** | Typography / Headline & CTA | Headline, subheadline e botões com entrada escalonada fluida (stagger). Deslocamento sutil no scroll. |
+| **Layer 2** | Structural Light & Haze | Haze luminoso difuso posicionado atrás do produto e linhas estruturais vetoriais. Parallax intermediário (2-4px). |
+| **Layer 3** | Living Ledger Stage | Card principal com multi-plano financeiro, backplate translúcido e prévia do próximo ciclo. 3D tilt responsivo suave e reflexo luminoso (sheen). |
+| **Layer 4** | Product Proof Chips | Chips flutuantes factuais de resolução de dívidas compartilhadas e cálculo matemático exato com micro-parallax (6-9px). |
+| **Layer 5** | Cursor Aura (Spotlight) | Aura luminosa sutil (320px) em Champagne Gold seguindo o ponteiro do mouse diretamente via `gsap.quickTo`. Desativada em touch/coarse. |
 
 ---
 
 ## 4. Diretrizes do Sistema de Motion com GSAP
 
 1. **Zero Continuous Idle RAF Loop:** Proibido manter `requestAnimationFrame` rodando em loop permanente quando não há interação do usuário.
-2. **Interpolações com `gsap.quickTo()`:** Para pointer tracking, utilizar setters de alta performance vinculados ao evento `pointermove` com throttle/dampening natural.
+2. **Interpolações com `gsap.quickTo()`:** Para pointer tracking, utilizar setters diretos de alta performance vinculados ao evento `pointermove`, sem re-renderização de estado React a cada movimento.
 3. **React Context Cleanup:** Todas as instâncias, timelines e tweens devem ser criadas dentro de `gsap.context()` e limpas no retorno do `useEffect`:
    ```javascript
    useEffect(() => {
@@ -74,20 +73,24 @@ O palco do Hero não é uma composição estática dividida em duas colunas, mas
    }, []);
    ```
 4. **ScrollTrigger:** Para animações associadas ao scroll, garantir scroll nativo (sem bibliotecas invasivas como Lenis) e efetuar o cleanup automático no unmount.
-5. **Touch & Mobile:** Em dispositivos com `pointer: coarse`, desabilitar o tracking contínuo do mouse para economizar processamento e bateria.
+5. **Touch & Mobile:** Em dispositivos com `pointer: coarse`, desabilitar o tracking contínuo do ponteiro para economizar processamento e bateria.
 6. **Prefers-Reduced-Motion:** Respeitar integralmente `prefers-reduced-motion: reduce`, desabilitando transformações tridimensionais, flutuações e parallaxes contínuos.
 
 ---
 
-## 5. Mascote da Marca — Fin
+## 5. Mascote da Marca — Fin (Governança & Escopo)
 
-- **Papel:** `BRAND_VISUAL_ASSISTANT`. Elemento de marca, guia contextual e apoio narrativo.
-- **Proibições:** Não deve simular chatbot, conselheiro financeiro, inteligência artificial autônoma ou feature paga.
-- **Expressões:**
-  - `IDLE`: Flutuação suave e calma.
-  - `LOOK_AT_CURSOR`: Cabeça e pupilas acompanham sutilmente a posição do ponteiro no Hero.
-  - `CELEBRATE_PAYMENT`: Micro-inclinação, ampliação momentânea do halo dourado e spark sutil quando um recebível é quitado.
-- **Speech Bubble:** Balão flutuante compacto e discreto com mensagem factual (*"Acompanhe sua fatura organizada! ✨"* ou *"Cada centavo no lugar certo."*), posicionado para nunca sobrepor valores financeiros ou títulos.
+- **STATUS NA LANDING:** `LANDING_FIN=false`.
+  - Fin **NÃO** faz parte da Landing Page oficial.
+  - **NÃO** usar Fin no Hero.
+  - **NÃO** usar eye tracking do Fin na Landing.
+  - **NÃO** usar speech bubble do Fin na Landing.
+  - **NÃO** reintroduzir o mascote na Landing sem nova aprovação explícita do owner.
+- **Escopo Futuro Autorizado:**
+  - Onboarding de novos usuários no produto.
+  - Empty states em telas internas do app.
+  - Ajuda contextual (*contextual help*) em módulos internos.
+- **Papel Geral:** `BRAND_VISUAL_ASSISTANT`. Elemento de guia e apoio narrativo em módulos internos. Nunca deve simular chatbot, inteligência artificial autônoma ou feature paga.
 
 ---
 
