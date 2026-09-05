@@ -1,6 +1,7 @@
-// src/pages/LandingPage.jsx
-import React, { useState } from 'react';
+// src/features/landing/LandingPage.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FinMascot from './FinMascot';
 
 // --- Ícones embutidos como componentes React ---
 
@@ -37,39 +38,140 @@ export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [demoCarlosPaid, setDemoCarlosPaid] = useState(false);
 
+  // Fundação visual de Light Mode (ativa SOMENTE em DEV via ?landingTheme=light para review visual)
+  const isDev = import.meta.env.DEV === true;
+  const isLight = isDev && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('landingTheme') === 'light';
+
   const navigate = useNavigate();
   const handleLoginClick = () => navigate('/login');
   const handleRegisterClick = () => navigate('/login');
   const handleUpgrade = () => navigate('/login');
 
+  // Refs para interação de ponteiro com rAF e zero re-renders React
+  const heroRef = useRef(null);
+  const finDesktopRef = useRef(null);
+  const ledgerRef = useRef(null);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const heroEl = heroRef.current;
+    if (!heroEl) return;
+
+    const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+    const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isCoarse || isReduced) return;
+
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+
+    const handlePointerMove = (e) => {
+      const rect = heroEl.getBoundingClientRect();
+      const relX = (e.clientX - rect.left) / rect.width - 0.5;
+      const relY = (e.clientY - rect.top) / rect.height - 0.5;
+      targetX = Math.max(-0.5, Math.min(0.5, relX));
+      targetY = Math.max(-0.5, Math.min(0.5, relY));
+    };
+
+    const handlePointerLeave = () => {
+      targetX = 0;
+      targetY = 0;
+    };
+
+    const updateFrame = () => {
+      currentX += (targetX - currentX) * 0.08;
+      currentY += (targetY - currentY) * 0.08;
+
+      if (finDesktopRef.current) {
+        const finX = (currentX * 12).toFixed(2);
+        const finY = (currentY * 12).toFixed(2);
+        const finRot = (currentX * 6).toFixed(2);
+        finDesktopRef.current.style.setProperty('--fin-x', `${finX}px`);
+        finDesktopRef.current.style.setProperty('--fin-y', `${finY}px`);
+        finDesktopRef.current.style.setProperty('--fin-rot', `${finRot}deg`);
+      }
+
+      if (ledgerRef.current) {
+        const tiltX = (-currentY * 2.2).toFixed(2);
+        const tiltY = (currentX * 2.2).toFixed(2);
+        const transY = (currentY * 4).toFixed(2);
+        ledgerRef.current.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(${transY}px)`;
+      }
+
+      rafRef.current = requestAnimationFrame(updateFrame);
+    };
+
+    heroEl.addEventListener('pointermove', handlePointerMove, { passive: true });
+    heroEl.addEventListener('pointerleave', handlePointerLeave, { passive: true });
+    rafRef.current = requestAnimationFrame(updateFrame);
+
+    return () => {
+      heroEl.removeEventListener('pointermove', handlePointerMove);
+      heroEl.removeEventListener('pointerleave', handlePointerLeave);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   return (
-    <div className="bg-[#0D0E11] text-[#F9FAFB] font-sans antialiased selection:bg-[#E5B842] selection:text-[#0D0E11] min-h-screen">
+    <div
+      className={`landing-root min-h-screen font-sans antialiased selection:bg-[#E5B842] selection:text-[#0D0E11] transition-colors duration-300 ${
+        isLight ? 'landing-theme-light bg-[#FAFAF8] text-[#15171B]' : 'bg-[#0D0E11] text-[#F9FAFB]'
+      }`}
+    >
       {/* 1. Header Refinado (The Architectural Ledger — 64px, Obsidian + Champagne Gold) */}
-      <header className="sticky top-0 left-0 right-0 z-50 bg-[#0D0E11]/90 backdrop-blur-md border-b border-white/[0.06] transition-colors">
+      <header
+        className={`sticky top-0 left-0 right-0 z-50 backdrop-blur-md border-b transition-colors ${
+          isLight
+            ? 'bg-[#FAFAF8]/90 border-black/[0.08]'
+            : 'bg-[#0D0E11]/90 border-white/[0.06]'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            
+
             {/* Logo FinControl */}
             <div className="flex items-center gap-3">
               <a href="/" className="flex items-center gap-2.5 group rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842]">
-                <div className="w-8 h-8 rounded-lg bg-[#1A1D24] border border-[#E5B842]/30 flex items-center justify-center text-[#E5B842] shadow-sm transition-colors group-hover:border-[#E5B842]">
-                  <FinControlLogo className="text-[#E5B842]" />
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm transition-colors ${
+                    isLight
+                      ? 'bg-[#F0EFEA] border border-[#C99116]/40 text-[#C99116] group-hover:border-[#C99116]'
+                      : 'bg-[#1A1D24] border border-[#E5B842]/30 text-[#E5B842] group-hover:border-[#E5B842]'
+                  }`}
+                >
+                  <FinControlLogo className={isLight ? "text-[#C99116]" : "text-[#E5B842]"} />
                 </div>
-                <span className="text-xl font-bold tracking-tight text-[#F9FAFB]">
-                  Fin<span className="text-[#E5B842]">Control</span>
+                <span className={`text-xl font-bold tracking-tight ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                  Fin<span className={isLight ? "text-[#C99116]" : "text-[#E5B842]"}>Control</span>
                 </span>
               </a>
             </div>
 
             {/* Navegação Desktop */}
             <nav aria-label="Navegação principal" className="hidden md:flex items-center gap-8">
-              <a href="#como-funciona" className="text-sm font-medium text-[#9CA3AF] hover:text-[#F9FAFB] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1">
+              <a
+                href="#living-ledger"
+                className={`text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1 ${
+                  isLight ? 'text-[#5F6670] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:text-[#F9FAFB]'
+                }`}
+              >
                 Como funciona
               </a>
-              <a href="#features" className="text-sm font-medium text-[#9CA3AF] hover:text-[#F9FAFB] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1">
+              <a
+                href="#features"
+                className={`text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1 ${
+                  isLight ? 'text-[#5F6670] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:text-[#F9FAFB]'
+                }`}
+              >
                 Recursos
               </a>
-              <a href="#pricing" className="text-sm font-medium text-[#9CA3AF] hover:text-[#F9FAFB] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1">
+              <a
+                href="#pricing"
+                className={`text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] rounded px-1 ${
+                  isLight ? 'text-[#5F6670] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:text-[#F9FAFB]'
+                }`}
+              >
                 Planos
               </a>
             </nav>
@@ -78,13 +180,21 @@ export default function LandingPage() {
             <div className="hidden md:flex items-center gap-3">
               <button
                 onClick={handleLoginClick}
-                className="px-4 py-2 text-sm font-medium text-[#9CA3AF] hover:text-[#F9FAFB] hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842]"
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] ${
+                  isLight
+                    ? 'text-[#5F6670] hover:text-[#15171B] hover:bg-black/[0.04]'
+                    : 'text-[#9CA3AF] hover:text-[#F9FAFB] hover:bg-white/[0.04]'
+                }`}
               >
                 Entrar
               </button>
               <button
                 onClick={handleRegisterClick}
-                className="px-4 py-2 text-sm font-semibold text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580] rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#E5B842] focus-visible:ring-offset-[#0D0E11]"
+                className={`px-4 py-2 text-sm font-semibold rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#E5B842] ${
+                  isLight
+                    ? 'text-white bg-[#C99116] hover:bg-[#A1730B] focus-visible:ring-offset-[#FAFAF8]'
+                    : 'text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580] focus-visible:ring-offset-[#0D0E11]'
+                }`}
               >
                 Criar conta gratuita
               </button>
@@ -97,7 +207,11 @@ export default function LandingPage() {
                 aria-label={isMenuOpen ? "Fechar menu de navegação" : "Abrir menu de navegação"}
                 aria-expanded={isMenuOpen}
                 aria-controls="mobile-nav-menu"
-                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg bg-[#1A1D24] text-[#9CA3AF] hover:text-[#F9FAFB] border border-white/[0.08] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842]"
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] ${
+                  isLight
+                    ? 'bg-[#FFFFFF] text-[#5F6670] hover:text-[#15171B] border-black/[0.1]'
+                    : 'bg-[#1A1D24] text-[#9CA3AF] hover:text-[#F9FAFB] border-white/[0.08]'
+                }`}
               >
                 {isMenuOpen ? <XIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
               </button>
@@ -109,39 +223,55 @@ export default function LandingPage() {
         {isMenuOpen && (
           <div
             id="mobile-nav-menu"
-            className="md:hidden bg-[#0D0E11] border-b border-white/[0.08] px-4 pt-3 pb-6 space-y-3 animate-fadeIn"
+            className={`md:hidden border-b px-4 pt-3 pb-6 space-y-3 animate-hero-entrance ${
+              isLight ? 'bg-[#FAFAF8] border-black/[0.08]' : 'bg-[#0D0E11] border-white/[0.08]'
+            }`}
           >
             <a
-              href="#como-funciona"
+              href="#living-ledger"
               onClick={() => setIsMenuOpen(false)}
-              className="block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB] transition-colors"
+              className={`block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                isLight ? 'text-[#5F6670] hover:bg-[#F0EFEA] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB]'
+              }`}
             >
               Como funciona
             </a>
             <a
               href="#features"
               onClick={() => setIsMenuOpen(false)}
-              className="block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB] transition-colors"
+              className={`block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                isLight ? 'text-[#5F6670] hover:bg-[#F0EFEA] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB]'
+              }`}
             >
               Recursos
             </a>
             <a
               href="#pricing"
               onClick={() => setIsMenuOpen(false)}
-              className="block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB] transition-colors"
+              className={`block min-h-[44px] px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                isLight ? 'text-[#5F6670] hover:bg-[#F0EFEA] hover:text-[#15171B]' : 'text-[#9CA3AF] hover:bg-[#1A1D24] hover:text-[#F9FAFB]'
+              }`}
             >
               Planos
             </a>
-            <div className="pt-3 border-t border-white/[0.06] space-y-2">
+            <div className={`pt-3 border-t space-y-2 ${isLight ? 'border-black/[0.06]' : 'border-white/[0.06]'}`}>
               <button
                 onClick={handleRegisterClick}
-                className="block w-full min-h-[44px] text-center px-4 py-3 text-base font-semibold text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580] rounded-lg shadow-sm transition-colors cursor-pointer"
+                className={`block w-full min-h-[44px] text-center px-4 py-3 text-base font-semibold rounded-lg shadow-sm transition-colors cursor-pointer ${
+                  isLight
+                    ? 'text-white bg-[#C99116] hover:bg-[#A1730B]'
+                    : 'text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580]'
+                }`}
               >
                 Criar conta gratuita
               </button>
               <button
                 onClick={handleLoginClick}
-                className="block w-full min-h-[44px] text-center px-4 py-3 text-base font-medium text-[#9CA3AF] bg-[#1A1D24] hover:bg-[#222630] hover:text-[#F9FAFB] rounded-lg border border-white/[0.08] transition-colors cursor-pointer"
+                className={`block w-full min-h-[44px] text-center px-4 py-3 text-base font-medium rounded-lg border transition-colors cursor-pointer ${
+                  isLight
+                    ? 'text-[#5F6670] bg-[#FFFFFF] hover:bg-[#F0EFEA] hover:text-[#15171B] border-black/[0.08]'
+                    : 'text-[#9CA3AF] bg-[#1A1D24] hover:bg-[#222630] hover:text-[#F9FAFB] border-white/[0.08]'
+                }`}
               >
                 Entrar na conta
               </button>
@@ -152,128 +282,270 @@ export default function LandingPage() {
 
       <main>
         {/* 2. Seção Hero (The Split & Ledger Stage) */}
-        <section className="relative pt-12 pb-16 md:pt-20 md:pb-24 overflow-hidden bg-[#0D0E11]">
-          {/* Sombra de profundidade suave e sutil */}
-          <div className="absolute top-0 right-1/4 w-[500px] h-[350px] bg-[#E5B842]/[0.03] blur-[140px] rounded-full pointer-events-none"></div>
+        <section
+          ref={heroRef}
+          className={`relative pt-12 pb-16 md:pt-20 md:pb-24 overflow-hidden transition-colors ${
+            isLight ? 'bg-[#FAFAF8]' : 'bg-[#0D0E11]'
+          }`}
+        >
+          {/* Profundidade Visual de Fundo: Malha e Linhas Sutis */}
+          <div
+            className={`absolute top-0 right-1/4 w-[600px] h-[400px] blur-[140px] rounded-full pointer-events-none transition-colors ${
+              isLight ? 'bg-[#C99116]/[0.05]' : 'bg-[#E5B842]/[0.04]'
+            }`}
+          />
+          <div
+            className={`absolute -bottom-10 -left-10 w-[450px] h-[300px] blur-[120px] rounded-full pointer-events-none transition-colors ${
+              isLight ? 'bg-[#C99116]/[0.03]' : 'bg-[#E5B842]/[0.02]'
+            }`}
+          />
+
+          {/* Linha Curva Estética Decorativa de Conexão */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none opacity-20 hidden md:block"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              d="M 150 120 C 350 180, 500 240, 850 160 C 1050 110, 1200 260, 1400 220"
+              fill="none"
+              stroke={isLight ? "rgba(201, 145, 22, 0.25)" : "rgba(229, 184, 66, 0.2)"}
+              strokeWidth="1.2"
+              strokeDasharray="4 6"
+            />
+          </svg>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+
               {/* Coluna Esquerda: Proposta de Valor e CTAs */}
               <div className="lg:col-span-6 xl:col-span-6 text-left">
-                {/* Badge Factual */}
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1A1D24] border border-[#E5B842]/30 text-[#E5B842] text-xs font-semibold tracking-wide mb-6">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E5B842] animate-pulse motion-reduce:animate-none"></span>
+
+                {/* Badge Factual (Ponto estático, sem pulse) */}
+                <div
+                  className={`animate-hero-entrance inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide mb-6 border transition-colors ${
+                    isLight
+                      ? 'bg-[#F4F3EF] border-[#C99116]/30 text-[#A1730B]'
+                      : 'bg-[#1A1D24] border-[#E5B842]/30 text-[#E5B842]'
+                  }`}
+                  style={{ animationDelay: '50ms' }}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isLight ? 'bg-[#C99116]' : 'bg-[#E5B842]'}`} />
                   Software financeiro para cartões e compras compartilhadas
                 </div>
 
                 {/* Headline Principal */}
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.85rem] font-bold tracking-tight text-[#F9FAFB] leading-[1.15]">
+                <h1
+                  className={`animate-hero-entrance text-3xl sm:text-4xl md:text-5xl lg:text-[2.85rem] font-bold tracking-tight leading-[1.15] ${
+                    isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'
+                  }`}
+                  style={{ animationDelay: '150ms' }}
+                >
                   Suas faturas sob controle.
-                  <span className="block text-[#E5B842] mt-1">Suas compras compartilhadas resolvidas.</span>
+                  <span className={`block mt-1 ${isLight ? 'text-[#C99116]' : 'text-[#E5B842]'}`}>
+                    Suas compras compartilhadas resolvidas.
+                  </span>
                 </h1>
 
                 {/* Subheadline Clara */}
-                <p className="mt-5 text-base sm:text-lg text-[#9CA3AF] leading-relaxed max-w-xl">
+                <p
+                  className={`animate-hero-entrance mt-5 text-base sm:text-lg leading-relaxed max-w-xl ${
+                    isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'
+                  }`}
+                  style={{ animationDelay: '250ms' }}
+                >
                   Saiba exatamente o valor da sua fatura antes do fechamento e controle quem te deve cada centavo com precisão.
                 </p>
 
                 {/* Grupo de Ações (CTAs) */}
-                <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
+                <div
+                  className="animate-hero-entrance mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5"
+                  style={{ animationDelay: '350ms' }}
+                >
                   <button
                     onClick={handleRegisterClick}
-                    className="px-6 py-3.5 text-sm font-semibold text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580] rounded-lg shadow-sm transition-all cursor-pointer text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#E5B842] focus-visible:ring-offset-[#0D0E11]"
+                    className={`px-6 py-3.5 text-sm font-semibold rounded-lg shadow-sm transition-all cursor-pointer text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#E5B842] ${
+                      isLight
+                        ? 'text-white bg-[#C99116] hover:bg-[#A1730B] focus-visible:ring-offset-[#FAFAF8]'
+                        : 'text-[#0D0E11] bg-[#E5B842] hover:bg-[#F5D580] focus-visible:ring-offset-[#0D0E11]'
+                    }`}
                   >
                     Criar conta gratuita
                   </button>
                   <a
-                    href="#como-funciona"
-                    className="px-6 py-3.5 text-sm font-medium text-[#F9FAFB] bg-[#1A1D24] hover:bg-[#222630] border border-white/[0.08] hover:border-white/[0.15] rounded-lg transition-colors text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842]"
+                    href="#living-ledger"
+                    className={`px-6 py-3.5 text-sm font-medium rounded-lg border transition-colors text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] ${
+                      isLight
+                        ? 'text-[#15171B] bg-white hover:bg-[#F4F3EF] border-black/10 hover:border-black/20'
+                        : 'text-[#F9FAFB] bg-[#1A1D24] hover:bg-[#222630] border-white/[0.08] hover:border-white/[0.15]'
+                    }`}
                   >
                     Ver como funciona
                   </a>
                 </div>
 
-                {/* Microcopy Factual */}
-                <div className="mt-8 pt-6 border-t border-white/[0.06] flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-[#6B7280]">
+                {/* Microcopy Factual (Tolerância Zero para Fake Claims) */}
+                <div
+                  className={`animate-hero-entrance mt-8 pt-6 border-t flex flex-wrap items-center gap-y-2 gap-x-6 text-xs ${
+                    isLight ? 'border-black/[0.08] text-[#5F6670]' : 'border-white/[0.06] text-[#6B7280]'
+                  }`}
+                  style={{ animationDelay: '420ms' }}
+                >
                   <span className="flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-[#E5B842]"></span>
+                    <span className={`w-1 h-1 rounded-full ${isLight ? 'bg-[#C99116]' : 'bg-[#E5B842]'}`} />
                     Integridade matemática em centavos
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-[#E5B842]"></span>
+                    <span className={`w-1 h-1 rounded-full ${isLight ? 'bg-[#C99116]' : 'bg-[#E5B842]'}`} />
                     Sem conexão bancária necessária
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-1 h-1 rounded-full bg-[#E5B842]"></span>
+                    <span className={`w-1 h-1 rounded-full ${isLight ? 'bg-[#C99116]' : 'bg-[#E5B842]'}`} />
                     Acesso autenticado
                   </span>
                 </div>
+
+                {/* Mascote Fin no Mobile (Entre CTAs e Living Ledger, compacto e sem sobreposições) */}
+                <div className="flex lg:hidden justify-center my-6 animate-hero-entrance" style={{ animationDelay: '300ms' }}>
+                  <FinMascot isLight={isLight} speech="Cada centavo no lugar certo." />
+                </div>
               </div>
 
-              {/* Coluna Direita: Living Ledger POC (Mock Funcional Sintético) */}
-              <div className="lg:col-span-6 xl:col-span-6">
-                <div className="bg-[#13151A] border border-white/[0.08] rounded-2xl p-5 sm:p-6 shadow-2xl shadow-black/80 relative overflow-hidden">
+              {/* Coluna Direita: Living Ledger POC (Mock Funcional Sintético com Profundidade) */}
+              <div className="lg:col-span-6 xl:col-span-6 relative animate-hero-entrance" style={{ animationDelay: '300ms' }}>
+
+                {/* Mascote Fin no Desktop (Posicionado entre copy e ledger, interagindo visualmente) */}
+                <div className="hidden lg:block absolute -left-12 top-6 z-20">
+                  <FinMascot
+                    pointerRef={finDesktopRef}
+                    isLight={isLight}
+                    speech="Veja sua fatura organizada no FinControl."
+                  />
+                </div>
+
+                {/* Container do Living Ledger com Tilt 3D sutil no Desktop */}
+                <div
+                  ref={ledgerRef}
+                  id="living-ledger"
+                  className={`scroll-mt-24 border rounded-2xl p-5 sm:p-6 relative overflow-hidden transition-all duration-200 ease-out will-change-transform ${
+                    isLight
+                      ? 'bg-[#F4F3EF] border-black/[0.08] shadow-xl shadow-black/5'
+                      : 'bg-[#13151A] border-white/[0.08] shadow-2xl shadow-black/80'
+                  }`}
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
                   {/* Linha de reflexo superior sutil */}
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E5B842]/25 to-transparent pointer-events-none"></div>
+                  <div
+                    className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent pointer-events-none ${
+                      isLight ? 'via-[#C99116]/30' : 'via-[#E5B842]/25'
+                    }`}
+                  />
 
                   {/* Widget do Cartão Fictício */}
-                  <div className="bg-[#1A1D24] border border-white/[0.06] rounded-xl p-4 sm:p-5 relative">
+                  <div
+                    className={`border rounded-xl p-4 sm:p-5 relative transition-colors ${
+                      isLight
+                        ? 'bg-white border-black/[0.06] shadow-sm'
+                        : 'bg-[#1A1D24] border-white/[0.06]'
+                    }`}
+                  >
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">FinControl Platinum</span>
-                          <span className="text-[11px] font-mono text-[#6B7280]">•••• 4821</span>
+                          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
+                            FinControl Platinum
+                          </span>
+                          <span className={`text-[11px] font-mono ${isLight ? 'text-[#8E95A0]' : 'text-[#6B7280]'}`}>
+                            •••• 4821
+                          </span>
                         </div>
-                        <div className="mt-2 text-2xl sm:text-3xl font-bold text-[#F9FAFB] tracking-tight tabular-nums">
+                        <div className={`mt-2 text-2xl sm:text-3xl font-bold tracking-tight tabular-nums ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
                           R$ 1.284,60
                         </div>
-                        <div className="text-xs text-[#9CA3AF] mt-0.5">Sua responsabilidade nesta fatura</div>
+                        <div className={`text-xs mt-0.5 ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
+                          Sua responsabilidade nesta fatura
+                        </div>
                       </div>
 
                       {/* Chip Metálico Fictício */}
-                      <div className="w-9 h-7 rounded-md bg-[#222630] border border-[#E5B842]/30 flex items-center justify-center text-[#E5B842]/70 shrink-0">
+                      <div
+                        className={`w-9 h-7 rounded-md border flex items-center justify-center shrink-0 ${
+                          isLight
+                            ? 'bg-[#F0EFEA] border-[#C99116]/40 text-[#C99116]'
+                            : 'bg-[#222630] border-[#E5B842]/30 text-[#E5B842]/70'
+                        }`}
+                      >
                         <CreditCardIcon />
                       </div>
                     </div>
 
                     {/* Ciclo do Cartão */}
-                    <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#222630] text-[#9CA3AF] border border-white/[0.05]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#E5B842]"></span>
+                    <div className={`mt-4 pt-3 border-t flex flex-wrap items-center justify-between gap-2 text-xs ${isLight ? 'border-black/[0.06]' : 'border-white/[0.06]'}`}>
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${
+                          isLight
+                            ? 'bg-[#F0EFEA] text-[#5F6670] border-black/[0.05]'
+                            : 'bg-[#222630] text-[#9CA3AF] border-white/[0.05]'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${isLight ? 'bg-[#C99116]' : 'bg-[#E5B842]'}`} />
                         Fechamento em 3 dias · Vencimento 10/10
                       </div>
-                      <span className="text-[11px] text-[#6B7280]">Ciclo ativo · Registrado no FinControl</span>
+                      <span className={`text-[11px] ${isLight ? 'text-[#8E95A0]' : 'text-[#6B7280]'}`}>
+                        Ciclo ativo · Registrado no FinControl
+                      </span>
                     </div>
                   </div>
 
                   {/* Cabeçalho do Extrato / Living Ledger */}
-                  <div className="mt-5 mb-3 flex items-center justify-between text-xs text-[#9CA3AF]">
-                    <span className="font-semibold uppercase tracking-wider text-[11px] text-[#9CA3AF]">Lançamentos & Compras Compartilhadas</span>
-                    <span className="text-[11px] text-[#6B7280]">Demonstração Interativa</span>
+                  <div className={`mt-5 mb-3 flex items-center justify-between text-xs ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
+                    <span className="font-semibold uppercase tracking-wider text-[11px]">
+                      Lançamentos & Compras Compartilhadas
+                    </span>
+                    <span className={`text-[11px] ${isLight ? 'text-[#8E95A0]' : 'text-[#6B7280]'}`}>
+                      Demonstração Interativa
+                    </span>
                   </div>
 
                   {/* Linhas do Razão Financeiro (Living Ledger) */}
                   <div className="space-y-2.5">
+
                     {/* Linha 1: Compra Compartilhada com Baixa Interativa */}
-                    <div className="bg-[#1A1D24]/70 border border-white/[0.05] hover:border-white/[0.1] rounded-xl p-3.5 transition-colors">
+                    <div
+                      className={`border rounded-xl p-3.5 transition-colors ${
+                        isLight
+                          ? 'bg-white border-black/[0.06] hover:border-black/15 shadow-sm'
+                          : 'bg-[#1A1D24]/70 border-white/[0.05] hover:border-white/[0.1]'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-[#222630] border border-white/[0.06] flex items-center justify-center text-[#E5B842] shrink-0">
+                          <div
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                              isLight
+                                ? 'bg-[#F0EFEA] border-black/[0.08] text-[#C99116]'
+                                : 'bg-[#222630] border-white/[0.06] text-[#E5B842]'
+                            }`}
+                          >
                             <UsersIcon />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-[#F9FAFB] truncate">Jantar de aniversário</div>
-                            <div className="text-xs text-[#9CA3AF] flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                              <span>Sua parte: <strong className="text-gray-200 tabular-nums font-semibold">R$ 150,00</strong></span>
+                            <div className={`text-sm font-semibold truncate ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              Jantar de aniversário
+                            </div>
+                            <div className={`text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
+                              <span>Sua parte: <strong className={`tabular-nums font-semibold ${isLight ? 'text-[#15171B]' : 'text-gray-200'}`}>R$ 150,00</strong></span>
                               <span>·</span>
-                              <span>Carlos: <strong className="text-gray-200 tabular-nums font-semibold">R$ 150,00</strong></span>
+                              <span>Carlos: <strong className={`tabular-nums font-semibold ${isLight ? 'text-[#15171B]' : 'text-gray-200'}`}>R$ 150,00</strong></span>
                             </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 text-right">
                           <div>
-                            <span className="block text-sm font-bold text-[#F9FAFB] tabular-nums">R$ 300,00</span>
+                            <span className={`block text-sm font-bold tabular-nums ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              R$ 300,00
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -282,8 +554,12 @@ export default function LandingPage() {
                             aria-label={demoCarlosPaid ? "Cota de Carlos marcada como paga. Clique para simular pendência." : "Cota de Carlos pendente. Clique para simular quitação."}
                             className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5B842] ${
                               demoCarlosPaid
-                                ? 'bg-[#34D399]/10 text-[#34D399] border-[#34D399]/30 hover:bg-[#34D399]/20'
-                                : 'bg-[#FBBF24]/10 text-[#FBBF24] border-[#FBBF24]/30 hover:bg-[#FBBF24]/20'
+                                ? isLight
+                                  ? 'bg-[#34D399]/15 text-[#047857] border-[#34D399]/40 hover:bg-[#34D399]/25'
+                                  : 'bg-[#34D399]/10 text-[#34D399] border-[#34D399]/30 hover:bg-[#34D399]/20'
+                                : isLight
+                                  ? 'bg-[#FBBF24]/15 text-[#B45309] border-[#FBBF24]/40 hover:bg-[#FBBF24]/25'
+                                  : 'bg-[#FBBF24]/10 text-[#FBBF24] border-[#FBBF24]/30 hover:bg-[#FBBF24]/20'
                             }`}
                           >
                             {demoCarlosPaid ? 'Pago Total' : 'Pendente'}
@@ -293,28 +569,50 @@ export default function LandingPage() {
                     </div>
 
                     {/* Linha 2: Parcela com 1 Centavo Residual (Regra Canônica Aprovada) */}
-                    <div className="bg-[#1A1D24]/70 border border-white/[0.05] rounded-xl p-3.5">
+                    <div
+                      className={`border rounded-xl p-3.5 transition-colors ${
+                        isLight
+                          ? 'bg-white border-black/[0.06] shadow-sm'
+                          : 'bg-[#1A1D24]/70 border-white/[0.05]'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-[#222630] border border-white/[0.06] flex items-center justify-center text-[#9CA3AF] shrink-0">
+                          <div
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                              isLight
+                                ? 'bg-[#F0EFEA] border-black/[0.08] text-[#5F6670]'
+                                : 'bg-[#222630] border-white/[0.06] text-[#9CA3AF]'
+                            }`}
+                          >
                             <CreditCardIcon />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-[#F9FAFB] truncate">Notebook (Parcela 03/10)</div>
-                            <div className="text-xs text-[#9CA3AF] flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                            <div className={`text-sm font-semibold truncate ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              Notebook (Parcela 03/10)
+                            </div>
+                            <div className={`text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
                               <span>R$ 99,99 pago</span>
                               <span>·</span>
-                              <span className="text-[#FBBF24] font-medium">R$ 0,01 restante</span>
+                              <span className={`${isLight ? 'text-[#B45309]' : 'text-[#FBBF24]'} font-medium`}>
+                                R$ 0,01 restante
+                              </span>
                             </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 text-right">
                           <div>
-                            <span className="block text-sm font-bold text-[#F9FAFB] tabular-nums">R$ 100,00</span>
+                            <span className={`block text-sm font-bold tabular-nums ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              R$ 100,00
+                            </span>
                           </div>
                           <span
-                            className="px-2.5 py-1 rounded-md text-xs font-semibold bg-[#FBBF24]/10 text-[#FBBF24] border border-[#FBBF24]/30"
+                            className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                              isLight
+                                ? 'bg-[#FBBF24]/15 text-[#B45309] border-[#FBBF24]/40'
+                                : 'bg-[#FBBF24]/10 text-[#FBBF24] border-[#FBBF24]/30'
+                            }`}
                             title="Regra de integridade: R$ 0,01 restante continua sendo dívida ativa"
                           >
                             Pago Parcial
@@ -324,23 +622,47 @@ export default function LandingPage() {
                     </div>
 
                     {/* Linha 3: Assinatura Recorrente */}
-                    <div className="bg-[#1A1D24]/70 border border-white/[0.05] rounded-xl p-3.5">
+                    <div
+                      className={`border rounded-xl p-3.5 transition-colors ${
+                        isLight
+                          ? 'bg-white border-black/[0.06] shadow-sm'
+                          : 'bg-[#1A1D24]/70 border-white/[0.05]'
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-[#222630] border border-white/[0.06] flex items-center justify-center text-[#9CA3AF] shrink-0">
+                          <div
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                              isLight
+                                ? 'bg-[#F0EFEA] border-black/[0.08] text-[#5F6670]'
+                                : 'bg-[#222630] border-white/[0.06] text-[#9CA3AF]'
+                            }`}
+                          >
                             <ChartIcon />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-[#F9FAFB] truncate">Assinatura de Software</div>
-                            <div className="text-xs text-[#6B7280] mt-0.5">Despesa fixa mensal</div>
+                            <div className={`text-sm font-semibold truncate ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              Assinatura de Software
+                            </div>
+                            <div className={`text-xs mt-0.5 ${isLight ? 'text-[#8E95A0]' : 'text-[#6B7280]'}`}>
+                              Despesa fixa mensal
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0 text-right">
                           <div>
-                            <span className="block text-sm font-bold text-[#F9FAFB] tabular-nums">R$ 59,90</span>
+                            <span className={`block text-sm font-bold tabular-nums ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
+                              R$ 59,90
+                            </span>
                           </div>
-                          <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-[#34D399]/10 text-[#34D399] border border-[#34D399]/30">
+                          <span
+                            className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                              isLight
+                                ? 'bg-[#34D399]/15 text-[#047857] border-[#34D399]/40'
+                                : 'bg-[#34D399]/10 text-[#34D399] border-[#34D399]/30'
+                            }`}
+                          >
                             Pago Total
                           </span>
                         </div>
@@ -350,15 +672,15 @@ export default function LandingPage() {
                   </div>
 
                   {/* Barra de Status Consolidado do Mock */}
-                  <div className="mt-4 pt-3.5 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2 text-[#9CA3AF]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]"></span>
+                  <div className={`mt-4 pt-3.5 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${isLight ? 'border-black/[0.08]' : 'border-white/[0.06]'}`}>
+                    <div className={`flex items-center gap-2 ${isLight ? 'text-[#5F6670]' : 'text-[#9CA3AF]'}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
                       <span>A receber de terceiros:</span>
-                      <span className="font-bold text-[#F9FAFB] tabular-nums">
+                      <span className={`font-bold tabular-nums ${isLight ? 'text-[#15171B]' : 'text-[#F9FAFB]'}`}>
                         {demoCarlosPaid ? 'R$ 0,00' : 'R$ 150,00'}
                       </span>
                     </div>
-                    <span className="text-[11px] text-[#6B7280]">
+                    <span className={`text-[11px] ${isLight ? 'text-[#8E95A0]' : 'text-[#6B7280]'}`}>
                       {demoCarlosPaid ? 'Todas as cotas de terceiros quitadas' : '1 cota pendente identificada'}
                     </span>
                   </div>
@@ -370,99 +692,96 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Ponto de ancoragem para o CTA secundário "Ver como funciona" */}
-        <div id="como-funciona" className="scroll-mt-16"></div>
-
         {/* Seção de Recursos (Preservada temporariamente para validação isolada do Hero) */}
         <section id="features" className="py-20 md:py-32 bg-carbon-900/50 border-t border-carbon-800">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-16">
-                            <h2 className="text-3xl md:text-4xl font-black text-gold-cream">Tudo o que você precisa em um só lugar</h2>
-                            <p className="mt-3 text-base md:text-lg text-gray-400">Ferramentas de alta precisão para descomplicar sua vida financeira.</p>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
-                                <FeatureIcon><CreditCardIcon /></FeatureIcon>
-                                <h3 className="text-xl font-bold mb-3 text-gold-cream">Gestão de Faturas</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">Saiba exatamente o valor da sua fatura antes dela fechar. Adicione compras, despesas avulsas e assinaturas com total fluidez.</p>
-                            </div>
-                            <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
-                                <FeatureIcon><UsersIcon /></FeatureIcon>
-                                <h3 className="text-xl font-bold mb-3 text-gold-cream">Compras Compartilhadas</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">Dividiu uma compra? Registre o valor de cada pessoa e controle rigorosamente quem te deve o quê, parcela por parcela.</p>
-                            </div>
-                            <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
-                                <FeatureIcon><ChartIcon /></FeatureIcon>
-                                <h3 className="text-xl font-bold mb-3 text-gold-cream">Relatórios Visuais</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">Com os recursos Pro, visualize gráficos dinâmicos que mostram para onde seu dinheiro está indo e tome decisões mais assertivas.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-black text-gold-cream">Tudo o que você precisa em um só lugar</h2>
+              <p className="mt-3 text-base md:text-lg text-gray-400">Ferramentas de alta precisão para descomplicar sua vida financeira.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
+                <FeatureIcon><CreditCardIcon /></FeatureIcon>
+                <h3 className="text-xl font-bold mb-3 text-gold-cream">Gestão de Faturas</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">Saiba exatamente o valor da sua fatura antes dela fechar. Adicione compras, despesas avulsas e assinaturas com total fluidez.</p>
+              </div>
+              <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
+                <FeatureIcon><UsersIcon /></FeatureIcon>
+                <h3 className="text-xl font-bold mb-3 text-gold-cream">Compras Compartilhadas</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">Dividiu uma compra? Registre o valor de cada pessoa e controle rigorosamente quem te deve o quê, parcela por parcela.</p>
+              </div>
+              <div className="bg-carbon-900 border border-carbon-800 p-8 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-gold/30 text-center">
+                <FeatureIcon><ChartIcon /></FeatureIcon>
+                <h3 className="text-xl font-bold mb-3 text-gold-cream">Relatórios Visuais</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">Com os recursos Pro, visualize gráficos dinâmicos que mostram para onde seu dinheiro está indo e tome decisões mais assertivas.</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-                {/* Seção de Preços */}
-                <section id="pricing" className="py-20 md:py-32 border-t border-carbon-800">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-16">
-                            <h2 className="text-3xl md:text-4xl font-black text-gold-cream">Um plano para cada necessidade</h2>
-                            <p className="mt-3 text-base md:text-lg text-gray-400">Comece de graça e evolua para a elite quando estiver pronto.</p>
-                        </div>
-                        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-                            
-                            {/* Plano Free */}
-                            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl p-8 sm:p-10 flex flex-col shadow-2xl">
-                                <h3 className="text-2xl font-black text-gold-cream">Standard</h3>
-                                <p className="mt-3 text-sm text-gray-400">O essencial para começar a organizar suas finanças hoje mesmo.</p>
-                                <div className="mt-6">
-                                    <span className="text-4xl font-black text-gold-cream">R$0</span>
-                                    <span className="text-sm font-medium text-gray-500"> /mês</span>
-                                </div>
-                                <ul className="mt-8 space-y-4 text-gray-300 text-sm flex-1">
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Gerenciamento de Pessoas</span></li>
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Gerenciamento de Cartões</span></li>
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Registro de Compras</span></li>
-                                </ul>
-                                <div className="mt-8">
-                                    <button onClick={handleRegisterClick} className="w-full px-6 py-3.5 text-sm font-bold text-gold bg-gold/10 border border-gold/20 hover:bg-gold/20 rounded-2xl transition cursor-pointer">Comece Grátis</button>
-                                </div>
-                            </div>
+        {/* Seção de Preços */}
+        <section id="pricing" className="py-20 md:py-32 border-t border-carbon-800">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-black text-gold-cream">Um plano para cada necessidade</h2>
+              <p className="mt-3 text-base md:text-lg text-gray-400">Comece de graça e evolua para a elite quando estiver pronto.</p>
+            </div>
+            <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
 
-                            {/* Plano Pro */}
-                            <div className="bg-gradient-to-b from-carbon-900 to-carbon-800 border-2 border-gold rounded-3xl p-8 sm:p-10 flex flex-col relative shadow-2xl shadow-gold/10">
-                                <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2">
-                                    <span className="px-4 py-1 text-xs font-black tracking-widest text-carbon-900 bg-gradient-to-r from-gold-light to-gold rounded-full shadow-md">BLACK PRO</span>
-                                </div>
-                                <h3 className="text-2xl font-black text-gold-cream">Pro / Black</h3>
-                                <p className="mt-3 text-sm text-gray-400">Desbloqueie todo o potencial com recursos analíticos avançados e exclusivas ferramentas de IA.</p>
-                                
-                                <div className="mt-6">
-                                    <span className="text-4xl font-black text-gold">R$29,99</span>
-                                    <span className="text-sm font-medium text-gray-400"> (Pagamento Único)</span>
-                                </div>
-                                
-                                <ul className="mt-8 space-y-4 text-gray-300 text-sm flex-1">
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span className="font-semibold text-gold-cream">Acesso Vitalício a tudo do plano Standard, e mais:</span></li>
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Registro de Receitas e Despesas Avulsas</span></li>
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Relatórios e Gráficos Pro Analytics</span></li>
-                                    <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Acesso Completo ao Modo Crise & Auditoria</span></li>
-                                </ul>
-                                
-                                <div className="mt-8">
-                                    <button onClick={handleUpgrade} className="w-full px-6 py-3.5 text-sm font-black text-carbon-900 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl shadow-lg shadow-gold/20 transition cursor-pointer">Tornar-se Black Pro</button>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </section>
-            </main>
-
-            {/* Rodapé */}
-            <footer className="bg-carbon-900 border-t border-carbon-800 py-10">
-                <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-gray-500">
-                    <p>&copy; {new Date().getFullYear()} FinControl. Todos os direitos reservados.</p>
+              {/* Plano Free */}
+              <div className="bg-carbon-900 border border-carbon-800 rounded-3xl p-8 sm:p-10 flex flex-col shadow-2xl">
+                <h3 className="text-2xl font-black text-gold-cream">Standard</h3>
+                <p className="mt-3 text-sm text-gray-400">O essencial para começar a organizar suas finanças hoje mesmo.</p>
+                <div className="mt-6">
+                  <span className="text-4xl font-black text-gold-cream">R$0</span>
+                  <span className="text-sm font-medium text-gray-500"> /mês</span>
                 </div>
-            </footer>
+                <ul className="mt-8 space-y-4 text-gray-300 text-sm flex-1">
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Gerenciamento de Pessoas</span></li>
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Gerenciamento de Cartões</span></li>
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Registro de Compras</span></li>
+                </ul>
+                <div className="mt-8">
+                  <button onClick={handleRegisterClick} className="w-full px-6 py-3.5 text-sm font-bold text-gold bg-gold/10 border border-gold/20 hover:bg-gold/20 rounded-2xl transition cursor-pointer">Comece Grátis</button>
+                </div>
+              </div>
+
+              {/* Plano Pro */}
+              <div className="bg-gradient-to-b from-carbon-900 to-carbon-800 border-2 border-gold rounded-3xl p-8 sm:p-10 flex flex-col relative shadow-2xl shadow-gold/10">
+                <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2">
+                  <span className="px-4 py-1 text-xs font-black tracking-widest text-carbon-900 bg-gradient-to-r from-gold-light to-gold rounded-full shadow-md">BLACK PRO</span>
+                </div>
+                <h3 className="text-2xl font-black text-gold-cream">Pro / Black</h3>
+                <p className="mt-3 text-sm text-gray-400">Desbloqueie todo o potencial com recursos analíticos avançados e exclusivas ferramentas de IA.</p>
+
+                <div className="mt-6">
+                  <span className="text-4xl font-black text-gold">R$29,99</span>
+                  <span className="text-sm font-medium text-gray-400"> (Pagamento Único)</span>
+                </div>
+
+                <ul className="mt-8 space-y-4 text-gray-300 text-sm flex-1">
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span className="font-semibold text-gold-cream">Acesso Vitalício a tudo do plano Standard, e mais:</span></li>
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Registro de Receitas e Despesas Avulsas</span></li>
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Relatórios e Gráficos Pro Analytics</span></li>
+                  <li className="flex items-start"><span className="text-gold mt-0.5 mr-3 flex-shrink-0"><CheckIcon /></span><span>Acesso Completo ao Modo Crise & Auditoria</span></li>
+                </ul>
+
+                <div className="mt-8">
+                  <button onClick={handleUpgrade} className="w-full px-6 py-3.5 text-sm font-black text-carbon-900 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl shadow-lg shadow-gold/20 transition cursor-pointer">Tornar-se Black Pro</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Rodapé */}
+      <footer className="bg-carbon-900 border-t border-carbon-800 py-10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-gray-500">
+          <p>&copy; {new Date().getFullYear()} FinControl. Todos os direitos reservados.</p>
         </div>
-    );
+      </footer>
+    </div>
+  );
 }

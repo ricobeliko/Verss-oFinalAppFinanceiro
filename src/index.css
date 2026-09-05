@@ -71,3 +71,83 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #4A4A4A;
 }
+
+/* ============================================================
+   FinControl Landing — Theme Tokens & Motion (Fase 8.4 CS2)
+   ============================================================ */
+
+.landing-root {
+  --landing-bg: #0D0E11;
+  --landing-bg-alt: #13151A;
+  --landing-surface: #1A1D24;
+  --landing-surface-elevated: #222630;
+  --landing-text: #F9FAFB;
+  --landing-text-secondary: #9CA3AF;
+  --landing-text-muted: #6B7280;
+  --landing-border: rgba(255, 255, 255, 0.08);
+  --landing-border-subtle: rgba(255, 255, 255, 0.05);
+  --landing-accent: #E5B842;
+  --landing-accent-soft: #F5D580;
+  --landing-card-bg: #1A1D24;
+  --landing-card-border: rgba(255, 255, 255, 0.06);
+  --landing-chip-bg: #222630;
+  --landing-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  --landing-header-bg: rgba(13, 14, 17, 0.90);
+  --landing-header-border: rgba(255, 255, 255, 0.06);
+}
+
+.landing-root.landing-theme-light {
+  --landing-bg: #FAFAF8;
+  --landing-bg-alt: #F4F3EF;
+  --landing-surface: #FFFFFF;
+  --landing-surface-elevated: #F7F7F5;
+  --landing-text: #15171B;
+  --landing-text-secondary: #5F6670;
+  --landing-text-muted: #8E95A0;
+  --landing-border: rgba(20, 24, 30, 0.10);
+  --landing-border-subtle: rgba(20, 24, 30, 0.06);
+  --landing-accent: #C99116;
+  --landing-accent-soft: #E5B842;
+  --landing-card-bg: #FFFFFF;
+  --landing-card-border: rgba(20, 24, 30, 0.08);
+  --landing-chip-bg: #EAE9E4;
+  --landing-shadow: 0 20px 40px -15px rgba(20, 24, 30, 0.08);
+  --landing-header-bg: rgba(250, 250, 248, 0.90);
+  --landing-header-border: rgba(20, 24, 30, 0.08);
+}
+
+@keyframes finFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(0.8deg);
+  }
+}
+
+.animate-fin-float {
+  animation: finFloat 3.8s ease-in-out infinite;
+}
+
+@keyframes heroEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero-entrance {
+  animation: heroEntrance 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fin-float,
+  .animate-hero-entrance {
+    animation: none !important;
+    transform: none !important;
+  }
+}
