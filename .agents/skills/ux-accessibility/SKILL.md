@@ -26,3 +26,26 @@ Assegurar uma experiência de usuário premium, fluida, intuitiva e acessível p
    - Feedback de validação com contraste adequado (mensagens de erro em `text-rose-400`).
 4. **Navegação por Teclado e Foco:**
    - Elementos interativos devem ser acessíveis via Tab e possuir estados visíveis de foco (`focus:ring-2 focus:ring-gold/50`).
+
+## Diretrizes de Conteúdo e Marketing (Product Proof > Social Proof)
+- **Proibição Estrita de Métricas e Prova Social Fictícia:**
+  - `NO_FAKE_SOCIAL_PROOF=true`
+  - `NO_FAKE_REVIEWS=true`
+  - `NO_FAKE_USER_COUNTS=true`
+  - `NO_FAKE_TESTIMONIALS=true`
+  - `NO_FAKE_SECURITY_CLAIMS=true`
+- **Itens terminantemente proibidos em Landing, Auth, Dashboard, Marketing, SEO e Social Previews:**
+  - Notas ou estrelas fictícias (ex: `4,9/5`, `4.9/5`, avaliações médias inventadas);
+  - Contagem de usuários inflada (ex: `50 mil+`, `milhares de clientes`);
+  - Expressões como `usuários confiando`, `empresas que usam`;
+  - Declarações absolutas de segurança desprovidas de comprovação técnica (ex: `100% seguro`, `100% privado`, `criptografia militar`);
+  - Depoimentos ou clientes fictícios;
+  - Selos de segurança ou prêmios não comprovados.
+- **Product Proof Factual Permitido:**
+  - Precisão matemática em centavos inteiros;
+  - Compras compartilhadas e divisão por participante;
+  - Controle e consolidação de faturas antes do fechamento;
+  - Parcelas e assinaturas organizadas;
+  - Sem conexão bancária necessária;
+  - Dados registrados no FinControl;
+  - Acesso autenticado e isolamento estrito por usuário.

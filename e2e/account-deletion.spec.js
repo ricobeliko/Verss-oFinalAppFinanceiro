@@ -58,6 +58,6 @@ test.describe('E2E Security & Privacy — Exclusão de Conta (LGPD)', () => {
 
         // Deve redirecionar para a Landing Page / Login após exclusão segura
         await expect(page).toHaveURL(/\/(login|$)/, { timeout: 8000 });
-        await expect(page.getByRole('button', { name: /Entrar|Acessar/i })).toBeVisible({ timeout: 8000 });
+        await expect(page.getByRole('button', { name: /Entrar|Acessar/i }).or(page.getByRole('link', { name: /Entrar|Acessar/i })).first()).toBeVisible({ timeout: 8000 });
     });
 });
