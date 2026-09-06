@@ -139,15 +139,27 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await page.goto('/');
 
     // Header mobile e botão menu
-    const menuBtn = page.getByRole('button', { name: /abrir menu de navegação/i });
+    const menuBtn = page.getByRole('button', { name: /menu de navegação/i });
     await expect(menuBtn).toBeVisible();
 
-    // Abre drawer mobile
+    // 1. Initial state: aria-expanded=false, aria-controls="landing-mobile-nav"
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'false');
+    await expect(menuBtn).toHaveAttribute('aria-controls', 'landing-mobile-nav');
+
+    // 2. Click: abre drawer mobile
     await menuBtn.click();
-    const navComoFuncionaMobile = page.locator('nav').getByRole('link', { name: 'Como Funciona' });
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'true');
+
+    // 3. Drawer visível com id="landing-mobile-nav"
+    const drawer = page.locator('#landing-mobile-nav');
+    await expect(drawer).toBeVisible();
+
+    const navComoFuncionaMobile = drawer.getByRole('link', { name: 'Como Funciona' });
     await expect(navComoFuncionaMobile).toBeVisible();
 
-    // Fecha drawer clicando no botão toggle
-    await page.getByRole('button', { name: /abrir menu de navegação/i }).click();
+    // 4. Click novamente: fecha drawer mobile e aria-expanded=false
+    await menuBtn.click();
+    await expect(menuBtn).toHaveAttribute('aria-expanded', 'false');
+    await expect(drawer).toHaveCount(0);
   });
 });

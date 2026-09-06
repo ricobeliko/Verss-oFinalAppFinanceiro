@@ -82,8 +82,14 @@ export default function LandingHeader() {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-xl text-[#9CA3AF] hover:text-[#F9FAFB] hover:bg-white/5 transition-colors focus:outline-none"
-          aria-label="Abrir menu de navegação"
+          className="md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-xl text-[#9CA3AF] hover:text-[#F9FAFB] hover:bg-white/5 transition-colors focus:outline-none"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="landing-mobile-nav"
+          aria-label={
+            mobileMenuOpen
+              ? "Fechar menu de navegação"
+              : "Abrir menu de navegação"
+          }
         >
           {mobileMenuOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
         </button>
@@ -91,14 +97,17 @@ export default function LandingHeader() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#0D0E11]/98 border-b border-white/10 px-6 py-6 space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">
+        <div
+          id="landing-mobile-nav"
+          className="md:hidden bg-[#0D0E11]/98 border-b border-white/10 px-6 py-6 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-4 duration-200"
+        >
           <nav className="flex flex-col space-y-3">
             {navLinks.map((link) => (
               <a
                 key={link.label}
                 href={link.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className="text-base font-medium text-[#9CA3AF] hover:text-[#F9FAFB] py-2 border-b border-white/5"
+                className="min-h-[44px] flex items-center text-base font-medium text-[#9CA3AF] hover:text-[#F9FAFB] py-2 border-b border-white/5"
               >
                 {link.label}
               </a>
@@ -108,14 +117,14 @@ export default function LandingHeader() {
             <Link
               to="/login"
               onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2.5 rounded-xl border border-white/10 text-sm font-medium text-[#F9FAFB]"
+              className="w-full min-h-[44px] flex items-center justify-center text-center py-2.5 rounded-xl border border-white/10 text-sm font-medium text-[#F9FAFB]"
             >
               Entrar
             </Link>
             <Link
               to="/login?mode=register"
               onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-[#E5B842] to-[#F5D580] text-[#0D0E11] text-sm font-bold shadow-lg"
+              className="w-full min-h-[44px] flex items-center justify-center text-center py-2.5 rounded-xl bg-gradient-to-r from-[#E5B842] to-[#F5D580] text-[#0D0E11] text-sm font-bold shadow-lg"
             >
               Criar conta gratuita
             </Link>
