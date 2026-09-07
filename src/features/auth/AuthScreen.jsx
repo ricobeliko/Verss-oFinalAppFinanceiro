@@ -82,7 +82,7 @@ export default function AuthScreen() {
     }
   }, []);
 
-  // Sincroniza query parameter caso alterado externamente
+  // Sincroniza query parameter caso alterado externamente (apenas navegação declarativa: register e login)
   useEffect(() => {
     const mode = searchParams.get('mode');
     if (mode === 'register') {
@@ -91,16 +91,8 @@ export default function AuthScreen() {
     } else if (mode === 'login') {
       setIsRegistering(false);
       setShowVerification(false);
-    } else if (mode === 'verify') {
-      setShowVerification(true);
-      if (!email) {
-        const queryEmail = searchParams.get('email');
-        if (queryEmail) {
-          setEmail(queryEmail);
-        }
-      }
     }
-  }, [searchParams, email]);
+  }, [searchParams]);
 
   // Cadastro
   const handleRegister = async (e) => {

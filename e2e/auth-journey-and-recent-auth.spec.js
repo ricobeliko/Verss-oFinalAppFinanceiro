@@ -106,22 +106,19 @@ test.describe('E2E Real Browser — Auth Journey & Recent Auth (Fase 8.6 — Sta
     await expect(page.getByRole('button', { name: 'Criar Conta', exact: true })).toBeVisible();
   });
 
-  test('URL query parameter (?mode=verify) sem email renderiza copy genérica sem dados fictícios', async ({ page }) => {
+  test('Negative Query: /login?mode=verify&email=fake@example.com não ativa tela de verificação e permanece no login normal', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/login?mode=verify');
+    await page.goto('/login?mode=verify&email=fake@example.com');
 
-    // 1. Mensagem genérica deve estar visível
-    await expect(page.getByText('Enviamos um link de confirmação para o seu e-mail.')).toBeVisible();
+    // 1. EmailVerificationView NÃO deve aparecer
+    await expect(page.getByText('Enviamos um link de confirmação')).toHaveCount(0);
+    await expect(page.getByText('Confirme seu E-mail')).toHaveCount(0);
+    await expect(page.getByText('fake@example.com')).toHaveCount(0);
 
-    // 2. Não deve inventar email fictício ou renderizar tag strong com email vazio
-    await expect(page.getByText('usuario.exemplo@fincontrol.com')).toHaveCount(0);
-    await expect(page.locator('p:has-text("Enviamos um link de confirmação para:") strong')).toHaveCount(0);
-
-    // 3. A tela permanece válida com botão funcional de retorno
-    const backBtn = page.getByRole('button', { name: /Voltar para entrar/i });
-    await expect(backBtn).toBeVisible();
-    await backBtn.click();
+    // 2. Deve permanecer no formulário de login normal
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
+    await expect(page.locator('#password')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: /^E-?mail/i })).toBeVisible();
   });
 
 });

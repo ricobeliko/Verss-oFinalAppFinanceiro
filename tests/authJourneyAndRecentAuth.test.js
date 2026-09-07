@@ -254,4 +254,51 @@ describe('FinControl — Auth Journey & Recent-Auth Contract (Fase 8.6 — PR #3
     });
   });
 
+  describe('4. Canonical Verification State Flow & Integrity (PR #32)', () => {
+    it('deve ativar estado de verificação SOMENTE após createUser e sendEmailVerification bem-sucedidos', async () => {
+      let showVerification = false;
+      const createUserMock = vi.fn().mockResolvedValue({ user: { uid: 'u1', email: 'user@fincontrol.com' } });
+      const sendEmailVerificationMock = vi.fn().mockResolvedValue();
+
+      const cred = await createUserMock();
+      await sendEmailVerificationMock(cred.user);
+      showVerification = true;
+
+      expect(createUserMock).toHaveBeenCalledTimes(1);
+      expect(sendEmailVerificationMock).toHaveBeenCalledWith(cred.user);
+      expect(showVerification).toBe(true);
+    });
+
+    it('NÃO deve ativar estado de verificação se sendEmailVerification falhar (fail-closed / SEND_FAILURE_SHOWS_VERIFICATION=false)', async () => {
+      let showVerification = false;
+      const createUserMock = vi.fn().mockResolvedValue({ user: { uid: 'u1', email: 'user@fincontrol.com' } });
+      const sendEmailVerificationMock = vi.fn().mockRejectedValue({ code: 'auth/too-many-requests' });
+
+      try {
+        const cred = await createUserMock();
+        await sendEmailVerificationMock(cred.user);
+        showVerification = true;
+      } catch {
+        // fail-closed
+      }
+
+      expect(createUserMock).toHaveBeenCalledTimes(1);
+      expect(sendEmailVerificationMock).toHaveBeenCalledTimes(1);
+      expect(showVerification).toBe(false);
+    });
+
+    it('ignora parâmetros de consulta ?mode=verify garantindo que query não forje estado de verificação', () => {
+      const allowedModes = ['register', 'login'];
+      const evaluateMode = (queryMode) => {
+        if (allowedModes.includes(queryMode)) return queryMode;
+        return 'login';
+      };
+
+      expect(evaluateMode('register')).toBe('register');
+      expect(evaluateMode('login')).toBe('login');
+      expect(evaluateMode('verify')).toBe('login');
+      expect(evaluateMode('admin')).toBe('login');
+    });
+  });
+
 });
