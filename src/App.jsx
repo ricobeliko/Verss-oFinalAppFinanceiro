@@ -9,6 +9,9 @@ import Spinner from './components/Spinner';
 const AuthScreen = lazy(() => import('./features/auth/AuthScreen'));
 const DashboardLayout = lazy(() => import('./features/dashboard/DashboardLayout'));
 const LandingPage = lazy(() => import('./features/landing/LandingPage'));
+const DesignSystemLab = import.meta.env.DEV
+  ? lazy(() => import('./design-system/lab/DesignSystemLab'))
+  : null;
 
 const RouteFallback = () => (
   <div className="flex justify-center items-center h-screen bg-carbon-900">
@@ -82,6 +85,14 @@ function App() {
             } 
           />
           
+          {/* Design System 2.0 Lab (Dev Only) */}
+          {import.meta.env.DEV && DesignSystemLab && (
+            <Route 
+              path="/design-system-lab" 
+              element={<DesignSystemLab />} 
+            />
+          )}
+
           {/* Redirecionamento Padrão */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
