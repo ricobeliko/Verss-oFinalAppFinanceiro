@@ -25,7 +25,7 @@ test.describe('E2E Security & Privacy — Exclusão de Conta (LGPD)', () => {
         await expect(page.getByText(/Resumo Financeiro/i)).toBeVisible({ timeout: 10000 });
     });
 
-    test('deve abrir o modal de exclusão, exigir confirmação "EXCLUIR" e processar logout', async ({ page }) => {
+    test('deve abrir o modal DS2, exigir confirmação "EXCLUIR" (Step 1), validar senha no Recent Auth (Step 2) e processar logout', async ({ page }) => {
         // Abre o dropdown de perfil do usuário
         const profileTrigger = page.getByRole('button', { name: 'Abrir menu de perfil do usuário' });
         await expect(profileTrigger).toBeVisible({ timeout: 10000 });
@@ -36,25 +36,45 @@ test.describe('E2E Security & Privacy — Exclusão de Conta (LGPD)', () => {
         await expect(deleteOption).toBeVisible({ timeout: 5000 });
         await deleteOption.click();
 
-        // Verifica abertura do modal de Zona de Perigo
+        // ETAPA 1: Verifica abertura do modal de Zona de Perigo
         await expect(page.getByText('Zona de Perigo — Excluir Conta')).toBeVisible();
         await expect(page.getByText('Ação permanente e irreversível!')).toBeVisible();
 
-        // Botão de exclusão deve começar desabilitado
-        const submitBtn = page.getByRole('button', { name: 'Excluir Minha Conta' });
-        await expect(submitBtn).toBeDisabled();
+        // Botão "Continuar" deve começar desabilitado
+        const continueBtn = page.getByRole('button', { name: 'Continuar' });
+        await expect(continueBtn).toBeDisabled();
 
         // Digitar texto incorreto não deve habilitar
-        const input = page.locator('#confirmDeletionInput');
-        await input.fill('CANCELAR');
-        await expect(submitBtn).toBeDisabled();
+        const confirmInput = page.locator('#confirmDeletionInput');
+        await confirmInput.fill('CANCELAR');
+        await expect(continueBtn).toBeDisabled();
 
-        // Digitar "EXCLUIR" deve habilitar o botão
-        await input.fill('EXCLUIR');
-        await expect(submitBtn).toBeEnabled();
+        // Digitar "EXCLUIR" deve habilitar o botão Continuar
+        await confirmInput.fill('EXCLUIR');
+        await expect(continueBtn).toBeEnabled();
+        await continueBtn.click();
 
-        // Executar exclusão
-        await submitBtn.click();
+        // ETAPA 2: Reautenticação Recente com Senha
+        await expect(page.getByRole('heading', { name: 'Confirme sua Senha' })).toBeVisible();
+        await expect(page.getByText(/Por segurança, precisamos confirmar novamente sua identidade/i)).toBeVisible();
+
+        const passwordInput = page.locator('#reauth-password-input');
+        const confirmDeleteBtn = page.getByRole('button', { name: 'Confirmar Exclusão' });
+
+        // Botão de confirmação de exclusão desabilitado sem senha
+        await expect(confirmDeleteBtn).toBeDisabled();
+
+        // Testar senha incorreta
+        await passwordInput.fill('wrong-password');
+        await expect(confirmDeleteBtn).toBeEnabled();
+        await confirmDeleteBtn.click();
+
+        // Mensagem de erro de senha incorreta deve ser exibida e modal não fecha
+        await expect(page.getByText('Senha incorreta. Tente novamente.')).toBeVisible();
+
+        // Digitar senha correta
+        await passwordInput.fill('senhaCorreta123');
+        await confirmDeleteBtn.click();
 
         // Deve redirecionar para a Landing Page / Login após exclusão segura
         await expect(page).toHaveURL(/\/(login|$)/, { timeout: 8000 });

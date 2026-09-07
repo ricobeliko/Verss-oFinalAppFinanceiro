@@ -7,8 +7,8 @@ test.describe('E2E Real Browser - Validações de Formulário de Autenticação'
     });
 
     test('deve validar tentativa de login com credenciais sintéticas inexistentes', async ({ page }) => {
-        await page.getByLabel('Email').fill('usuario-sintetico-nao-existe@fincontrol.local');
-        await page.getByLabel('Senha', { exact: true }).fill('SenhaInvalida123!');
+        await page.getByRole('textbox', { name: /^E-?mail/i }).fill('usuario-sintetico-nao-existe@fincontrol.local');
+        await page.locator('#password').fill('SenhaInvalida123!');
 
         const submitBtn = page.getByRole('button', { name: 'Entrar', exact: true });
         await submitBtn.click();
@@ -20,10 +20,10 @@ test.describe('E2E Real Browser - Validações de Formulário de Autenticação'
     test('deve validar preenchimento de campos obrigatórios no cadastro', async ({ page }) => {
         await page.getByRole('button', { name: /Não tem uma conta\? Cadastre-se/i }).click();
 
-        const nameInput = page.getByLabel('Nome');
-        const emailInput = page.getByLabel('Email');
-        const passwordInput = page.getByLabel('Senha', { exact: true });
-        const confirmPasswordInput = page.getByLabel('Confirmar Senha');
+        const nameInput = page.getByRole('textbox', { name: /Nome/i });
+        const emailInput = page.getByRole('textbox', { name: /^E-?mail/i });
+        const passwordInput = page.locator('#password');
+        const confirmPasswordInput = page.locator('#confirmPassword');
 
         await expect(nameInput).toHaveAttribute('required', '');
         await expect(emailInput).toHaveAttribute('required', '');
@@ -31,3 +31,4 @@ test.describe('E2E Real Browser - Validações de Formulário de Autenticação'
         await expect(confirmPasswordInput).toHaveAttribute('required', '');
     });
 });
+
