@@ -106,4 +106,22 @@ test.describe('E2E Real Browser — Auth Journey & Recent Auth (Fase 8.6 — Sta
     await expect(page.getByRole('button', { name: 'Criar Conta', exact: true })).toBeVisible();
   });
 
+  test('URL query parameter (?mode=verify) sem email renderiza copy genérica sem dados fictícios', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/login?mode=verify');
+
+    // 1. Mensagem genérica deve estar visível
+    await expect(page.getByText('Enviamos um link de confirmação para o seu e-mail.')).toBeVisible();
+
+    // 2. Não deve inventar email fictício ou renderizar tag strong com email vazio
+    await expect(page.getByText('usuario.exemplo@fincontrol.com')).toHaveCount(0);
+    await expect(page.locator('p:has-text("Enviamos um link de confirmação para:") strong')).toHaveCount(0);
+
+    // 3. A tela permanece válida com botão funcional de retorno
+    const backBtn = page.getByRole('button', { name: /Voltar para entrar/i });
+    await expect(backBtn).toBeVisible();
+    await backBtn.click();
+    await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
+  });
+
 });

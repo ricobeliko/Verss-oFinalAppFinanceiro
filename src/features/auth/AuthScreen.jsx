@@ -94,7 +94,10 @@ export default function AuthScreen() {
     } else if (mode === 'verify') {
       setShowVerification(true);
       if (!email) {
-        setEmail(searchParams.get('email') || 'usuario.exemplo@fincontrol.com');
+        const queryEmail = searchParams.get('email');
+        if (queryEmail) {
+          setEmail(queryEmail);
+        }
       }
     }
   }, [searchParams, email]);
@@ -102,6 +105,11 @@ export default function AuthScreen() {
   // Cadastro
   const handleRegister = async (e) => {
     e.preventDefault();
+
+    if (!userName.trim()) {
+      showToast('Informe seu nome para continuar.', 'warning');
+      return;
+    }
 
     if (password.length < 8) {
       showToast('A senha deve ter no mínimo 8 caracteres.', 'warning');
@@ -240,7 +248,6 @@ export default function AuthScreen() {
               <form
                 onSubmit={isRegistering ? handleRegister : handleLogin}
                 className="space-y-4"
-                noValidate
               >
                 {isRegistering && (
                   <TextField

@@ -76,6 +76,11 @@ test.describe('E2E Security & Privacy — Exclusão de Conta (LGPD)', () => {
         await passwordInput.fill('senhaCorreta123');
         await confirmDeleteBtn.click();
 
+        // Modal deve fechar e campos serem limpos no sucesso (SUCCESS_MODAL_CLOSE & PASSWORD_CLEARED)
+        await expect(page.getByRole('heading', { name: 'Confirme sua Senha' })).toHaveCount(0);
+        await expect(page.getByText('Zona de Perigo — Excluir Conta')).toHaveCount(0);
+        await expect(passwordInput).toHaveCount(0);
+
         // Deve redirecionar para a Landing Page / Login após exclusão segura
         await expect(page).toHaveURL(/\/(login|$)/, { timeout: 8000 });
         await expect(page.getByRole('button', { name: /Entrar|Acessar/i }).or(page.getByRole('link', { name: /Entrar|Acessar/i })).first()).toBeVisible({ timeout: 8000 });

@@ -1,10 +1,14 @@
 // tests/authJourneyAndRecentAuth.test.js
 import { describe, it, expect, vi } from 'vitest';
 import { mapAuthError } from '../src/features/auth/authErrorMap';
+import {
+  executeAccountDeletion,
+  mapAccountDeletionError,
+} from '../src/features/auth/accountDeletionFlow';
 
-describe('FinControl — Auth Journey & Recent-Auth Contract (Fase 8.6 — Stage A)', () => {
+describe('FinControl — Auth Journey & Recent-Auth Contract (Fase 8.6 — PR #32)', () => {
 
-  describe('1. Error Mapping & User Enumeration Defense', () => {
+  describe('1. Error Mapping & User Enumeration Defense (Auth)', () => {
     it('deve retornar mensagem neutra para credenciais inválidas, usuário não encontrado ou senha errada (proteção contra enumeração)', () => {
       const neutralMessage = 'E-mail ou senha inválidos.';
       expect(mapAuthError({ code: 'auth/invalid-credential' })).toBe(neutralMessage);
@@ -27,137 +31,226 @@ describe('FinControl — Auth Journey & Recent-Auth Contract (Fase 8.6 — Stage
     });
   });
 
-  describe('2. Registration Validation & Schema Rules', () => {
-    it('deve validar regras de senha mínima de 8 caracteres', () => {
-      const isPasswordValid = (pwd) => typeof pwd === 'string' && pwd.length >= 8;
-      expect(isPasswordValid('1234567')).toBe(false);
-      expect(isPasswordValid('12345678')).toBe(true);
-      expect(isPasswordValid('senhaForte123')).toBe(true);
+  describe('2. Account Deletion Error Mapping & Raw Error Suppression', () => {
+    it('deve mapear erros conhecidos de credencial e recente autenticação para mensagens seguras', () => {
+      expect(mapAccountDeletionError({ code: 'auth/wrong-password' })).toBe('Senha incorreta. Tente novamente.');
+      expect(mapAccountDeletionError({ code: 'auth/invalid-credential' })).toBe('Senha incorreta. Tente novamente.');
+      expect(
+        mapAccountDeletionError({
+          code: 'functions/failed-precondition',
+          details: { reason: 'recent-auth-required' },
+        })
+      ).toBe('Não foi possível atualizar sua autenticação. Entre novamente e tente de novo.');
+      expect(mapAccountDeletionError({ code: 'auth/too-many-requests' })).toBe(
+        'Muitas tentativas consecutivas. Aguarde alguns instantes e tente novamente.'
+      );
+      expect(mapAccountDeletionError({ code: 'auth/network-request-failed' })).toBe(
+        'Falha de conexão com a rede. Verifique sua internet e tente novamente.'
+      );
+      expect(mapAccountDeletionError({ code: 'functions/unavailable' })).toBe(
+        'Serviço temporariamente indisponível. Tente novamente mais tarde.'
+      );
+      expect(mapAccountDeletionError({ code: 'auth/missing-password' })).toBe(
+        'Por favor, informe a sua senha atual.'
+      );
+      expect(mapAccountDeletionError({ code: 'auth/invalid-session' })).toBe(
+        'Sessão inválida. Faça login novamente para prosseguir.'
+      );
     });
 
-    it('deve rejeitar confirmação de senha divergente', () => {
-      const passwordsMatch = (p1, p2) => p1 === p2;
-      expect(passwordsMatch('senha1234', 'senha1235')).toBe(false);
-      expect(passwordsMatch('senha1234', 'senha1234')).toBe(true);
-    });
-
-    it('deve preservar criação com plano "free" e sem ativação antecipada de trial', () => {
-      const initialUserData = {
-        name: 'Cliente Teste',
-        email: 'teste@fincontrol.com',
-        plan: 'free',
-        trialExpiresAt: null,
+    it('NUNCA deve exibir raw error.message ou error.stack para erro desconhecido (SECRET_INTERNAL_DETAIL)', () => {
+      const internalError = {
+        code: 'unknown/internal-failure',
+        message: 'SECRET_INTERNAL_DETAIL: database connection refused at 10.0.0.1',
+        stack: 'Error: SECRET_INTERNAL_DETAIL at Server.run (/app/secret.js:42)',
       };
-      expect(initialUserData.plan).toBe('free');
-      expect(initialUserData.trialExpiresAt).toBeNull();
+
+      const mapped = mapAccountDeletionError(internalError);
+
+      expect(mapped).toBe('Não foi possível excluir sua conta. Tente novamente.');
+      expect(mapped).not.toContain('SECRET_INTERNAL_DETAIL');
+      expect(mapped).not.toContain('database connection refused');
+      expect(mapped).not.toContain('/app/secret.js');
     });
   });
 
-  describe('3. Password Reset Flow (User Enumeration Protection)', () => {
-    it('deve responder de forma neutra quando usuário não existe para impedir enumeração', async () => {
-      const mockSendReset = vi.fn().mockRejectedValue({ code: 'auth/user-not-found' });
-      let statusResponse = '';
+  describe('3. Real Recent-Auth Deletion Orchestration (accountDeletionFlow)', () => {
+    it('deve executar a sequência canônica real: reauthenticateWithCredential → getIdToken(true) → delete callable', async () => {
+      const executionTrace = [];
 
-      try {
-        await mockSendReset('inexistente@fincontrol.com');
-      } catch (err) {
-        if (err.code === 'auth/user-not-found') {
-          statusResponse = 'Se este e-mail estiver cadastrado, você receberá o link de recuperação em instantes.';
-        }
-      }
+      const reauthMock = vi.fn().mockImplementation(async (user, credential) => {
+        executionTrace.push('reauthenticate');
+        expect(credential).toBeDefined();
+      });
 
-      expect(mockSendReset).toHaveBeenCalledWith('inexistente@fincontrol.com');
-      expect(statusResponse).toContain('Se este e-mail estiver cadastrado');
-      expect(statusResponse).not.toContain('não encontrado');
-    });
-  });
+      const getIdTokenMock = vi.fn().mockImplementation(async (forceRefresh) => {
+        executionTrace.push('getIdToken');
+        expect(forceRefresh).toBe(true);
+        return 'fresh-refreshed-token';
+      });
 
-  describe('4. Destructive Account Deletion & Two-Step Recent Auth Contract', () => {
-    it('deve exigir texto de confirmação exato "EXCLUIR" no Step 1', () => {
-      const validateStep1 = (text) => text.trim().toUpperCase() === 'EXCLUIR';
-      expect(validateStep1('')).toBe(false);
-      expect(validateStep1('excluir')).toBe(true);
-      expect(validateStep1(' EXCLUIR ')).toBe(true);
-      expect(validateStep1('DELETE')).toBe(false);
-      expect(validateStep1('excluir conta')).toBe(false);
-    });
+      const deleteCallableMock = vi.fn().mockImplementation(async () => {
+        executionTrace.push('deleteCallable');
+        return { data: { success: true } };
+      });
 
-    it('deve falhar fechado (fail-closed) no Step 2 se a senha for vazia ou usuário ausente', async () => {
-      const deleteCallable = vi.fn();
-      const reauthenticate = vi.fn();
-
-      const attemptDeletion = async ({ user, password }) => {
-        if (!user || !user.email) throw new Error('Sessão inválida');
-        if (!password || !password.trim()) throw new Error('Senha obrigatória');
-        await reauthenticate();
-        await deleteCallable();
+      const currentUser = {
+        uid: 'user-lgpd-real-123',
+        email: 'cliente.real@fincontrol.com',
+        getIdToken: getIdTokenMock,
       };
 
-      // Sem usuário
-      await expect(attemptDeletion({ user: null, password: '123' })).rejects.toThrow('Sessão inválida');
-      expect(reauthenticate).not.toHaveBeenCalled();
-      expect(deleteCallable).not.toHaveBeenCalled();
+      const result = await executeAccountDeletion({
+        currentUser,
+        password: 'SenhaSegura123',
+        reauthenticateFn: reauthMock,
+        getCallableFn: async () => deleteCallableMock,
+      });
 
-      // Sem senha
-      await expect(attemptDeletion({ user: { email: 'test@fin.local' }, password: '' })).rejects.toThrow('Senha obrigatória');
-      expect(reauthenticate).not.toHaveBeenCalled();
-      expect(deleteCallable).not.toHaveBeenCalled();
-    });
-
-    it('deve interromper o fluxo e NÃO chamar deleteUserAccount se a reautenticação falhar com senha incorreta', async () => {
-      const reauthMock = vi.fn().mockRejectedValue({ code: 'auth/wrong-password' });
-      const deleteCallableMock = vi.fn();
-      let errorMessage = '';
-
-      try {
-        await reauthMock();
-        await deleteCallableMock();
-      } catch (err) {
-        if (err.code === 'auth/wrong-password') {
-          errorMessage = 'Senha incorreta. Tente novamente.';
-        }
-      }
-
+      expect(result.success).toBe(true);
+      expect(executionTrace).toEqual(['reauthenticate', 'getIdToken', 'deleteCallable']);
       expect(reauthMock).toHaveBeenCalledTimes(1);
-      expect(deleteCallableMock).not.toHaveBeenCalled();
-      expect(errorMessage).toBe('Senha incorreta. Tente novamente.');
+      expect(getIdTokenMock).toHaveBeenCalledWith(true);
+      expect(deleteCallableMock).toHaveBeenCalledTimes(1);
     });
 
-    it('deve forçar atualização do ID Token antes de invocar a callable após reautenticação com sucesso', async () => {
-      const reauthMock = vi.fn().mockResolvedValue(true);
-      const getIdTokenMock = vi.fn().mockResolvedValue('new-fresh-id-token');
-      const deleteCallableMock = vi.fn().mockResolvedValue({ data: { success: true } });
-      const logoutMock = vi.fn();
+    it('deve falhar fechado se currentUser for nulo (sem reauth e sem delete)', async () => {
+      const reauthMock = vi.fn();
+      const deleteCallableMock = vi.fn();
 
-      const user = {
+      await expect(
+        executeAccountDeletion({
+          currentUser: null,
+          password: 'SenhaSegura123',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toThrow('Sessão inválida. Faça login novamente para prosseguir.');
+
+      expect(reauthMock).not.toHaveBeenCalled();
+      expect(deleteCallableMock).not.toHaveBeenCalled();
+    });
+
+    it('deve falhar fechado se currentUser.email estiver ausente (sem reauth e sem delete)', async () => {
+      const reauthMock = vi.fn();
+      const deleteCallableMock = vi.fn();
+
+      await expect(
+        executeAccountDeletion({
+          currentUser: { uid: 'no-email-user', email: '' },
+          password: 'SenhaSegura123',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toThrow('Sessão inválida. Faça login novamente para prosseguir.');
+
+      expect(reauthMock).not.toHaveBeenCalled();
+      expect(deleteCallableMock).not.toHaveBeenCalled();
+    });
+
+    it('deve falhar fechado se senha for vazia ou somente espaços (sem reauth e sem delete)', async () => {
+      const reauthMock = vi.fn();
+      const deleteCallableMock = vi.fn();
+      const currentUser = { uid: 'user-1', email: 'user@fincontrol.com', getIdToken: vi.fn() };
+
+      await expect(
+        executeAccountDeletion({
+          currentUser,
+          password: '',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toThrow('Por favor, informe a sua senha atual.');
+
+      await expect(
+        executeAccountDeletion({
+          currentUser,
+          password: '    ',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toThrow('Por favor, informe a sua senha atual.');
+
+      expect(reauthMock).not.toHaveBeenCalled();
+      expect(deleteCallableMock).not.toHaveBeenCalled();
+    });
+
+    it('deve interromper o fluxo se a reautenticação falhar (sem renovação de token e sem delete)', async () => {
+      const reauthMock = vi.fn().mockRejectedValue({ code: 'auth/wrong-password' });
+      const getIdTokenMock = vi.fn();
+      const deleteCallableMock = vi.fn();
+
+      const currentUser = {
+        uid: 'user-fail-reauth',
         email: 'user@fincontrol.com',
         getIdToken: getIdTokenMock,
       };
 
-      // Sequência oficial:
-      await reauthMock();
-      await user.getIdToken(true); // Força refresh com auth_time recente
-      await deleteCallableMock();
-      logoutMock();
+      await expect(
+        executeAccountDeletion({
+          currentUser,
+          password: 'senha-errada',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toMatchObject({ code: 'auth/wrong-password' });
+
+      expect(reauthMock).toHaveBeenCalledTimes(1);
+      expect(getIdTokenMock).not.toHaveBeenCalled();
+      expect(deleteCallableMock).not.toHaveBeenCalled();
+    });
+
+    it('deve interromper o fluxo se a renovação de ID Token falhar (sem chamar delete)', async () => {
+      const reauthMock = vi.fn().mockResolvedValue(true);
+      const getIdTokenMock = vi.fn().mockRejectedValue(new Error('Falha de rede ao renovar token'));
+      const deleteCallableMock = vi.fn();
+
+      const currentUser = {
+        uid: 'user-fail-token',
+        email: 'user@fincontrol.com',
+        getIdToken: getIdTokenMock,
+      };
+
+      await expect(
+        executeAccountDeletion({
+          currentUser,
+          password: 'senhaCorreta123',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toThrow('Falha de rede ao renovar token');
+
+      expect(reauthMock).toHaveBeenCalledTimes(1);
+      expect(getIdTokenMock).toHaveBeenCalledWith(true);
+      expect(deleteCallableMock).not.toHaveBeenCalled();
+    });
+
+    it('deve propagar erro de forma controlada se a callable de exclusão falhar', async () => {
+      const reauthMock = vi.fn().mockResolvedValue(true);
+      const getIdTokenMock = vi.fn().mockResolvedValue('token-ok');
+      const deleteCallableMock = vi.fn().mockRejectedValue({
+        code: 'functions/internal',
+        message: 'Internal error in Cloud Function',
+      });
+
+      const currentUser = {
+        uid: 'user-callable-fail',
+        email: 'user@fincontrol.com',
+        getIdToken: getIdTokenMock,
+      };
+
+      await expect(
+        executeAccountDeletion({
+          currentUser,
+          password: 'senhaCorreta123',
+          reauthenticateFn: reauthMock,
+          getCallableFn: async () => deleteCallableMock,
+        })
+      ).rejects.toMatchObject({ code: 'functions/internal' });
 
       expect(reauthMock).toHaveBeenCalledTimes(1);
       expect(getIdTokenMock).toHaveBeenCalledWith(true);
       expect(deleteCallableMock).toHaveBeenCalledTimes(1);
-      expect(logoutMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('deve tratar defensivamente erro recent-auth-required do backend sem loops infinitos', async () => {
-      const serverError = {
-        code: 'functions/failed-precondition',
-        details: { reason: 'recent-auth-required' },
-      };
-
-      let userFeedback = '';
-      if (serverError.code === 'functions/failed-precondition' && serverError.details?.reason === 'recent-auth-required') {
-        userFeedback = 'Não foi possível atualizar sua autenticação. Entre novamente e tente de novo.';
-      }
-
-      expect(userFeedback).toBe('Não foi possível atualizar sua autenticação. Entre novamente e tente de novo.');
     });
   });
 

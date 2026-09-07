@@ -39,10 +39,16 @@ export default function EmailVerificationView({
             Confirme seu E-mail
           </h2>
           <p className="text-sm text-[var(--fc-text-secondary)] leading-relaxed">
-            Enviamos um link de confirmação para:{' '}
-            <strong className="text-[var(--fc-accent)] font-semibold block sm:inline break-all">
-              {email}
-            </strong>
+            {email ? (
+              <>
+                Enviamos um link de confirmação para:{' '}
+                <strong className="text-[var(--fc-accent)] font-semibold block sm:inline break-all">
+                  {email}
+                </strong>
+              </>
+            ) : (
+              'Enviamos um link de confirmação para o seu e-mail.'
+            )}
           </p>
           <p className="text-xs text-[var(--fc-text-muted)] leading-relaxed pt-1">
             Abra o e-mail e clique no link de ativação para liberar seu acesso ao FinControl.

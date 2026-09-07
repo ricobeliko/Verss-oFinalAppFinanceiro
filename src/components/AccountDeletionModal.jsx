@@ -1,10 +1,10 @@
 // src/components/AccountDeletionModal.jsx
 import React, { useState } from 'react';
-import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../design-system/primitives/Modal';
 import TextField from '../design-system/primitives/TextField';
 import Button from '../design-system/primitives/Button';
+import { executeAccountDeletion, mapAccountDeletionError } from '../features/auth/accountDeletionFlow';
 
 /**
  * Modal de Exclusão Definitiva de Conta (LGPD / Privacy).
@@ -28,14 +28,19 @@ export default function AccountDeletionModal({ isOpen, onClose }) {
 
   const isConfirmed = confirmationText.trim().toUpperCase() === 'EXCLUIR';
 
-  // Limpa estados e fecha
-  const handleClose = () => {
-    if (isProcessing) return;
+  // Limpa estados e fecha (sem guard de processamento, usado nos fluxos de sucesso)
+  const resetAndClose = () => {
     setStep(1);
     setConfirmationText('');
     setPassword('');
     setErrorMessage('');
     onClose();
+  };
+
+  // Tentativa manual do usuário de fechar durante o uso
+  const handleClose = () => {
+    if (isProcessing) return;
+    resetAndClose();
   };
 
   // Avança para a etapa 2 (Reauth)
@@ -88,49 +93,24 @@ export default function AccountDeletionModal({ isOpen, onClose }) {
         }
 
         showToast('Sua conta e todos os dados foram excluídos com sucesso.', 'success');
-        handleClose();
+        resetAndClose();
         logout();
         return;
       }
 
-      // 2. Reautenticação Real Firebase Auth
-      const credential = EmailAuthProvider.credential(currentUser.email, password);
-      await reauthenticateWithCredential(currentUser, credential);
-
-      // 3. Força atualização do ID Token (garante auth_time <= 300s no token para o backend)
-      await currentUser.getIdToken(true);
-
-      // 4. Invocação da Cloud Function autenticada
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const { app } = await import('../utils/firebase');
-      const functions = getFunctions(app, 'southamerica-east1');
-      const deleteAccountCallable = httpsCallable(functions, 'deleteUserAccount');
-
-      await deleteAccountCallable();
+      // 2. Orquestração Real de Exclusão com Recent Auth Gate
+      await executeAccountDeletion({ currentUser, password });
 
       showToast('Sua conta e todos os dados foram excluídos com sucesso.', 'success');
-      handleClose();
+      resetAndClose();
       logout();
     } catch (error) {
       console.error('[AccountDeletion] Falha na reautenticação ou exclusão:', error);
       setPassword(''); // Limpa a senha da memória por segurança
 
-      const errorCode = error?.code || '';
-      const reason = error?.details?.reason || '';
-
-      if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
-        setErrorMessage('Senha incorreta. Tente novamente.');
-      } else if (
-        errorCode === 'functions/failed-precondition' &&
-        reason === 'recent-auth-required'
-      ) {
-        setErrorMessage(
-          'Não foi possível atualizar sua autenticação. Entre novamente e tente de novo.'
-        );
-      } else {
-        setErrorMessage(
-          error.message || 'Falha ao processar exclusão de conta. Tente novamente.'
-        );
+      const message = mapAccountDeletionError(error);
+      setErrorMessage(message);
+      if (message === 'Não foi possível excluir sua conta. Tente novamente.') {
         showToast('Erro ao excluir conta.', 'error');
       }
     } finally {
