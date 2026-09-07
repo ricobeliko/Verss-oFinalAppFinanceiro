@@ -1,0 +1,57 @@
+/* src/design-system/motion.css */
+/* FinControl Design System 2.0 — Motion System Foundation */
+
+.fc-transition-fast {
+  transition: all var(--fc-motion-fast);
+}
+
+.fc-transition-normal {
+  transition: all var(--fc-motion-normal);
+}
+
+.fc-transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 200ms;
+}
+
+@keyframes fcFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fcScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.fc-animate-fade-in {
+  animation: fcFadeIn var(--fc-motion-normal) forwards;
+}
+
+.fc-animate-scale-up {
+  animation: fcScaleUp var(--fc-motion-normal) forwards;
+}
+
+/* Reduced Motion Safety */
+@media (prefers-reduced-motion: reduce) {
+  .fc-transition-fast,
+  .fc-transition-normal,
+  .fc-transition-colors,
+  .fc-animate-fade-in,
+  .fc-animate-scale-up {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

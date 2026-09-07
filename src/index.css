@@ -1,3 +1,6 @@
+@import './design-system/tokens.css';
+@import './design-system/motion.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

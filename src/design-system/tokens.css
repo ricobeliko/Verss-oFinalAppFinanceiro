@@ -1,0 +1,101 @@
+/* src/design-system/tokens.css */
+/* FinControl Design System 2.0 — Semantic Tokens Foundation */
+
+:root,
+[data-theme="dark"] {
+  /* =========================================================================
+     DARK PALETTE — Obsidian, Graphite & Champagne Gold (Canonical from Landing)
+     ========================================================================= */
+  --fc-bg: #0D0E11;
+  --fc-bg-subtle: #13151A;
+
+  --fc-surface-1: #1A1D24;
+  --fc-surface-2: #222630;
+  --fc-surface-3: #2A2F3D;
+
+  --fc-text-primary: #F9FAFB;
+  --fc-text-secondary: #9CA3AF;
+  --fc-text-muted: #6B7280;
+  --fc-text-inverse: #0D0E11;
+
+  --fc-border-subtle: rgba(255, 255, 255, 0.05);
+  --fc-border-default: rgba(255, 255, 255, 0.08);
+  --fc-border-strong: rgba(255, 255, 255, 0.15);
+
+  --fc-accent: #E5B842;
+  --fc-accent-hover: #F5D580;
+  --fc-accent-soft: rgba(229, 184, 66, 0.12);
+  --fc-accent-contrast: #0D0E11;
+
+  --fc-success: #34D399;
+  --fc-success-soft: rgba(52, 211, 153, 0.12);
+  --fc-warning: #FBBF24;
+  --fc-warning-soft: rgba(251, 191, 36, 0.12);
+  --fc-danger: #F87171;
+  --fc-danger-soft: rgba(248, 113, 113, 0.12);
+  --fc-info: #38BDF8;
+  --fc-info-soft: rgba(56, 189, 248, 0.12);
+
+  --fc-focus-ring: rgba(229, 184, 66, 0.50);
+
+  --fc-shadow-sm: 0 2px 8px -1px rgba(0, 0, 0, 0.40);
+  --fc-shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.60);
+  --fc-shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.80);
+  --fc-shadow-glow: 0 0 25px -5px rgba(229, 184, 66, 0.25);
+}
+
+[data-theme="light"] {
+  /* =========================================================================
+     LIGHT PALETTE — Warm Stone, Surface Depth & Deep Graphite Foundation
+     ========================================================================= */
+  --fc-bg: #F0EFEB;
+  --fc-bg-subtle: #EAE8E2;
+
+  --fc-surface-1: #FFFFFF;
+  --fc-surface-2: #F6F4EE;
+  --fc-surface-3: #ECE8DF;
+
+  --fc-text-primary: #121417;
+  --fc-text-secondary: #434A56;
+  --fc-text-muted: #5C6370;
+  --fc-text-inverse: #FFFFFF;
+
+  --fc-border-subtle: rgba(20, 24, 30, 0.08);
+  --fc-border-default: rgba(20, 24, 30, 0.13);
+  --fc-border-strong: rgba(20, 24, 30, 0.22);
+
+  --fc-accent: #8E5E00;
+  --fc-accent-hover: #784E00;
+  --fc-accent-soft: rgba(142, 94, 0, 0.10);
+  --fc-accent-contrast: #FFFFFF;
+
+  --fc-success: #065F46;
+  --fc-success-soft: rgba(6, 95, 70, 0.10);
+  --fc-warning: #9A3412;
+  --fc-warning-soft: rgba(154, 52, 18, 0.10);
+  --fc-danger: #B91C1C;
+  --fc-danger-soft: rgba(185, 28, 28, 0.10);
+  --fc-info: #0369A1;
+  --fc-info-soft: rgba(3, 105, 161, 0.10);
+
+  --fc-focus-ring: rgba(142, 94, 0, 0.40);
+
+  --fc-shadow-sm: 0 1px 3px 0 rgba(20, 24, 30, 0.06), 0 1px 2px -1px rgba(20, 24, 30, 0.06);
+  --fc-shadow-md: 0 6px 18px -3px rgba(20, 24, 30, 0.08), 0 2px 6px -2px rgba(20, 24, 30, 0.04);
+  --fc-shadow-lg: 0 18px 36px -8px rgba(20, 24, 30, 0.12), 0 4px 12px -3px rgba(20, 24, 30, 0.05);
+  --fc-shadow-glow: 0 0 20px -4px rgba(142, 94, 0, 0.20);
+}
+
+:root {
+  /* =========================================================================
+     RADII & MOTION (Harmonious across themes)
+     ========================================================================= */
+  --fc-radius-sm: 0.5rem;   /* 8px */
+  --fc-radius-md: 0.75rem;  /* 12px */
+  --fc-radius-lg: 1rem;     /* 16px */
+  --fc-radius-xl: 1.5rem;   /* 24px */
+
+  --fc-motion-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --fc-motion-normal: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  --fc-motion-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
