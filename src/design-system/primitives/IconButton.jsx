@@ -21,8 +21,8 @@ export default function IconButton({
   type = 'button',
   ...rest
 }) {
-  if (!ariaLabel) {
-    console.warn('[DS2 IconButton] `ariaLabel` is mandatory for accessible icon-only buttons.');
+  if (!ariaLabel || !ariaLabel.trim()) {
+    throw new Error('[DS2 IconButton] `ariaLabel` is mandatory and cannot be empty for accessible icon-only buttons.');
   }
 
   const baseStyles = 'min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-xl p-2.5 select-none cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--fc-bg)] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none motion-safe:active:scale-[0.95]';
@@ -41,7 +41,7 @@ export default function IconButton({
       type={type}
       disabled={disabled}
       aria-disabled={disabled ? 'true' : undefined}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel.trim()}
       className={`${baseStyles} ${selectedVariant} ${className}`}
       {...rest}
     >

@@ -31,7 +31,7 @@ export default function Button({
     primary: 'bg-gradient-to-r from-[var(--fc-accent)] to-[var(--fc-accent-hover)] text-[var(--fc-accent-contrast)] font-bold shadow-md hover:opacity-95',
     secondary: 'bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-3)] hover:border-[var(--fc-border-strong)] font-semibold',
     ghost: 'bg-transparent text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] font-medium',
-    danger: 'bg-[var(--fc-danger)] text-white hover:opacity-95 font-semibold shadow-md',
+    danger: 'bg-[var(--fc-danger)] text-[var(--fc-text-inverse)] hover:opacity-95 font-semibold shadow-md',
   };
 
   const sizeStyles = {
@@ -52,8 +52,11 @@ export default function Button({
       className={`${baseStyles} ${selectedVariant} ${selectedSize} ${className}`}
       {...rest}
     >
-      {isLoading ? (
-        <span className="inline-flex items-center justify-center gap-2">
+      {isLoading && (
+        <span
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          aria-hidden="true"
+        >
           <svg
             className="motion-safe:animate-spin h-4 w-4 text-current"
             xmlns="http://www.w3.org/2000/svg"
@@ -75,14 +78,13 @@ export default function Button({
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             />
           </svg>
-          <span>Carregando...</span>
         </span>
-      ) : (
-        <>
-          {icon && <span className="shrink-0 flex items-center justify-center" aria-hidden="true">{icon}</span>}
-          <span>{children}</span>
-        </>
       )}
+      <span className={`inline-flex items-center justify-center gap-[inherit] ${isLoading ? 'invisible' : ''}`}>
+        {icon && <span className="shrink-0 flex items-center justify-center" aria-hidden="true">{icon}</span>}
+        <span>{children}</span>
+      </span>
+      {isLoading && <span className="sr-only">Carregando...</span>}
     </button>
   );
 }

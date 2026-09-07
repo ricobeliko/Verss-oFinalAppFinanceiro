@@ -44,7 +44,7 @@ test.describe('E2E Real Browser — Design System 2.0 Lab (Stage A)', () => {
     await expect(page.locator('text=R$ 12.480,75')).toBeVisible();
     await expect(page.locator('text=-R$ 450,20')).toBeVisible();
 
-    // 6. Teste do Modal: Abertura, Trap de Foco e Fechamento com Escape
+    // 6. Teste do Modal: Abertura e fechamento via botão fechar (x)
     const openModalBtn = page.getByRole('button', { name: /Abrir Modal DS2/i });
     await expect(openModalBtn).toBeVisible();
     await openModalBtn.click();
@@ -54,16 +54,62 @@ test.describe('E2E Real Browser — Design System 2.0 Lab (Stage A)', () => {
     await expect(dialog).toHaveAttribute('aria-modal', 'true');
     await expect(page.locator('#fc-modal-title')).toContainText('Demonstração do Modal DS2');
 
-    // Pressiona Escape para fechar
-    await page.keyboard.press('Escape');
-    await expect(dialog).toHaveCount(0);
-
-    // Reabre e fecha pelo botão de fechar (x)
-    await openModalBtn.click();
-    await expect(dialog).toBeVisible();
     const closeBtn = dialog.getByRole('button', { name: 'Fechar modal' });
     await closeBtn.click();
     await expect(dialog).toHaveCount(0);
+  });
+
+  test('Modal DS2: valida foco real, trap de foco circular, Escape e restore focus', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/design-system-lab');
+
+    // 1. localizar botão "Abrir Modal DS2"
+    const openModalBtn = page.getByRole('button', { name: 'Abrir Modal DS2' });
+    await expect(openModalBtn).toBeVisible();
+
+    // 2. focar/clicar
+    await openModalBtn.focus();
+    await expect(openModalBtn).toBeFocused();
+    await openModalBtn.click();
+
+    // 3. confirmar dialog visível
+    const dialog = page.locator('div[role="dialog"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    // 4. após abertura confirmar que foco está dentro do dialog
+    await expect.poll(async () => {
+      return await page.evaluate(() => {
+        const d = document.querySelector('div[role="dialog"]');
+        return d && d.contains(document.activeElement);
+      });
+    }).toBe(true);
+
+    // 5. identificar primeiro e último elemento focável do dialog
+    const firstFocusable = dialog.getByRole('button', { name: 'Fechar modal' });
+    const lastFocusable = dialog.getByRole('button', { name: 'Confirmar Operação' });
+    await expect(firstFocusable).toBeVisible();
+    await expect(lastFocusable).toBeVisible();
+
+    // 6. validar wrap de foco:
+    // - estando no primeiro: Shift+Tab → foco vai para último
+    await firstFocusable.focus();
+    await expect(firstFocusable).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(lastFocusable).toBeFocused();
+
+    // - estando no último: Tab → foco volta para primeiro
+    await page.keyboard.press('Tab');
+    await expect(firstFocusable).toBeFocused();
+
+    // 7. pressionar Escape
+    await page.keyboard.press('Escape');
+
+    // 8. dialog desaparece
+    await expect(dialog).toHaveCount(0);
+
+    // 9. foco retorna ao botão "Abrir Modal DS2"
+    await expect(openModalBtn).toBeFocused();
   });
 
   test('Mobile (390x844): renderiza lab, valida touch targets e sem overflow horizontal', async ({ page }) => {

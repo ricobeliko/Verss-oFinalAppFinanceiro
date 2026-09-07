@@ -1,5 +1,5 @@
 // tests/designSystemPrimitives.test.jsx
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 
@@ -24,15 +24,20 @@ describe('FinControl — Design System 2.0 Primitives (Fase 8.5 — Stage A)', (
       expect(html).not.toContain('aria-busy');
     });
 
-    it('deve lidar com estado isLoading com aria-busy="true", spinner acessível e desabilitação', () => {
+    it('deve lidar com estado isLoading preservando footprint estrutural com spinner em overlay e aria-busy="true"', () => {
       const html = renderToString(
-        React.createElement(Button, { isLoading: true }, 'Confirmar')
+        React.createElement(Button, { isLoading: true }, 'Confirmar Transação')
       );
       expect(html).toContain('aria-busy="true"');
       expect(html).toContain('disabled');
       expect(html).toContain('aria-hidden="true"');
       expect(html).toContain('animate-spin');
+      expect(html).toContain('absolute inset-0');
+      // Conteúdo original continua presente no DOM (invisible preserva footprint de largura)
+      expect(html).toContain('Confirmar Transação');
+      expect(html).toContain('invisible');
       expect(html).toContain('Carregando...');
+      expect(html).toContain('sr-only');
     });
 
     it('deve lidar com estado disabled real e atributos coerentes', () => {
@@ -45,14 +50,43 @@ describe('FinControl — Design System 2.0 Primitives (Fase 8.5 — Stage A)', (
       expect(html).toContain('cursor-not-allowed');
     });
 
-    it('deve renderizar variantes secondary, ghost e danger corretamente', () => {
+    it('deve renderizar variantes secondary, ghost e danger com tokens semânticos corretos', () => {
       const secHtml = renderToString(React.createElement(Button, { variant: 'secondary' }, 'Secundário'));
       const ghostHtml = renderToString(React.createElement(Button, { variant: 'ghost' }, 'Fantasma'));
       const dangerHtml = renderToString(React.createElement(Button, { variant: 'danger' }, 'Excluir'));
 
       expect(secHtml).toContain('border-[var(--fc-border-default)]');
       expect(ghostHtml).toContain('bg-transparent');
+      // Button danger usa token semântico text-inverse e NUNCA text-white
       expect(dangerHtml).toContain('bg-[var(--fc-danger)]');
+      expect(dangerHtml).toContain('text-[var(--fc-text-inverse)]');
+      expect(dangerHtml).not.toContain('text-white');
+    });
+
+    it('deve garantir matematicamente contraste do Button danger >= 4.5:1 nos temas Dark e Light', () => {
+      const getLuminance = (hex) => {
+        const rgb = hex.replace('#', '').match(/.{2}/g).map(x => {
+          const c = parseInt(x, 16) / 255;
+          return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+      };
+
+      const getContrast = (hex1, hex2) => {
+        const l1 = getLuminance(hex1);
+        const l2 = getLuminance(hex2);
+        const lighter = Math.max(l1, l2);
+        const darker = Math.min(l1, l2);
+        return (lighter + 0.05) / (darker + 0.05);
+      };
+
+      // DARK: text-inverse (#0D0E11) sobre danger (#F87171)
+      const darkDangerContrast = getContrast('#0D0E11', '#F87171');
+      expect(darkDangerContrast).toBeGreaterThanOrEqual(4.5);
+
+      // LIGHT: text-inverse (#FFFFFF) sobre danger (#B91C1C)
+      const lightDangerContrast = getContrast('#FFFFFF', '#B91C1C');
+      expect(lightDangerContrast).toBeGreaterThanOrEqual(4.5);
     });
   });
 
@@ -69,6 +103,25 @@ describe('FinControl — Design System 2.0 Primitives (Fase 8.5 — Stage A)', (
       expect(html).toContain('min-w-[44px]');
       expect(html).toContain('min-h-[44px]');
       expect(html).toContain('mock-icon');
+    });
+
+    it('deve lançar erro de contrato quando ariaLabel estiver ausente, vazio ou whitespace (fail-closed)', () => {
+      const MockIcon = () => React.createElement('svg', { 'data-testid': 'mock-icon' });
+
+      // Sem prop ariaLabel
+      expect(() => {
+        renderToString(React.createElement(IconButton, { icon: React.createElement(MockIcon) }));
+      }).toThrowError(/\[DS2 IconButton\] `ariaLabel` is mandatory/);
+
+      // ariaLabel vazio
+      expect(() => {
+        renderToString(React.createElement(IconButton, { ariaLabel: '', icon: React.createElement(MockIcon) }));
+      }).toThrowError(/\[DS2 IconButton\] `ariaLabel` is mandatory/);
+
+      // ariaLabel apenas com espaços
+      expect(() => {
+        renderToString(React.createElement(IconButton, { ariaLabel: '   ', icon: React.createElement(MockIcon) }));
+      }).toThrowError(/\[DS2 IconButton\] `ariaLabel` is mandatory/);
     });
 
     it('deve lidar com estado desabilitado', () => {
@@ -226,60 +279,6 @@ describe('FinControl — Design System 2.0 Primitives (Fase 8.5 — Stage A)', (
       expect(html).toContain('aria-label="Fechar modal"');
       expect(html).toContain('min-w-[44px]');
       expect(html).toContain('min-h-[44px]');
-    });
-
-    describe('Interação com Teclado e Restauração de Foco', () => {
-      let eventListeners = {};
-
-      beforeEach(() => {
-        eventListeners = {};
-        globalThis.document = {
-          activeElement: null,
-          addEventListener: (type, listener) => {
-            eventListeners[type] = eventListeners[type] || [];
-            eventListeners[type].push(listener);
-          },
-          removeEventListener: (type, listener) => {
-            if (eventListeners[type]) {
-              eventListeners[type] = eventListeners[type].filter(l => l !== listener);
-            }
-          }
-        };
-      });
-
-      it('deve registrar handler de tecla Escape e chamar onClose ao pressionar Escape', () => {
-        const handleClose = vi.fn();
-        const handleKeyDown = (e) => {
-          if (e.key === 'Escape') {
-            handleClose();
-          }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        expect(eventListeners['keydown'].length).toBe(1);
-
-        eventListeners['keydown'][0]({ key: 'Escape', preventDefault: () => {} });
-        expect(handleClose).toHaveBeenCalledTimes(1);
-
-        document.removeEventListener('keydown', handleKeyDown);
-        expect(eventListeners['keydown'].length).toBe(0);
-      });
-
-      it('deve salvar o elemento ativo antes da abertura e restaurar o foco no fechamento', () => {
-        const triggerElement = {
-          id: 'btn-open-ds-modal',
-          focus: vi.fn()
-        };
-
-        let previousActiveElement = triggerElement;
-
-        // Ao fechar:
-        if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
-          previousActiveElement.focus();
-        }
-
-        expect(triggerElement.focus).toHaveBeenCalledTimes(1);
-      });
     });
   });
 
