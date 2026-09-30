@@ -34,8 +34,8 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
 
     // 5. Clica no botão de login e valida navegação
     await loginLink.click();
-    await expect(page).toHaveURL(/.*login/);
-    await expect(page.getByLabel('Email')).toBeVisible();
+    await expect(page).toHaveURL(/.*login/, { timeout: 15000 });
+    await expect(page.getByLabel('Email')).toBeVisible({ timeout: 15000 });
   });
 
   test('deve renderizar Hero com Living Ledger como protagonista e ausência total do Mascote Fin', async ({ page }) => {

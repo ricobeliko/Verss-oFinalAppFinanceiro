@@ -67,9 +67,9 @@ export function AppProvider({ children }) {
                 plan: 'vip_trial',
                 updatedAt: serverTimestamp(),
             });
-            showToast('Período de teste VIP ativado com sucesso! Aproveite 30 dias de acesso.', 'success');
+            showToast('Teste Pro ativado com sucesso! Aproveite 30 dias de acesso aos recursos Pro.', 'success');
         } catch (error) {
-            console.error('Erro ao ativar período de teste VIP:', error);
+            console.error('Erro ao ativar teste Pro:', error);
             showToast('Não foi possível ativar o período de teste. Tente novamente mais tarde.', 'error');
         }
     }, [currentUser, userProfile, showToast]);

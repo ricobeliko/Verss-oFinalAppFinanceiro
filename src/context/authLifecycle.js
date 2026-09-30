@@ -41,6 +41,7 @@ export function setupAuthLifecycle({
             name: e2eSession.name || 'Usuário E2E',
             email: e2eSession.email || 'e2e-user@test.local',
             plan: e2eSession.plan || 'pro',
+            trialExpiresAt: e2eSession.trialExpiresAt !== undefined ? e2eSession.trialExpiresAt : null,
             budgets: e2eSession.budgets || { Alimentação: 1500, Transporte: 500 },
             notificationSettings: e2eSession.notificationSettings || { cardDueEnabled: true, cardDueDays: 3, receivablesEnabled: true },
             aiPreferences: e2eSession.aiPreferences || { optIn: false },

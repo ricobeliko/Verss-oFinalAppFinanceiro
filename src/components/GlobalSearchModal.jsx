@@ -68,10 +68,10 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
             aria-modal="true"
             aria-label="Busca global de lançamentos"
         >
-            <div className="bg-carbon-900 border border-carbon-700 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] w-full max-w-2xl rounded-3xl shadow-[var(--fc-shadow-lg)] overflow-hidden flex flex-col max-h-[80vh]">
                 {/* Search Bar Input */}
-                <div className="p-4 sm:p-5 border-b border-carbon-800 flex items-center gap-3 bg-carbon-800/40">
-                    <span className="text-xl text-gold" aria-hidden="true">🔎</span>
+                <div className="p-4 sm:p-5 border-b border-[var(--fc-border-subtle)] flex items-center gap-3 bg-[var(--fc-surface-2)]">
+                    <span className="text-xl text-[var(--fc-accent)]" aria-hidden="true">🔎</span>
                     <input
                         ref={inputRef}
                         type="text"
@@ -79,13 +79,13 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Buscar compra, pessoa, assinatura, despesa..."
                         aria-label="Termo de busca"
-                        className="w-full bg-transparent text-gold-cream placeholder-gray-500 text-base sm:text-lg font-medium focus:outline-none"
+                        className="w-full bg-transparent text-[var(--fc-text-primary)] placeholder-[var(--fc-text-muted)] text-base sm:text-lg font-medium focus:outline-none"
                     />
                     {searchTerm && (
                         <button
                             type="button"
                             onClick={() => setSearchTerm('')}
-                            className="text-xs text-gray-400 hover:text-gold transition p-1 focus:outline-none focus:ring-1 focus:ring-gold/50"
+                            className="text-xs text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)] transition p-1 focus:outline-none focus:ring-1 focus:ring-[var(--fc-focus-ring)]"
                             aria-label="Limpar busca"
                         >
                             <span aria-hidden="true">✕</span>
@@ -95,7 +95,7 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
                         type="button"
                         onClick={onClose}
                         aria-label="Fechar busca global"
-                        className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-carbon-800 text-gray-300 border border-carbon-700 hover:text-white transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/50"
+                        className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-[var(--fc-surface-3)] text-[var(--fc-text-secondary)] border border-[var(--fc-border-subtle)] hover:text-[var(--fc-text-primary)] transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                     >
                         ESC
                     </button>
@@ -104,30 +104,30 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
                 {/* Resultados */}
                 <div className="overflow-y-auto p-4 sm:p-6 space-y-6">
                     {!searchTerm.trim() ? (
-                        <div className="text-center py-12 text-gray-500 text-sm space-y-2">
+                        <div className="text-center py-12 text-[var(--fc-text-muted)] text-sm space-y-2">
                             <p>Digite para buscar em compras, despesas, assinaturas e pessoas.</p>
-                            <p className="text-xs text-gray-600">Dica: Ignora acentos e maiúsculas (ex: "farmacia", "joao").</p>
+                            <p className="text-xs text-[var(--fc-text-muted)] opacity-80">Dica: Ignora acentos e maiúsculas (ex: "farmacia", "joao").</p>
                         </div>
                     ) : totalMatches === 0 ? (
-                        <div className="text-center py-12 text-gray-400 text-sm">
-                            Nenhum resultado encontrado para <span className="text-gold font-semibold">"{searchTerm}"</span>.
+                        <div className="text-center py-12 text-[var(--fc-text-muted)] text-sm">
+                            Nenhum resultado encontrado para <span className="text-[var(--fc-accent)] font-semibold">"{searchTerm}"</span>.
                         </div>
                     ) : (
                         sections.map(section => (
                             <div key={section.key} className="space-y-2">
-                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gold">
+                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--fc-accent)]">
                                     <span>{section.icon}</span>
                                     <span>{section.label} ({section.items.length})</span>
                                 </div>
-                                <div className="divide-y divide-carbon-800 bg-carbon-800/40 border border-carbon-800 rounded-2xl overflow-hidden">
+                                <div className="divide-y divide-[var(--fc-border-subtle)] bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-2xl overflow-hidden">
                                     {section.items.map(item => (
-                                        <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-carbon-800/80 transition">
+                                        <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-[var(--fc-surface-3)] transition">
                                             <div className="pr-3 truncate">
-                                                <p className="text-sm font-semibold text-gold-cream truncate">{item.title}</p>
-                                                <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
+                                                <p className="text-sm font-semibold text-[var(--fc-text-primary)] truncate">{item.title}</p>
+                                                <p className="text-xs text-[var(--fc-text-secondary)] truncate">{item.subtitle}</p>
                                             </div>
                                             {item.value !== null && item.value !== undefined && (
-                                                <span className="text-sm font-mono font-bold text-gold-cream whitespace-nowrap">
+                                                <span className="text-sm font-mono font-bold text-[var(--fc-accent)] whitespace-nowrap">
                                                     {formatCurrencyDisplay(item.value)}
                                                 </span>
                                             )}

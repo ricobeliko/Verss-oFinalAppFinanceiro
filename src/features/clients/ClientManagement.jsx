@@ -3,9 +3,11 @@ import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestor
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import FinancialReportModal from './FinancialReportModal';
+import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { calculateConsolidatedClientReceivables } from '../../services/financialService';
+import { canAddPerson } from '../../config/planEntitlements';
 import { useClients } from '../../hooks/useClients';
 import { useLoans } from '../../hooks/useLoans';
 import { useExpenses } from '../../hooks/useExpenses';
@@ -18,7 +20,7 @@ const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height
 
 // --- Componente Principal ---
 export default function ClientManagement() {
-    const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
+    const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const { clients } = useClients();
     const { loans: allLoans } = useLoans();
     const { expenses: allExpenses } = useExpenses();
@@ -40,6 +42,7 @@ export default function ClientManagement() {
     // --- Estados para o formulário de ADIÇÃO ---
     const [newClientName, setNewClientName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
     // --- Estados para o modal de EDIÇÃO ---
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -58,6 +61,14 @@ export default function ClientManagement() {
         e.preventDefault();
         if (isSubmitting) return;
 
+        // Validação canônica do limite do plano Free
+        const check = canAddPerson({ isPro, isTrialActive, peopleCount: clients.length });
+        if (!check.allowed) {
+            showToast(check.message, 'warning');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (!newClientName.trim()) {
             showToast('O nome da pessoa não pode estar vazio.', 'error');
             return;
@@ -66,6 +77,15 @@ export default function ClientManagement() {
         setIsSubmitting(true);
         try {
             if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+                const currentMockCount = (window.__FINCONTROL_E2E_MOCK_DATA__.clients || []).length;
+                const mockCheck = canAddPerson({ isPro, isTrialActive, peopleCount: currentMockCount });
+                if (!mockCheck.allowed) {
+                    showToast(mockCheck.message, 'warning');
+                    setIsUpgradeModalOpen(true);
+                    setIsSubmitting(false);
+                    return;
+                }
+
                 const newClient = { id: `client-e2e-${Date.now()}`, name: newClientName.trim(), userId };
                 window.__FINCONTROL_E2E_MOCK_DATA__.clients = [...(window.__FINCONTROL_E2E_MOCK_DATA__.clients || []), newClient];
                 showToast('Pessoa adicionada com sucesso!', 'success');
@@ -81,7 +101,7 @@ export default function ClientManagement() {
             setNewClientName('');
         } catch (error) {
             console.error("Erro ao adicionar pessoa:", error);
-            showToast(`Erro ao salvar pessoa: ${error.message}`, 'error');
+            showToast('Não foi possível salvar a pessoa. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -114,7 +134,7 @@ export default function ClientManagement() {
             handleCloseEditModal();
         } catch (error) {
             console.error("Erro ao atualizar pessoa:", error);
-            showToast(`Erro ao atualizar pessoa: ${error.message}`, 'error');
+            showToast('Não foi possível atualizar a pessoa. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -138,7 +158,7 @@ export default function ClientManagement() {
             setClientToDelete(null);
         } catch (error) {
             console.error("Erro ao excluir pessoa:", error);
-            showToast(`Erro ao excluir pessoa: ${error.message}`, 'error');
+            showToast('Não foi possível excluir a pessoa. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -151,16 +171,17 @@ export default function ClientManagement() {
 
     return (
         <div className="space-y-8 animate-fadeIn">
-            {/* Header Carbono & Dourado */}
-            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+            {/* Header DS2 */}
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Pessoas</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione e gerencie as pessoas associadas aos seus lançamentos e faturas compartilhadas.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Pessoas</h1>
+                    <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione e gerencie as pessoas associadas aos seus lançamentos e faturas compartilhadas.</p>
                 </div>
 
                 {/* Formulário de Adição */}
                 <form onSubmit={handleAddClient} className="flex items-stretch gap-4 pt-2">
                     <input
+                        id="clientName"
                         type="text"
                         value={newClientName}
                         onChange={(e) => setNewClientName(e.target.value)}
@@ -173,7 +194,7 @@ export default function ClientManagement() {
                         type="submit" 
                         disabled={isSubmitting}
                         aria-label="Adicionar pessoa"
-                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gold/50"
+                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg hover:opacity-90 transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
                     >
                         {isSubmitting ? <Spinner /> : <PlusIcon />}
                         <span className="hidden sm:inline">{isSubmitting ? 'Salvando...' : 'Adicionar Pessoa'}</span>
@@ -182,40 +203,40 @@ export default function ClientManagement() {
             </div>
 
             {/* Central Consolidada de Repasses de Terceiros */}
-            <div className="bg-gradient-to-br from-carbon-900 via-carbon-900 to-carbon-800 border border-carbon-700 p-6 rounded-3xl shadow-2xl space-y-4">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-2.5">
                     <span className="text-xl" aria-hidden="true">👥</span>
-                    <h2 className="text-base font-bold text-gold-cream tracking-tight">
+                    <h2 className="text-base font-bold text-[var(--fc-text-primary)] tracking-tight">
                         Central de Repasses de Terceiros ({new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })})
                     </h2>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-carbon-800/70 border border-carbon-700 p-4 rounded-2xl">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-1">A Receber Este Mês</span>
-                        <span className="text-xl font-black text-gold font-mono">{formatCurrencyDisplay(receivablesData.totalReceivableThisMonth)}</span>
+                    <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-4 rounded-2xl">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] block mb-1">A Receber Este Mês</span>
+                        <span className="text-xl font-black text-[var(--fc-accent)] font-mono">{formatCurrencyDisplay(receivablesData.totalReceivableThisMonth)}</span>
                     </div>
-                    <div className="bg-carbon-800/70 border border-carbon-700 p-4 rounded-2xl">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-1">Já Recebido</span>
-                        <span className="text-xl font-black text-emerald-400 font-mono">{formatCurrencyDisplay(receivablesData.totalPaidThisMonth)}</span>
+                    <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-4 rounded-2xl">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] block mb-1">Já Recebido</span>
+                        <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">{formatCurrencyDisplay(receivablesData.totalPaidThisMonth)}</span>
                     </div>
-                    <div className="bg-carbon-800/70 border border-carbon-700 p-4 rounded-2xl">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-1">Pendente de Repasse</span>
-                        <span className="text-xl font-black text-amber-300 font-mono">{formatCurrencyDisplay(receivablesData.totalPendingThisMonth)}</span>
+                    <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-4 rounded-2xl">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] block mb-1">Pendente de Repasse</span>
+                        <span className="text-xl font-black text-amber-600 dark:text-amber-300 font-mono">{formatCurrencyDisplay(receivablesData.totalPendingThisMonth)}</span>
                     </div>
-                    <div className="bg-carbon-800/70 border border-carbon-700 p-4 rounded-2xl">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-1">Saldo Futuro Total</span>
-                        <span className="text-xl font-black text-gray-200 font-mono">{formatCurrencyDisplay(receivablesData.totalFutureReceivables)}</span>
+                    <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-4 rounded-2xl">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] block mb-1">Saldo Futuro Total</span>
+                        <span className="text-xl font-black text-[var(--fc-text-primary)] font-mono">{formatCurrencyDisplay(receivablesData.totalFutureReceivables)}</span>
                     </div>
                 </div>
             </div>
 
             {/* Tabela de Pessoas com Detalhamento de Repasses */}
-            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>
-                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                            <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
                                 <th scope="col" className="px-6 py-4 text-left">Nome</th>
                                 <th scope="col" className="px-6 py-4 text-left">A Receber no Mês</th>
                                 <th scope="col" className="px-6 py-4 text-left">Status do Repasse</th>
@@ -223,7 +244,7 @@ export default function ClientManagement() {
                                 <th scope="col" className="px-6 py-4 text-right">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-carbon-800 text-sm">
+                        <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
                             {clients.length > 0 ? clients.map((client) => {
                                 const clientRec = receivablesData.byClient.find(c => c.clientId === client.id) || {
                                     receivableThisMonth: 0,
@@ -234,27 +255,27 @@ export default function ClientManagement() {
                                 };
 
                                 return (
-                                    <tr key={client.id} className="hover:bg-carbon-800/40 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream">
+                                    <tr key={client.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--fc-text-primary)]">
                                             {client.name}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-mono text-gray-200">
+                                        <td className="px-6 py-4 whitespace-nowrap font-mono text-[var(--fc-text-primary)]">
                                             {formatCurrencyDisplay(clientRec.receivableThisMonth)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {clientRec.receivableThisMonth === 0 ? (
-                                                <span className="text-xs text-gray-500 font-medium">Sem faturas neste mês</span>
+                                                <span className="text-xs text-[var(--fc-text-muted)] font-medium">Sem faturas neste mês</span>
                                             ) : clientRec.hasPending ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/20">
                                                     <span>⏳</span> Pendente: {formatCurrencyDisplay(clientRec.pendingThisMonth)}
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                                     <span>✓</span> Quitado no Mês
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-mono text-gray-400 text-xs">
+                                        <td className="px-6 py-4 whitespace-nowrap font-mono text-[var(--fc-text-muted)] text-xs">
                                             {formatCurrencyDisplay(clientRec.totalFutureRemaining)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap font-medium text-right">
@@ -263,7 +284,7 @@ export default function ClientManagement() {
                                                     type="button"
                                                     onClick={() => handleOpenEditModal(client)} 
                                                     aria-label={`Editar pessoa ${client.name || ''}`.trim()}
-                                                    className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer" 
                                                     title="Editar"
                                                 >
                                                     <EditIcon />
@@ -272,7 +293,7 @@ export default function ClientManagement() {
                                                     type="button"
                                                     onClick={() => confirmDeleteClient(client)} 
                                                     aria-label={`Excluir pessoa ${client.name || ''}`.trim()}
-                                                    className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                                    className="text-rose-500 hover:text-rose-400 transition cursor-pointer" 
                                                     title="Excluir"
                                                 >
                                                     <DeleteIcon />
@@ -280,7 +301,7 @@ export default function ClientManagement() {
                                                 <button 
                                                     onClick={() => handleReport(client)} 
                                                     aria-label={`Ver extrato e PDF de ${client.name || ''}`.trim()}
-                                                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-semibold py-1.5 px-3.5 rounded-xl transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs font-semibold py-1.5 px-3.5 rounded-xl transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                                                 >
                                                     Extrato / PDF
                                                 </button>
@@ -290,7 +311,7 @@ export default function ClientManagement() {
                                 );
                             }) : (
                                 <tr>
-                                    <td colSpan="5" className="text-center py-12 text-gray-500">
+                                    <td colSpan="5" className="text-center py-12 text-[var(--fc-text-muted)]">
                                         Nenhuma pessoa cadastrada ainda.
                                     </td>
                                 </tr>
@@ -301,16 +322,16 @@ export default function ClientManagement() {
             </div>
 
             {/* Modal de Edição */}
-            <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title="Editar Pessoa" theme="dark" maxWidth="max-w-md">
+            <GenericModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} title="Editar Pessoa" maxWidth="max-w-md">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="clientName" className="block text-sm font-medium text-gray-300 mb-1">Nome da Pessoa</label>
+                        <label htmlFor="clientName" className="block text-sm font-bold text-[var(--fc-text-secondary)] mb-1">Nome da Pessoa</label>
                         <input type="text" id="clientName" value={editingClientName} onChange={(e) => setEditingClientName(e.target.value)} placeholder="Ex: João Silva" />
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseEditModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50">
+                    <button onClick={handleCloseEditModal} className="py-2.5 px-5 bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] rounded-2xl text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] transition cursor-pointer font-medium">Cancelar</button>
+                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg disabled:opacity-50">
                         {isSubmitting ? 'Salvando...' : 'Salvar'}
                     </button>
                 </div>
@@ -323,11 +344,10 @@ export default function ClientManagement() {
                 onConfirm={handleDeleteClientConfirmed}
                 title="Confirmar Exclusão de Pessoa"
                 isConfirmation={true}
-                theme="dark"
             >
                 <div className="space-y-3">
-                    <p className="text-sm text-gray-300">
-                        Tem certeza que deseja deletar a pessoa <strong className="text-gold">{clientToDelete?.name}</strong>?
+                    <p className="text-sm text-[var(--fc-text-primary)]">
+                        Tem certeza que deseja deletar a pessoa <strong className="text-[var(--fc-accent)]">{clientToDelete?.name}</strong>?
                     </p>
                     {(() => {
                         if (!clientToDelete) return null;
@@ -341,9 +361,9 @@ export default function ClientManagement() {
 
                         if (linkedLoans > 0 || linkedExpenses > 0 || linkedSubs > 0) {
                             return (
-                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 space-y-1">
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-600 dark:text-amber-300 space-y-1">
                                     <p className="font-bold flex items-center gap-1.5">⚠️ Registros Financeiros Vinculados:</p>
-                                    <p className="text-gray-300">
+                                    <p className="text-[var(--fc-text-secondary)]">
                                         Esta pessoa possui {linkedLoans > 0 ? `${linkedLoans} compra(s)` : ''}{linkedLoans > 0 && linkedExpenses > 0 ? ', ' : ''}{linkedExpenses > 0 ? `${linkedExpenses} despesa(s)` : ''}{linkedSubs > 0 ? ` e ${linkedSubs} assinatura(s)` : ''} associadas.
                                     </p>
                                 </div>
@@ -360,6 +380,18 @@ export default function ClientManagement() {
                 onClose={() => setIsReportModalOpen(false)}
                 client={reportClient}
             />
+
+            {/* Modal de Upgrade Pro (Disparado ao atingir o limite de 3 pessoas do Free) */}
+            <GenericModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                maxWidth="max-w-lg"
+            >
+                <UpgradePrompt 
+                    onUpgradeClick={handleUpgradeClick}
+                    onActivateTrial={activateFreeTrial}
+                />
+            </GenericModal>
         </div>
     );
 }

@@ -279,28 +279,28 @@ export default function PdfImportModal({
 
     return (
         <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fadeIn"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fadeIn"
             role="dialog"
             aria-modal="true"
             aria-labelledby="pdf-import-modal-title"
         >
-            <div className="bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] text-[var(--fc-text-primary)]">
                 
                 {/* Header */}
-                <div className="p-6 border-b border-[#2A2A2A] flex justify-between items-center bg-[#1A1A1A]">
+                <div className="p-6 border-b border-[var(--fc-border-subtle)] flex justify-between items-center bg-[var(--fc-surface-2)]">
                     <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-[#F2B705]/10 text-[#F2B705] border border-[#F2B705]/20 rounded-2xl" aria-hidden="true">
+                        <div className="p-2.5 bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-border-default)] rounded-2xl" aria-hidden="true">
                             <SparklesIcon />
                         </div>
                         <div>
-                            <h2 id="pdf-import-modal-title" className="text-xl font-bold text-[#FFF3D6] tracking-tight">Importação Inteligente de Fatura PDF</h2>
-                            <p className="text-xs text-gray-400 mt-0.5">Lê Nubank, Itaú, Inter, Bradesco, Santander e outros bancos com motor anti-duplicidade.</p>
+                            <h2 id="pdf-import-modal-title" className="text-xl font-bold text-[var(--fc-text-primary)] tracking-tight">Importação Inteligente de Fatura PDF</h2>
+                            <p className="text-xs text-[var(--fc-text-muted)] mt-0.5">Lê Nubank, Itaú, Inter, Bradesco, Santander e outros bancos com motor anti-duplicidade.</p>
                         </div>
                     </div>
                     <button 
                         onClick={onClose} 
                         aria-label="Fechar modal de importação PDF"
-                        className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold/50"
+                        className="w-8 h-8 rounded-full bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] flex items-center justify-center transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
                     >
                         <span aria-hidden="true">✕</span>
                     </button>
@@ -309,17 +309,17 @@ export default function PdfImportModal({
                 {/* Conteúdo Principal */}
                 <div className="p-6 overflow-y-auto space-y-6 flex-1">
                     {!file ? (
-                        <div className="border-2 border-dashed border-[#3A3A3A] hover:border-[#F2B705]/60 rounded-3xl p-10 text-center transition flex flex-col items-center justify-center space-y-4 bg-[#1A1A1A]/40">
-                            <div className="p-5 bg-[#F2B705]/10 text-[#F2B705] rounded-2xl border border-[#F2B705]/20 shadow-lg shadow-[#F2B705]/5">
+                        <div className="border-2 border-dashed border-[var(--fc-border-default)] hover:border-[var(--fc-accent)]/60 rounded-3xl p-10 text-center transition flex flex-col items-center justify-center space-y-4 bg-[var(--fc-surface-2)]/40">
+                            <div className="p-5 bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] rounded-2xl border border-[var(--fc-border-default)] shadow-lg shadow-black/5">
                                 <UploadIcon />
                             </div>
                             <div className="max-w-md">
-                                <p className="text-base font-bold text-[#FFF3D6]">Arraste ou selecione o PDF da sua fatura</p>
-                                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                                <p className="text-base font-bold text-[var(--fc-text-primary)]">Arraste ou selecione o PDF da sua fatura</p>
+                                <p className="text-xs text-[var(--fc-text-muted)] mt-1.5 leading-relaxed">
                                     O leitor identifica automaticamente compras à vista, parcelamentos (ex: 02/10), datas, valores e detecta compras já cadastradas no seu cartão.
                                 </p>
                             </div>
-                            <label className="bg-gradient-to-r from-[#FFF3D6] to-[#F2B705] text-[#141414] font-extrabold py-3 px-7 rounded-2xl shadow-lg shadow-[#F2B705]/20 cursor-pointer hover:opacity-90 text-xs transition uppercase tracking-wider">
+                            <label className="bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3 px-7 rounded-2xl shadow-lg cursor-pointer hover:opacity-90 text-xs transition uppercase tracking-wider">
                                 Escolher Arquivo PDF
                                 <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileUpload} />
                             </label>
@@ -328,39 +328,39 @@ export default function PdfImportModal({
                         <div className="py-24 text-center space-y-5">
                             <div className="flex justify-center"><Spinner /></div>
                             <div className="space-y-1">
-                                <p className="text-base text-[#F2B705] font-bold animate-pulse">{analysisStatus}</p>
-                                <p className="text-xs text-gray-500">Isso leva apenas alguns segundos...</p>
+                                <p className="text-base text-[var(--fc-accent)] font-bold animate-pulse">{analysisStatus}</p>
+                                <p className="text-xs text-[var(--fc-text-muted)]">Isso leva apenas alguns segundos...</p>
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-5">
                             {/* Barra de Controles e Estatísticas */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#1A1A1A] p-4 rounded-2xl border border-[#2A2A2A]">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--fc-surface-2)] p-4 rounded-2xl border border-[var(--fc-border-default)]">
                                 <div>
-                                    <label className="text-xs text-gray-400 block mb-1 font-semibold">Vincular a qual Cartão?</label>
+                                    <label className="text-xs text-[var(--fc-text-secondary)] block mb-1 font-semibold">Vincular a qual Cartão?</label>
                                     <select 
                                         value={selectedCardId} 
                                         onChange={(e) => setSelectedCardId(e.target.value)}
-                                        className="w-full bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl px-3 py-2 text-xs text-[#FFF3D6] focus:ring-2 focus:ring-[#F2B705] outline-none cursor-pointer"
+                                        className="w-full bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-3 py-2 text-xs text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] outline-none cursor-pointer"
                                     >
                                         {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
 
                                 <div>
-                                    <label className="text-xs text-gray-400 block mb-1 font-semibold">Atribuir Pessoa em Massa</label>
+                                    <label className="text-xs text-[var(--fc-text-secondary)] block mb-1 font-semibold">Atribuir Pessoa em Massa</label>
                                     <div className="flex gap-2">
                                         <select 
                                             value={bulkClientId} 
                                             onChange={(e) => setBulkClientId(e.target.value)}
-                                            className="w-full bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl px-3 py-2 text-xs text-[#FFF3D6] focus:ring-2 focus:ring-[#F2B705] outline-none cursor-pointer"
+                                            className="w-full bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-3 py-2 text-xs text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] outline-none cursor-pointer"
                                         >
                                             <option value="">Selecione a Pessoa...</option>
                                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
                                         <button 
                                             onClick={handleApplyBulkClient}
-                                            className="px-3 py-2 bg-[#2A2A2A] hover:bg-[#3A3A3A] border border-[#3A3A3A] text-xs font-bold text-gray-200 rounded-xl transition cursor-pointer flex-shrink-0"
+                                            className="px-3 py-2 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] text-xs font-bold text-[var(--fc-text-primary)] rounded-xl transition cursor-pointer flex-shrink-0"
                                             title="Aplica a pessoa selecionada a todos os itens marcados"
                                         >
                                             Aplicar
@@ -368,22 +368,22 @@ export default function PdfImportModal({
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-around bg-[#222] p-2.5 rounded-xl border border-[#333]">
+                                <div className="flex items-center justify-around bg-[var(--fc-surface-1)] p-2.5 rounded-xl border border-[var(--fc-border-default)]">
                                     <div className="text-center">
-                                        <span className="text-[10px] text-gray-400 block uppercase font-bold">Total Lidos</span>
-                                        <span className="text-sm font-black text-gray-200">{stats.totalFound}</span>
+                                        <span className="text-[10px] text-[var(--fc-text-muted)] block uppercase font-bold">Total Lidos</span>
+                                        <span className="text-sm font-black text-[var(--fc-text-primary)]">{stats.totalFound}</span>
                                     </div>
                                     <div className="text-center">
-                                        <span className="text-[10px] text-emerald-400 block uppercase font-bold">A Importar</span>
-                                        <span className="text-sm font-black text-emerald-400">{stats.selectedToImport}</span>
+                                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block uppercase font-bold">A Importar</span>
+                                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{stats.selectedToImport}</span>
                                     </div>
                                     <div className="text-center">
-                                        <span className="text-[10px] text-rose-400 block uppercase font-bold">Duplicados</span>
-                                        <span className="text-sm font-black text-rose-400">{stats.duplicates}</span>
+                                        <span className="text-[10px] text-rose-600 dark:text-rose-400 block uppercase font-bold">Duplicados</span>
+                                        <span className="text-sm font-black text-rose-600 dark:text-rose-400">{stats.duplicates}</span>
                                     </div>
-                                    <div className="text-center border-l border-[#3A3A3A] pl-3">
-                                        <span className="text-[10px] text-[#F2B705] block uppercase font-bold">Valor Total</span>
-                                        <span className="text-sm font-black text-[#F2B705] font-mono">{formatCurrencyDisplay(stats.totalValue)}</span>
+                                    <div className="text-center border-l border-[var(--fc-border-subtle)] pl-3">
+                                        <span className="text-[10px] text-[var(--fc-accent)] block uppercase font-bold">Valor Total</span>
+                                        <span className="text-sm font-black text-[var(--fc-accent)] font-mono">{formatCurrencyDisplay(stats.totalValue)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -391,20 +391,20 @@ export default function PdfImportModal({
                             {/* Ações rápidas de seleção */}
                             <div className="flex justify-between items-center text-xs px-1">
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleToggleSelectAll(true)} className="text-[#F2B705] hover:underline cursor-pointer font-semibold">Marcar todos</button>
-                                    <span className="text-gray-600">|</span>
-                                    <button onClick={() => handleToggleSelectAll(false)} className="text-gray-400 hover:text-white cursor-pointer font-semibold">Desmarcar todos</button>
+                                    <button onClick={() => handleToggleSelectAll(true)} className="text-[var(--fc-accent)] hover:underline cursor-pointer font-semibold">Marcar todos</button>
+                                    <span className="text-[var(--fc-text-muted)]">|</span>
+                                    <button onClick={() => handleToggleSelectAll(false)} className="text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)] cursor-pointer font-semibold">Desmarcar todos</button>
                                 </div>
-                                <button onClick={handleReset} className="text-gray-400 hover:text-rose-400 cursor-pointer font-semibold">
+                                <button onClick={handleReset} className="text-[var(--fc-text-muted)] hover:text-rose-500 cursor-pointer font-semibold">
                                     ↺ Trocar arquivo PDF
                                 </button>
                             </div>
 
                             {/* Tabela de Revisão dos Lançamentos */}
-                            <div className="border border-[#2A2A2A] rounded-2xl overflow-hidden bg-[#1A1A1A]">
+                            <div className="border border-[var(--fc-border-default)] rounded-2xl overflow-hidden bg-[var(--fc-surface-1)]">
                                 <table className="min-w-full text-left border-collapse text-xs">
                                     <thead>
-                                        <tr className="bg-[#222] text-gray-400 uppercase font-semibold border-b border-[#2A2A2A]">
+                                        <tr className="bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] uppercase font-semibold border-b border-[var(--fc-border-subtle)]">
                                             <th className="p-3 w-10 text-center">✓</th>
                                             <th className="p-3">Data / Descrição</th>
                                             <th className="p-3">Valor da Parcela</th>
@@ -413,7 +413,7 @@ export default function PdfImportModal({
                                             <th className="p-3">Status Anti-Duplicidade</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-[#2A2A2A]">
+                                    <tbody className="divide-y divide-[var(--fc-border-subtle)]">
                                         {importedItems.map((item) => (
                                             <tr 
                                                 key={item.id} 
@@ -421,7 +421,7 @@ export default function PdfImportModal({
                                                     item.isDuplicate 
                                                         ? 'bg-rose-500/5 opacity-70 hover:bg-rose-500/10' 
                                                         : item.selected 
-                                                            ? 'hover:bg-[#2A2A2A]/50 bg-[#1A1A1A]' 
+                                                            ? 'hover:bg-[var(--fc-surface-2)]/60 bg-[var(--fc-surface-1)]' 
                                                             : 'opacity-40 hover:opacity-80'
                                                 }`}
                                             >
@@ -430,30 +430,30 @@ export default function PdfImportModal({
                                                         type="checkbox" 
                                                         checked={item.selected} 
                                                         onChange={(e) => handleItemChange(item.id, 'selected', e.target.checked)} 
-                                                        className="w-4 h-4 rounded bg-[#2A2A2A] border-[#3A3A3A] text-[#F2B705] focus:ring-[#F2B705] cursor-pointer"
+                                                        className="w-4 h-4 rounded bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] accent-[var(--fc-accent)] cursor-pointer"
                                                     />
                                                 </td>
-                                                <td className="p-3 font-semibold text-[#FFF3D6]">
+                                                <td className="p-3 font-semibold text-[var(--fc-text-primary)]">
                                                     {item.description}
-                                                    <span className="block text-[10px] text-gray-400 font-mono mt-0.5">{item.date}</span>
+                                                    <span className="block text-[10px] text-[var(--fc-text-muted)] font-mono mt-0.5">{item.date}</span>
                                                 </td>
-                                                <td className="p-3 font-mono font-black text-[#F2B705] whitespace-nowrap">
+                                                <td className="p-3 font-mono font-black text-[var(--fc-accent)] whitespace-nowrap">
                                                     {formatCurrencyDisplay(item.value)}
                                                 </td>
-                                                <td className="p-3 text-gray-300 whitespace-nowrap">
+                                                <td className="p-3 text-[var(--fc-text-secondary)] whitespace-nowrap">
                                                     {item.totalInstallments > 1 ? (
-                                                        <span className="inline-flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20">
+                                                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/20">
                                                             {item.currentInstallment}/{item.totalInstallments} ({item.totalInstallments - item.currentInstallment + 1} restante(s))
                                                         </span>
                                                     ) : (
-                                                        <span className="text-gray-400 bg-[#2A2A2A] px-2.5 py-1 rounded-xl">À vista (1x)</span>
+                                                        <span className="text-[var(--fc-text-muted)] bg-[var(--fc-surface-2)] px-2.5 py-1 rounded-xl">À vista (1x)</span>
                                                     )}
                                                 </td>
                                                 <td className="p-3">
                                                     <select 
                                                         value={item.clientId} 
                                                         onChange={(e) => handleItemChange(item.id, 'clientId', e.target.value)}
-                                                        className="bg-[#2A2A2A] border border-[#3A3A3A] rounded-xl px-2.5 py-1.5 text-[#FFF3D6] outline-none focus:ring-1 focus:ring-[#F2B705] cursor-pointer w-full max-w-[180px]"
+                                                        className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-2.5 py-1.5 text-[var(--fc-text-primary)] outline-none focus:border-[var(--fc-accent)] cursor-pointer w-full max-w-[180px]"
                                                     >
                                                         <option value="">Selecione...</option>
                                                         {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -461,11 +461,11 @@ export default function PdfImportModal({
                                                 </td>
                                                 <td className="p-3 whitespace-nowrap">
                                                     {item.isDuplicate ? (
-                                                        <span className="inline-flex items-center gap-1.5 text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-xl border border-rose-500/20 font-medium text-[11px]" title={item.duplicateReason}>
+                                                        <span className="inline-flex items-center gap-1.5 text-rose-500 bg-rose-500/10 px-2.5 py-1 rounded-xl border border-rose-500/20 font-medium text-[11px]" title={item.duplicateReason}>
                                                             <RepeatIcon /> Já Cadastrada
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium text-[11px]">
+                                                        <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium text-[11px]">
                                                             <CheckCircleIcon /> Nova Compra
                                                         </span>
                                                     )}
@@ -480,19 +480,19 @@ export default function PdfImportModal({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-[#2A2A2A] flex justify-between items-center bg-[#1A1A1A]">
-                    <span className="text-xs text-gray-400 font-medium">
+                <div className="p-6 border-t border-[var(--fc-border-subtle)] flex justify-between items-center bg-[var(--fc-surface-2)]">
+                    <span className="text-xs text-[var(--fc-text-muted)] font-medium">
                         {importedItems.length > 0 && `${stats.selectedToImport} de ${stats.totalFound} compras selecionadas para importação`}
                     </span>
                     <div className="flex gap-3">
-                        <button onClick={onClose} className="px-5 py-2.5 rounded-2xl bg-[#2A2A2A] hover:bg-[#3A3A3A] text-gray-300 text-xs font-semibold transition cursor-pointer">
+                        <button onClick={onClose} className="px-5 py-2.5 rounded-2xl bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-3)] text-[var(--fc-text-secondary)] border border-[var(--fc-border-default)] text-xs font-semibold transition cursor-pointer">
                             Cancelar
                         </button>
                         {file && !isAnalyzing && importedItems.length > 0 && (
                             <button 
                                 onClick={handleConfirmImport} 
                                 disabled={stats.selectedToImport === 0 || isSubmitting}
-                                className={`px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#FFF3D6] to-[#F2B705] text-[#141414] text-xs font-black shadow-lg shadow-[#F2B705]/20 transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
+                                className={`px-6 py-2.5 rounded-2xl bg-gradient-to-r from-gold-light to-gold text-carbon-900 text-xs font-black shadow-lg transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
                                     stats.selectedToImport === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
                                 }`}
                             >

@@ -370,6 +370,42 @@ test.describe('E2E Write-Path — Assinaturas', () => {
 
         await expect(page.getByText(/adicionad|salv|sucesso/i)).toBeVisible({ timeout: 5000 });
     });
+
+    test('deve editar uma assinatura existente, preencher campos e atualizar', async ({ page }) => {
+        await page.addInitScript(() => {
+            window.__FINCONTROL_E2E_MOCK_DATA__.subscriptions = [
+                {
+                    id: 'sub-edit-e2e',
+                    name: 'Streaming Original',
+                    amount: 39.90,
+                    dueDate: 15,
+                    paymentMethod: 'creditCard',
+                    cardId: 'card-write-e2e',
+                    status: 'Ativa',
+                    userId: 'e2e-write-user'
+                }
+            ];
+        });
+
+        await page.reload();
+        await page.getByRole('button', { name: /Assinaturas/i }).click();
+        await expect(page.getByRole('heading', { name: /Assinaturas/i })).toBeVisible({ timeout: 10000 });
+
+        const editBtn = page.getByRole('button', { name: /Editar assinatura Streaming Original/i }).or(page.locator('button[title="Editar"]').first());
+        await expect(editBtn).toBeVisible({ timeout: 5000 });
+        await editBtn.click();
+
+        const nameInput = page.locator('#subscriptionName');
+        await expect(nameInput).toHaveValue('Streaming Original');
+
+        await nameInput.clear();
+        await nameInput.fill('Streaming Editado E2E');
+
+        const saveBtn = page.getByRole('button', { name: /Atualizar Assinatura/i });
+        await saveBtn.click();
+
+        await expect(page.getByText(/atualizada com sucesso/i)).toBeVisible({ timeout: 5000 });
+    });
 });
 
 // ============================================================

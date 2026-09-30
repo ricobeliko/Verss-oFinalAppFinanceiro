@@ -54,7 +54,7 @@ test.describe('E2E Write-Path — Cartões (CREATE / UPDATE / DELETE)', () => {
         await addBtn.click();
 
         // Preenche o formulário via placeholders
-        await page.getByPlaceholder('Ex: Nubank Black').fill('Cartão E2E Platinum');
+        await page.getByPlaceholder('Ex: Nubank').fill('Cartão E2E Platinum');
         
         // Campo de limite usa formatação de moeda
         const limiteInput = page.getByPlaceholder('0,00');
@@ -94,7 +94,7 @@ test.describe('E2E Write-Path — Cartões (CREATE / UPDATE / DELETE)', () => {
         await editBtn.click();
 
         // Limpa e altera o nome
-        const nameInput = page.getByPlaceholder('Ex: Nubank Black');
+        const nameInput = page.getByPlaceholder('Ex: Nubank');
         await nameInput.clear();
         await nameInput.fill('Cartão Editado E2E');
 

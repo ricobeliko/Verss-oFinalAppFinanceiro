@@ -74,7 +74,7 @@ export default function CategoryBudgetsModal({
             maxWidth="max-w-lg"
         >
             <form onSubmit={handleSave} className="space-y-5">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--fc-text-muted)]">
                     Defina um teto mensal de gastos para cada categoria. Deixe em branco caso não queira estipular meta.
                 </p>
 
@@ -83,10 +83,10 @@ export default function CategoryBudgetsModal({
                         const normalizedCat = cat.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
                         const inputId = `budget-${normalizedCat}`;
                         return (
-                            <div key={cat} className="flex items-center justify-between gap-4 p-2.5 rounded-2xl bg-carbon-800 border border-carbon-700">
-                                <label htmlFor={inputId} className="text-xs font-bold text-gold-cream truncate max-w-[150px] cursor-pointer">{cat}</label>
+                            <div key={cat} className="flex items-center justify-between gap-4 p-2.5 rounded-2xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)]">
+                                <label htmlFor={inputId} className="text-xs font-bold text-[var(--fc-text-primary)] truncate max-w-[150px] cursor-pointer">{cat}</label>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs text-gray-400 font-semibold" aria-hidden="true">R$</span>
+                                    <span className="text-xs text-[var(--fc-text-muted)] font-semibold" aria-hidden="true">R$</span>
                                     <input
                                         id={inputId}
                                         type="text"
@@ -95,7 +95,7 @@ export default function CategoryBudgetsModal({
                                         placeholder="Sem meta"
                                         aria-label={`Meta de orçamento para ${cat}`}
                                         inputMode="decimal"
-                                        className="w-28 p-2 bg-carbon-900 border border-carbon-700 rounded-xl text-gold text-xs font-bold focus:outline-none focus:border-gold text-right"
+                                        className="w-28 p-2 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl text-[var(--fc-text-primary)] text-xs font-bold focus:outline-none focus:border-[var(--fc-accent)] text-right"
                                     />
                                 </div>
                             </div>
@@ -103,11 +103,11 @@ export default function CategoryBudgetsModal({
                     })}
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-carbon-800">
+                <div className="flex justify-end gap-3 pt-4 border-t border-[var(--fc-border-subtle)]">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white rounded-xl bg-carbon-800 transition cursor-pointer"
+                        className="px-4 py-2 text-xs font-semibold text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] transition cursor-pointer"
                     >
                         Cancelar
                     </button>

@@ -6,14 +6,18 @@ import { useAppContext } from '../../context/AppContext';
 import { useCards } from '../../hooks/useCards';
 import { useClients } from '../../hooks/useClients';
 import { useLoans } from '../../hooks/useLoans';
+import ProFeatureLock from '../../components/ProFeatureLock';
+import GenericModal from '../../components/GenericModal';
+import UpgradePrompt from '../../components/UpgradePrompt';
 
 const PdfImportModal = lazy(() => import('../../components/PdfImportModal'));
 
 function UnifiedTransactionManagement() {
     const [transactionType, setTransactionType] = useState('loan');
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     
-    const { isPro, isTrialActive, db, userId, getUserCollectionPathSegments, showToast } = useAppContext();
+    const { isPro, isTrialActive, db, userId, getUserCollectionPathSegments, showToast, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
     const { cards } = useCards();
@@ -43,20 +47,20 @@ function UnifiedTransactionManagement() {
                 </Suspense>
             )}
 
-            {/* Header Carbono & Dourado */}
-            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+            {/* Header Harmonizado */}
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md space-y-6">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Adicionar Movimentações</h1>
-                    <p className="text-sm text-gray-400 mt-1">Registre suas compras no cartão, receitas e despesas avulsas com precisão.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Adicionar Movimentações</h1>
+                    <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Registre suas compras no cartão, receitas e despesas avulsas com precisão.</p>
                 </div>
                 
-                {/* Seletor de Abas Black Card */}
-                <div role="group" aria-label="Tipos de movimentação" className="flex justify-center p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl max-w-md mx-auto">
+                {/* Seletor de Abas Harmonizado */}
+                <div role="group" aria-label="Tipos de movimentação" className="flex justify-center p-1.5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-2xl max-w-md mx-auto">
                     <button 
                         type="button"
                         aria-pressed={transactionType === 'loan'}
                         onClick={() => setTransactionType('loan')}
-                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'loan' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
+                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'loan' ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md' : 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)]'} focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50`}
                     >
                         Compras
                     </button>
@@ -64,7 +68,7 @@ function UnifiedTransactionManagement() {
                         type="button"
                         aria-pressed={transactionType === 'income'}
                         onClick={() => setTransactionType('income')}
-                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'income' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
+                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'income' ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md' : 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)]'} focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50`}
                     >
                         Receitas
                     </button>
@@ -72,7 +76,7 @@ function UnifiedTransactionManagement() {
                         type="button"
                         aria-pressed={transactionType === 'expense'}
                         onClick={() => setTransactionType('expense')}
-                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'expense' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} focus:outline-none focus:ring-2 focus:ring-gold/50`}
+                        className={`w-1/3 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${transactionType === 'expense' ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md' : 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)]'} focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50`}
                     >
                         Despesas
                     </button>
@@ -87,26 +91,38 @@ function UnifiedTransactionManagement() {
                 
                 {transactionType === 'income' && (
                     hasProAccess ? IncomeFormComponent : (
-                        <div className="text-center p-10 bg-carbon-900 border border-gold/30 rounded-3xl shadow-2xl space-y-3">
-                            <span className="text-2xl">🔒</span>
-                            <h3 className="text-lg font-bold text-gold-cream">Recurso Exclusivo Black Pro</h3>
-                            <p className="text-sm text-gray-400">Gerenciar e registrar receitas é uma ferramenta exclusiva para membros PRO ou VIP.</p>
-                        </div>
+                        <ProFeatureLock 
+                            title="Gerenciamento de Receitas"
+                            description="O gerenciamento e registro de receitas faz parte dos recursos do plano Pro."
+                            onAction={() => setIsUpgradeModalOpen(true)}
+                        />
                     )
                 )}
                 
                 {transactionType === 'expense' && (
                     hasProAccess ? ExpenseFormComponent : (
-                        <div className="text-center p-10 bg-carbon-900 border border-gold/30 rounded-3xl shadow-2xl space-y-3">
-                            <span className="text-2xl">🔒</span>
-                            <h3 className="text-lg font-bold text-gold-cream">Recurso Exclusivo Black Pro</h3>
-                            <p className="text-sm text-gray-400">Gerenciar e registrar despesas é uma ferramenta exclusiva para membros PRO ou VIP.</p>
-                        </div>
+                        <ProFeatureLock 
+                            title="Despesas Avulsas"
+                            description="O gerenciamento e registro de despesas avulsas faz parte dos recursos do plano Pro."
+                            onAction={() => setIsUpgradeModalOpen(true)}
+                        />
                     )
                 )}
             </div>
+
+            {/* Modal de Upgrade Pro */}
+            <GenericModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                maxWidth="max-w-lg"
+            >
+                <UpgradePrompt 
+                    onUpgradeClick={handleUpgradeClick}
+                    onActivateTrial={activateFreeTrial}
+                />
+            </GenericModal>
         </div>
     );
 }
 
-export default UnifiedTransactionManagement;
+export default UnifiedTransactionManagement;

@@ -229,7 +229,8 @@ function LoanManagement() {
             }
             handleCloseModal();
         } catch (error) {
-            showToast(`Erro ao salvar: ${error.message}`, 'error');
+            console.error("Erro ao salvar compra:", error);
+            showToast('Não foi possível salvar a compra. Tente novamente.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -248,7 +249,8 @@ function LoanManagement() {
             await deleteDoc(doc(database, ...userCollectionPath, userId, 'loans', loanIdToDelete));
             showToast("Compra deletada com sucesso!", "success");
         } catch (error) {
-            showToast(`Erro ao deletar: ${error.message}`, "error");
+            console.error("Erro ao excluir compra:", error);
+            showToast('Não foi possível excluir a compra. Tente novamente.', 'error');
         } finally {
             setIsLoading(false);
             setIsConfirmationModalOpen(false);
@@ -320,8 +322,8 @@ function LoanManagement() {
             await updateDoc(loanDocumentReference, fieldsToUpdate);
             showToast(`Parcela marcada como ${newStatus}!`, 'success');
         } catch (error) {
-            showToast(`Erro ao atualizar parcela: ${error.message}`, 'error');
             console.error("Erro detalhado do Firestore:", error);
+            showToast('Não foi possível atualizar a parcela. Tente novamente.', 'error');
         }
     };
 
@@ -343,39 +345,39 @@ function LoanManagement() {
     const renderInstallmentsList = (installments, loanId, personKey = null) => {
         if (!Array.isArray(installments) || installments.length === 0) {
              return (
-                <div className="p-4 bg-carbon-900/50 text-center text-sm text-gray-500">
+                <div className="p-4 bg-[var(--fc-surface-2)]/50 text-center text-sm text-[var(--fc-text-muted)]">
                     Nenhuma parcela para exibir.
                 </div>
             );
         }
         return (
-            <div className="p-4 bg-carbon-900/50 space-y-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-gold">Parcelas Detalhadas:</h4>
+            <div className="p-4 bg-[var(--fc-surface-2)]/50 space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-[var(--fc-accent)]">Parcelas Detalhadas:</h4>
                 <ul className="space-y-2">
                     {installments.map(installment => (
-                        <li key={installment.number} className="flex justify-between items-center text-sm p-2 bg-carbon-800/40 rounded-xl border border-carbon-800">
+                        <li key={installment.number} className="flex justify-between items-center text-sm p-2 bg-[var(--fc-surface-1)] rounded-xl border border-[var(--fc-border-default)]">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold text-gold-cream">{installment.number}ª</span>
-                                <span className="text-gray-400">•</span>
-                                <span className="text-gray-300">{new Date(installment.dueDate + "T00:00:00").toLocaleDateString('pt-BR')}</span>
-                                <span className="text-gray-400">•</span>
-                                <span className="font-mono font-bold text-gold">{formatCurrencyDisplay(installment.value)}</span>
-                                <span className="text-gray-400">•</span>
-                                <span className={installment.status === 'Paga' ? 'text-emerald-400 font-semibold text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20' : 'text-gold font-semibold text-xs px-2 py-0.5 rounded-full bg-gold/10 border border-gold/20'}>{installment.status}</span>
-                                {installment.status === 'Paga' && installment.paidDate && <span className="text-[11px] text-gray-500 hidden sm:inline"> (pago em {new Date(installment.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
+                                <span className="font-bold text-[var(--fc-text-primary)]">{installment.number}ª</span>
+                                <span className="text-[var(--fc-text-muted)]">•</span>
+                                <span className="text-[var(--fc-text-secondary)]">{new Date(installment.dueDate + "T00:00:00").toLocaleDateString('pt-BR')}</span>
+                                <span className="text-[var(--fc-text-muted)]">•</span>
+                                <span className="font-mono font-bold text-[var(--fc-accent)]">{formatCurrencyDisplay(installment.value)}</span>
+                                <span className="text-[var(--fc-text-muted)]">•</span>
+                                <span className={installment.status === 'Paga' ? 'text-emerald-600 dark:text-emerald-400 font-semibold text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20' : 'text-[var(--fc-accent)] font-semibold text-xs px-2 py-0.5 rounded-full bg-[var(--fc-accent-soft)] border border-[var(--fc-border-default)]'}>{installment.status}</span>
+                                {installment.status === 'Paga' && installment.paidDate && <span className="text-[11px] text-[var(--fc-text-muted)] hidden sm:inline"> (pago em {new Date(installment.paidDate + "T00:00:00").toLocaleDateString('pt-BR')})</span>}
                             </div>
                             <div className="flex items-center gap-2">
                                 {installment.status === 'Pendente' && (
                                     <button 
                                         onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Paga')} 
-                                        className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
+                                        className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
                                         Marcar Paga
                                     </button>
                                 )}
                                 {installment.status === 'Paga' && (
                                     <button 
                                         onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Pendente')} 
-                                        className="bg-gold/10 text-gold hover:bg-gold/20 border border-gold/20 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
+                                        className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
                                         Desmarcar
                                     </button>
                                 )}
@@ -389,10 +391,10 @@ function LoanManagement() {
     
     return (
         <div className="space-y-8 animate-fadeIn">
-             <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Compras</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione e acompanhe suas compras parceladas ou compartilhadas.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Compras</h1>
+                    <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione e acompanhe suas compras parceladas ou compartilhadas.</p>
                 </div>
                 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -400,12 +402,12 @@ function LoanManagement() {
                     <div className="relative inline-flex flex-1 sm:flex-none">
                         <button 
                             disabled
-                            className="w-full flex items-center justify-center gap-2 bg-carbon-800/40 text-gold/30 border border-gold/10 font-bold py-3 px-4 rounded-2xl cursor-not-allowed opacity-40 select-none text-xs uppercase tracking-wider"
+                            className="w-full flex items-center justify-center gap-2 bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border border-[var(--fc-border-default)] font-bold py-3 px-4 rounded-2xl cursor-not-allowed opacity-40 select-none text-xs uppercase tracking-wider"
                         >
                             <span>📄</span> Importar Fatura PDF
                         </button>
-                        <div className="absolute inset-0 flex items-center justify-center bg-carbon-900/75 backdrop-blur-[1px] rounded-2xl border border-gold/30 shadow-lg">
-                            <span className="text-[10px] font-extrabold text-gold uppercase tracking-wider bg-carbon-900 px-2.5 py-1 rounded-full border border-gold/30 shadow-inner">
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--fc-surface-1)]/75 backdrop-blur-[1px] rounded-2xl border border-[var(--fc-border-default)] shadow-lg">
+                            <span className="text-[10px] font-extrabold text-[var(--fc-accent)] uppercase tracking-wider bg-[var(--fc-surface-2)] px-2.5 py-1 rounded-full border border-[var(--fc-border-default)] shadow-inner">
                                 Em breve 🚀
                             </span>
                         </div>
@@ -423,13 +425,13 @@ function LoanManagement() {
             </div>
             
             <div className="flex justify-end items-center px-2">
-                <label className="flex items-center text-sm text-gray-400 cursor-pointer font-medium hover:text-gold transition">
-                    <input type="checkbox" checked={shouldShowPaidLoans} onChange={() => setShouldShowPaidLoans(!shouldShowPaidLoans)} className="h-4 w-4 bg-carbon-800 border-carbon-700 text-gold focus:ring-gold rounded mr-2.5 accent-gold cursor-pointer" />
+                <label className="flex items-center text-sm text-[var(--fc-text-muted)] cursor-pointer font-medium hover:text-[var(--fc-text-primary)] transition">
+                    <input type="checkbox" checked={shouldShowPaidLoans} onChange={() => setShouldShowPaidLoans(!shouldShowPaidLoans)} className="h-4 w-4 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded mr-2.5 accent-[var(--fc-accent)] cursor-pointer" />
                     Mostrar compras pagas
                 </label>
             </div>
 
-            <div className="hidden md:grid grid-cols-7 gap-4 px-6 py-4 items-center border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/40 rounded-t-3xl">
+            <div className="hidden md:grid grid-cols-7 gap-4 px-6 py-4 items-center border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)] rounded-t-3xl">
                 <span>Descrição</span>
                 <span>Cartão</span>
                 <span>Valor da Parcela</span>
@@ -450,7 +452,7 @@ function LoanManagement() {
                                         <div className="flex items-center gap-3">
                                             <WarningIcon />
                                             <div>
-                                                <div className="text-sm font-semibold text-gold-cream">{loan.description || "Compra com dados inválidos"}</div>
+                                                <div className="text-sm font-semibold text-[var(--fc-text-primary)]">{loan.description || "Compra com dados inválidos"}</div>
                                                 <div className="text-xs text-rose-300">Esta compra tem um formato antigo. Por favor, anote os detalhes, apague-a e crie uma nova.</div>
                                             </div>
                                         </div>
@@ -459,9 +461,9 @@ function LoanManagement() {
                                         <span className="text-rose-400 font-bold">Inválido</span>
                                     </div>
                                     <div className="flex items-center justify-end gap-4">
-                                        <button disabled className="text-gold/20 cursor-not-allowed" title="Editar desabilitado"><EditIcon /></button>
+                                        <button disabled className="text-[var(--fc-text-muted)] cursor-not-allowed" title="Editar desabilitado"><EditIcon /></button>
                                         <button onClick={() => confirmDeleteLoan(loan.id)} className="text-rose-400 hover:text-rose-300 transition cursor-pointer" title="Deletar"><DeleteIcon /></button>
-                                        <button disabled className="text-gray-600 cursor-not-allowed"><ChevronDown /></button>
+                                        <button disabled className="text-[var(--fc-text-muted)] cursor-not-allowed"><ChevronDown /></button>
                                     </div>
                                 </div>
                             </div>
@@ -470,27 +472,27 @@ function LoanManagement() {
 
                     const card = allCards.find(card => card.id === loan.cardId);
                     return (
-                        <div key={loan.id} className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 hover:border-gold/30">
+                        <div key={loan.id} className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 hover:border-[var(--fc-accent)]/30">
                              <div className="grid grid-cols-3 md:grid-cols-7 gap-4 p-6 items-center">
                                <div className="col-span-2 md:col-span-1">
-                                   <div className="text-sm font-bold text-gold-cream truncate">{loan.description}</div>
-                                   <div className="text-xs text-gray-400 mt-0.5 truncate">{loan.isShared ? `${getClientNameById(loan.sharedDetails.person1.clientId)} / ${getClientNameById(loan.sharedDetails.person2.clientId)}` : getClientNameById(loan.clientId)}</div>
+                                   <div className="text-sm font-bold text-[var(--fc-text-primary)] truncate">{loan.description}</div>
+                                   <div className="text-xs text-[var(--fc-text-muted)] mt-0.5 truncate">{loan.isShared ? `${getClientNameById(loan.sharedDetails.person1.clientId)} / ${getClientNameById(loan.sharedDetails.person2.clientId)}` : getClientNameById(loan.clientId)}</div>
                                </div>
-                               <div className="hidden md:flex items-center text-sm text-gray-300">
+                               <div className="hidden md:flex items-center text-sm text-[var(--fc-text-secondary)]">
                                    <span className="w-3.5 h-3.5 rounded-md mr-2.5 border border-white/20 shadow-sm" style={{ backgroundColor: card ? card.color : '#F2B705' }}></span>
                                    <span className="truncate">{card ? card.name : 'N/A'}</span>
                                </div>
-                               <div className="hidden md:block text-sm font-mono text-gray-300">{formatCurrencyDisplay(loan.installments?.[0]?.value || 0)}</div>
-                               <div className="hidden md:block text-sm text-gray-300 font-medium">{`${loan.installmentsCount}x`}</div>
-                               <div className="hidden md:block font-extrabold text-gold font-mono">{formatCurrencyDisplay(loan.totalValue)}</div>
+                               <div className="hidden md:block text-sm font-mono text-[var(--fc-text-secondary)]">{formatCurrencyDisplay(loan.installments?.[0]?.value || 0)}</div>
+                               <div className="hidden md:block text-sm text-[var(--fc-text-secondary)] font-medium">{`${loan.installmentsCount}x`}</div>
+                               <div className="hidden md:block font-extrabold text-[var(--fc-accent)] font-mono">{formatCurrencyDisplay(loan.totalValue)}</div>
                                <div className="hidden md:block text-xs font-semibold">
                                    {loan.isShared ? (
                                        <div className="space-y-1">
-                                           <span className={`inline-block px-2.5 py-0.5 rounded-full border ${loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-gold/10 text-gold border-gold/20'}`}>P1: {loan.sharedDetails.person1.statusPayment}</span>
-                                           <span className={`inline-block px-2.5 py-0.5 rounded-full border ${loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-gold/10 text-gold border-gold/20'}`}>P2: {loan.sharedDetails.person2.statusPayment}</span>
+                                           <span className={`inline-block px-2.5 py-0.5 rounded-full border ${loan.sharedDetails.person1.statusPayment === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-border-default)]'}`}>P1: {loan.sharedDetails.person1.statusPayment}</span>
+                                           <span className={`inline-block px-2.5 py-0.5 rounded-full border ${loan.sharedDetails.person2.statusPayment === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-border-default)]'}`}>P2: {loan.sharedDetails.person2.statusPayment}</span>
                                        </div>
                                    ) : (
-                                       <span className={`inline-block px-2.5 py-1 rounded-full border ${loan.statusPaymentClient === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-gold/10 text-gold border-gold/20'}`}>{loan.statusPaymentClient}</span>
+                                       <span className={`inline-block px-2.5 py-1 rounded-full border ${loan.statusPaymentClient === 'Pago Total' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-border-default)]'}`}>{loan.statusPaymentClient}</span>
                                    )}
                                </div>
                                <div className="flex items-center justify-end gap-4">
@@ -498,7 +500,7 @@ function LoanManagement() {
                                         type="button"
                                         onClick={() => handleOpenModal(loan)} 
                                         aria-label={`Editar compra ${loan.description || ''}`.trim()}
-                                        className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                        className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer" 
                                         title="Editar"
                                     >
                                         <EditIcon />
@@ -507,7 +509,7 @@ function LoanManagement() {
                                         type="button"
                                         onClick={() => confirmDeleteLoan(loan.id)} 
                                         aria-label={`Excluir compra ${loan.description || ''}`.trim()}
-                                        className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                        className="text-rose-500 hover:text-rose-400 transition cursor-pointer" 
                                         title="Deletar"
                                     >
                                         <DeleteIcon />
@@ -516,22 +518,22 @@ function LoanManagement() {
                                         type="button"
                                         onClick={() => toggleInstallmentsVisibility(loan.id)} 
                                         aria-label={visibleInstallments[loan.id] ? "Ocultar parcelas" : "Ver parcelas"}
-                                        className="text-gray-400 hover:text-white transition p-1.5 rounded-xl bg-carbon-800 hover:bg-carbon-700 cursor-pointer"
+                                        className="text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] transition p-1.5 rounded-xl bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] cursor-pointer"
                                     >
                                         {visibleInstallments[loan.id] ? <ChevronUp /> : <ChevronDown />}
                                     </button>
                                </div>
                             </div>
                             {visibleInstallments[loan.id] && (
-                                <div className="border-t border-carbon-800">
+                                <div className="border-t border-[var(--fc-border-subtle)]">
                                     {loan.isShared ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-carbon-800">
-                                            <div className="bg-carbon-900 p-4">
-                                                <h5 className="font-bold text-center text-xs uppercase tracking-wider text-gold mb-3">{getClientNameById(loan.sharedDetails.person1.clientId)}</h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[var(--fc-border-subtle)]">
+                                            <div className="bg-[var(--fc-surface-2)] p-4">
+                                                <h5 className="font-bold text-center text-xs uppercase tracking-wider text-[var(--fc-accent)] mb-3">{getClientNameById(loan.sharedDetails.person1.clientId)}</h5>
                                                 {renderInstallmentsList(loan.sharedDetails.person1.installments, loan.id, 'person1')}
                                             </div>
-                                            <div className="bg-carbon-900 p-4">
-                                                <h5 className="font-bold text-center text-xs uppercase tracking-wider text-gold mb-3">{getClientNameById(loan.sharedDetails.person2.clientId)}</h5>
+                                            <div className="bg-[var(--fc-surface-2)] p-4">
+                                                <h5 className="font-bold text-center text-xs uppercase tracking-wider text-[var(--fc-accent)] mb-3">{getClientNameById(loan.sharedDetails.person2.clientId)}</h5>
                                                 {renderInstallmentsList(loan.sharedDetails.person2.installments, loan.id, 'person2')}
                                             </div>
                                         </div>
@@ -541,95 +543,205 @@ function LoanManagement() {
                                 </div>
                             )}
                         </div>
-                    )
+                    );
                 })}
             </div>
-            
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingLoan ? 'Editar Compra' : 'Adicionar Nova Compra'} theme="dark" maxWidth="max-w-4xl">
+
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingLoan ? 'Editar Compra' : 'Adicionar Nova Compra'} maxWidth="max-w-4xl">
                 <div className="space-y-6">
-                    <div className="flex justify-center p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl max-w-sm mx-auto">
-                        <button onClick={() => setPurchaseType('normal')} disabled={!!editingLoan} className={`w-1/2 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${purchaseType === 'normal' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} disabled:opacity-50`}>Compra Normal</button>
-                        <button onClick={() => setPurchaseType('shared')} disabled={!!editingLoan} className={`w-1/2 py-2.5 text-xs font-black tracking-wider uppercase rounded-xl transition-all cursor-pointer ${purchaseType === 'shared' ? 'bg-gradient-to-r from-gold-light to-gold text-carbon-900 shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white'} disabled:opacity-50`}>Compartilhada</button>
+                    <div className="flex justify-center p-1.5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-2xl max-w-sm mx-auto">
+                        <button 
+                            type="button"
+                            onClick={() => setPurchaseType('normal')} 
+                            disabled={!!editingLoan} 
+                            className={`w-1/2 py-2.5 text-xs font-bold tracking-wider uppercase rounded-xl transition-all cursor-pointer ${
+                                purchaseType === 'normal' 
+                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold' 
+                                    : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            Compra Normal
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => setPurchaseType('shared')} 
+                            disabled={!!editingLoan} 
+                            className={`w-1/2 py-2.5 text-xs font-bold tracking-wider uppercase rounded-xl transition-all cursor-pointer ${
+                                purchaseType === 'shared' 
+                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold' 
+                                    : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            Compartilhada
+                        </button>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="w-full">
-                            <label htmlFor="purchaseDate" className="block text-sm font-medium text-gray-300 mb-1">Data da Compra</label>
-                            <input id="purchaseDate" type="date" value={purchaseDate} className="w-full" onChange={(evento) => setPurchaseDate(evento.target.value)} required />
+                            <label htmlFor="purchaseDate" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Data da Compra</label>
+                            <input 
+                                id="purchaseDate" 
+                                type="date" 
+                                value={purchaseDate} 
+                                onChange={(evento) => setPurchaseDate(evento.target.value)} 
+                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
+                                required 
+                            />
                         </div>
                         <div className="w-full">
-                            <label htmlFor="selectedCardId" className="block text-sm font-medium text-gray-300 mb-1">Cartão</label>
-                            <select id="selectedCardId" value={selectedCardId} className="w-full" onChange={(evento) => setSelectedCardId(evento.target.value)} required>
+                            <label htmlFor="selectedCardId" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Cartão</label>
+                            <select 
+                                id="selectedCardId" 
+                                value={selectedCardId} 
+                                onChange={(evento) => setSelectedCardId(evento.target.value)} 
+                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                required
+                            >
                                 <option value="">Selecione o Cartão</option>
                                 {allCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                             </select>
                         </div>
                         <div className="w-full">
-                            <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
-                            <input id="description" type="text" placeholder="Descrição da Compra" value={description} className="w-full" onChange={(evento) => setDescription(evento.target.value)} required />
+                            <label htmlFor="description" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Descrição</label>
+                            <input 
+                                id="description" 
+                                type="text" 
+                                placeholder="Descrição da Compra" 
+                                value={description} 
+                                onChange={(evento) => setDescription(evento.target.value)} 
+                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm"
+                                required 
+                            />
                         </div>
                     </div>
                     
-                    {firstDueDate && <div className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl text-xs text-gray-400 text-center font-medium">Primeira parcela em: <span className="font-bold text-gold">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span></div>}
+                    {firstDueDate && (
+                        <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl text-xs text-[var(--fc-text-secondary)] text-center font-medium">
+                            Primeira parcela em: <span className="font-bold text-[var(--fc-accent)] font-mono">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
+                        </div>
+                    )}
 
                     {purchaseType === 'normal' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-carbon-800">
-                           <div className="w-full">
-                                <label htmlFor="selectedClientId" className="block text-sm font-medium text-gray-300 mb-1">Pessoa</label>
-                                <select id="selectedClientId" value={selectedClientId} className="w-full" onChange={(evento) => setSelectedClientId(evento.target.value)} required>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-[var(--fc-border-subtle)]">
+                            <div className="w-full">
+                                <label htmlFor="selectedClientId" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa</label>
+                                <select 
+                                    id="selectedClientId" 
+                                    value={selectedClientId} 
+                                    onChange={(evento) => setSelectedClientId(evento.target.value)} 
+                                    className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                    required
+                                >
                                     <option value="">Selecione a Pessoa</option>
                                     {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                 </select>
-                           </div>
+                            </div>
                             <div className="w-full">
-                                <label htmlFor="totalValueInput" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
+                                <label htmlFor="totalValueInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor Total</label>
                                 <div className="relative w-full">
-                                    <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
-                                    <input id="totalValueInput" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
+                                    <input 
+                                        id="totalValueInput" 
+                                        type="text" 
+                                        placeholder="0,00" 
+                                        value={totalValueInput} 
+                                        onChange={handleCurrencyInputChange(setTotalValueInput)} 
+                                        className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
+                                        required 
+                                        inputMode="decimal" 
+                                    />
                                 </div>
                             </div>
                             <div className="w-full">
-                                <label htmlFor="installmentsCount" className="block text-sm font-medium text-gray-300 mb-1">Número de Parcelas</label>
-                                <input id="installmentsCount" type="number" placeholder="1" value={installmentsCount} className="w-full" onChange={(evento) => setInstallmentsCount(evento.target.value)} min="1" required />
+                                <label htmlFor="installmentsCount" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Número de Parcelas</label>
+                                <input 
+                                    id="installmentsCount" 
+                                    type="number" 
+                                    placeholder="1" 
+                                    value={installmentsCount} 
+                                    onChange={(evento) => setInstallmentsCount(evento.target.value)} 
+                                    min="1" 
+                                    className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
+                                    required 
+                                />
                             </div>
                         </div>
                     ) : (
-                         <div className="pt-4 border-t border-carbon-800 space-y-4">
+                        <div className="pt-4 border-t border-[var(--fc-border-subtle)] space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="w-full">
-                                    <label htmlFor="totalValueShared" className="block text-sm font-medium text-gray-300 mb-1">Valor Total</label>
+                                    <label htmlFor="totalValueShared" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor Total</label>
                                     <div className="relative w-full">
-                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
-                                        <input id="totalValueShared" type="text" placeholder="0,00" value={totalValueInput} onChange={handleCurrencyInputChange(setTotalValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
+                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
+                                        <input 
+                                            id="totalValueShared" 
+                                            type="text" 
+                                            placeholder="0,00" 
+                                            value={totalValueInput} 
+                                            onChange={handleCurrencyInputChange(setTotalValueInput)} 
+                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
+                                            required 
+                                            inputMode="decimal" 
+                                        />
                                     </div>
                                 </div>
                                 <div className="w-full">
-                                    <label htmlFor="installmentsCountShared" className="block text-sm font-medium text-gray-300 mb-1">Número de Parcelas</label>
-                                    <input id="installmentsCountShared" type="number" placeholder="1" value={installmentsCount} className="w-full" onChange={(evento) => setInstallmentsCount(evento.target.value)} min="1" required />
+                                    <label htmlFor="installmentsCountShared" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Número de Parcelas</label>
+                                    <input 
+                                        id="installmentsCountShared" 
+                                        type="number" 
+                                        placeholder="1" 
+                                        value={installmentsCount} 
+                                        onChange={(evento) => setInstallmentsCount(evento.target.value)} 
+                                        min="1" 
+                                        className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
+                                        required 
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                                 <div className="w-full">
-                                    <label htmlFor="selectedClient1Id" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 1</label>
-                                    <select id="selectedClient1Id" value={selectedClient1Id} className="w-full" onChange={(evento) => setSelectedClient1Id(evento.target.value)} required>
+                                    <label htmlFor="selectedClient1Id" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa 1</label>
+                                    <select 
+                                        id="selectedClient1Id" 
+                                        value={selectedClient1Id} 
+                                        onChange={(evento) => setSelectedClient1Id(evento.target.value)} 
+                                        className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                        required
+                                    >
                                         <option value="">Selecione a Pessoa 1</option>
                                         {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="w-full">
-                                    <label htmlFor="person1ShareInput" className="block text-sm font-medium text-gray-300 mb-1">Valor da Pessoa 1</label>
+                                    <label htmlFor="person1ShareInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor da Pessoa 1</label>
                                     <div className="relative w-full">
-                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10">R$</span>
-                                        <input id="person1ShareInput" type="text" placeholder="0,00" value={person1ShareInput} onChange={handleCurrencyInputChange(setPerson1ShareInput)} className="w-full currency-input !pl-14" required inputMode="decimal" />
+                                        <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
+                                        <input 
+                                            id="person1ShareInput" 
+                                            type="text" 
+                                            placeholder="0,00" 
+                                            value={person1ShareInput} 
+                                            onChange={handleCurrencyInputChange(setPerson1ShareInput)} 
+                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
+                                            required 
+                                            inputMode="decimal" 
+                                        />
                                     </div>
                                 </div>
-                                <div className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl text-center text-gray-300 h-[50px] flex items-center justify-between px-4 w-full">
-                                    <span className="text-xs font-semibold uppercase text-gray-400">Valor Pessoa 2:</span>
-                                    <span className="font-bold font-mono text-gold">{person2ShareDisplay}</span>
+                                <div className="min-h-[48px] h-12 p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl flex items-center justify-between px-4 w-full shadow-sm">
+                                    <span className="text-xs font-semibold uppercase text-[var(--fc-text-muted)]">Valor Pessoa 2:</span>
+                                    <span className="font-bold font-mono text-[var(--fc-accent)] text-sm">{person2ShareDisplay}</span>
                                 </div>
                                 <div className="w-full">
-                                     <label htmlFor="selectedClient2Id" className="block text-sm font-medium text-gray-300 mb-1">Pessoa 2</label>
-                                    <select id="selectedClient2Id" value={selectedClient2Id} className="w-full" onChange={(evento) => setSelectedClient2Id(evento.target.value)} required>
+                                    <label htmlFor="selectedClient2Id" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa 2</label>
+                                    <select 
+                                        id="selectedClient2Id" 
+                                        value={selectedClient2Id} 
+                                        onChange={(evento) => setSelectedClient2Id(evento.target.value)} 
+                                        className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                        required
+                                    >
                                         <option value="">Selecione a Pessoa 2</option>
                                         {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                                     </select>
@@ -656,7 +768,7 @@ function LoanManagement() {
                 </div>
             </GenericModal>
 
-            <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" isConfirmation={true} theme="dark">
+            <GenericModal isOpen={isConfirmationModalOpen} onClose={() => setIsConfirmationModalOpen(false)} onConfirm={handleDeleteLoanConfirmed} title="Confirmar Exclusão" isConfirmation={true}>
                 Tem certeza que deseja deletar esta compra e todas as suas parcelas?
             </GenericModal>
         </div>

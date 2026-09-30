@@ -39,7 +39,7 @@ test.describe('E2E Security — Isolamento de Escrita entre Usuários', () => {
         });
 
         await pageA.goto('/dashboard');
-        await expect(pageA.getByText('BLACK PRO')).toBeVisible({ timeout: 10000 });
+        await expect(pageA.locator('aside').getByText('Pro', { exact: true })).toBeVisible({ timeout: 10000 });
         // Verifica que a compra de Alpha existe no dashboard de Alpha
         await expect(pageA.getByText(/Resumo Financeiro/i)).toBeVisible();
 
@@ -70,11 +70,11 @@ test.describe('E2E Security — Isolamento de Escrita entre Usuários', () => {
         });
 
         await pageB.goto('/dashboard');
-        await expect(pageB.getByText('STANDARD')).toBeVisible({ timeout: 10000 });
+        await expect(pageB.locator('aside').getByText('Free', { exact: true })).toBeVisible({ timeout: 10000 });
 
         // User B NÃO deve ver dados de User A (não há dados de A no contexto de B)
         await expect(pageB.getByText('Compra Alpha Exclusiva')).not.toBeVisible();
-        await expect(pageB.getByText('BLACK PRO')).not.toBeVisible();
+        await expect(pageB.locator('aside').getByText('Pro', { exact: true })).not.toBeVisible();
 
         await contextB.close();
     });

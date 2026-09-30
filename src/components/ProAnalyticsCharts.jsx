@@ -17,20 +17,39 @@ const formatYAxis = (tick) => {
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="p-3 bg-carbon-900 border border-carbon-700 rounded-2xl shadow-2xl text-xs space-y-1">
-                <p className="font-bold text-gold-cream">{label}</p>
-                <p className="text-gold font-mono font-bold">{`Total Gasto: ${formatCurrencyDisplay(payload[0].value)}`}</p>
+            <div className="p-3 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-[var(--fc-shadow-md)] text-xs space-y-1">
+                <p className="font-bold text-[var(--fc-text-primary)]">{label}</p>
+                <p className="text-[var(--fc-accent)] font-mono font-bold">{`Total Gasto: ${formatCurrencyDisplay(payload[0].value)}`}</p>
             </div>
         );
     }
     return null;
 };
 
-const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions }) => {
-    const { isPro, isTrialActive, currentUser, showToast } = useAppContext();
+const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) => {
+    const { isPro, isTrialActive, currentUser, showToast, activateFreeTrial } = useAppContext();
     const [isLoading, setIsLoading] = useState(false);
 
     const hasProAccess = isPro || isTrialActive;
+
+    const handleActivateTrial = async () => {
+        if (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_USER__ || sessionStorage.getItem('fincontrol_e2e_user'))) {
+            showToast('Teste Pro ativado com sucesso! Aproveite 30 dias de acesso aos recursos Pro.', 'success');
+            return;
+        }
+        if (typeof activateFreeTrial === 'function') {
+            await activateFreeTrial();
+        }
+    };
+    const isLight = theme === 'light';
+    const textColor = isLight ? '#434A56' : '#9CA3AF';
+    const gridStroke = isLight ? 'rgba(20, 24, 30, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+    const axisLineStroke = isLight ? 'rgba(20, 24, 30, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+    const barFill = isLight ? '#8E5E00' : '#E5B842';
+    const cellStroke = isLight ? '#FFFFFF' : '#1A1D24';
+    const pieTooltipBg = isLight ? '#FFFFFF' : '#1A1D24';
+    const pieTooltipBorder = isLight ? 'rgba(20, 24, 30, 0.15)' : 'rgba(255, 255, 255, 0.15)';
+    const pieTooltipColor = isLight ? '#121417' : '#F9FAFB';
 
     const handleUpgrade = async () => {
         if (!currentUser) {
@@ -85,15 +104,20 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions }) => {
         return Object.entries(categories).map(([name, value]) => ({ name, value }));
     }, [expenses, loans, subscriptions]);
 
-    const COLORS = ['#F2B705', '#F29F05', '#D97904', '#BF5B04', '#8C3F02', '#592501', '#E8C547'];
-    const textColor = '#9CA3AF';
+    const COLORS = isLight 
+        ? ['#8E5E00', '#B45309', '#D97706', '#92400E', '#78350F', '#451A03', '#B7791F']
+        : ['#F2B705', '#F29F05', '#D97904', '#BF5B04', '#8C3F02', '#592501', '#E8C547'];
 
     return (
         <div className="relative min-h-[380px]">
             {!hasProAccess ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-carbon-900/80 backdrop-blur-md rounded-3xl z-20 p-4">
-                    <div className="max-w-sm w-full">
-                        <UpgradePrompt onUpgradeClick={handleUpgrade} isLoading={isLoading} />
+                <div className="absolute inset-0 flex items-center justify-center bg-[var(--fc-bg)]/80 backdrop-blur-md rounded-2xl z-20 p-4 overflow-y-auto">
+                    <div className="max-w-md w-full my-auto">
+                        <UpgradePrompt 
+                            onUpgradeClick={handleUpgrade} 
+                            onActivateTrial={handleActivateTrial}
+                            isLoading={isLoading} 
+                        />
                     </div>
                 </div>
             ) : (
@@ -101,41 +125,41 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions }) => {
                     
                     {/* Gráfico de Barras: Gastos por Pessoa */}
                     <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-gold-cream mb-6">Gastos por Pessoa (Fatura)</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)] mb-6">Gastos por Pessoa (Fatura)</h3>
                         {dataForBarChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={dataForBarChart}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-                                    <XAxis dataKey="name" tick={{ fill: textColor, fontSize: 12 }} axisLine={{ stroke: '#333' }} />
-                                    <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={formatYAxis} axisLine={{ stroke: '#333' }} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(242, 183, 5, 0.05)' }} />
-                                    <Bar dataKey="Total Gasto" fill="#F2B705" radius={[8, 8, 0, 0]}>
-                                        <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill="#F2B705" fontSize={11} fontWeight="bold" />
+                                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fill: textColor, fontSize: 12 }} axisLine={{ stroke: axisLineStroke }} />
+                                    <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={formatYAxis} axisLine={{ stroke: axisLineStroke }} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: isLight ? 'rgba(142, 94, 0, 0.05)' : 'rgba(229, 184, 66, 0.05)' }} />
+                                    <Bar dataKey="Total Gasto" fill={barFill} radius={[8, 8, 0, 0]}>
+                                        <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill={barFill} fontSize={11} fontWeight="bold" />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="flex items-center justify-center h-[300px] text-gray-500 text-sm">Nenhuma compra para os filtros.</div>
+                            <div className="flex items-center justify-center h-[300px] text-[var(--fc-text-muted)] text-sm">Nenhuma compra para os filtros.</div>
                         )}
                     </div>
 
                     {/* Gráfico de Pizza: Gastos por Categoria */}
                     <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-gold-cream mb-6">Gastos Totais por Categoria</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)] mb-6">Gastos Totais por Categoria</h3>
                         {dataForPieChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                     <Pie data={dataForPieChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                                         {dataForPieChart.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#171717" strokeWidth={2} />
+                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke={cellStroke} strokeWidth={2} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value) => formatCurrencyDisplay(value)} contentStyle={{ backgroundColor: '#171717', borderColor: '#333', borderRadius: '1rem', color: '#F2B705' }} />
-                                    <Legend wrapperStyle={{ fontSize: '12px', color: '#9CA3AF', paddingTop: '10px' }} />
+                                    <Tooltip formatter={(value) => formatCurrencyDisplay(value)} contentStyle={{ backgroundColor: pieTooltipBg, borderColor: pieTooltipBorder, borderRadius: '0.75rem', color: pieTooltipColor }} />
+                                    <Legend wrapperStyle={{ fontSize: '12px', color: textColor, paddingTop: '10px' }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="flex items-center justify-center h-[300px] text-gray-500 text-sm">Nenhum gasto para os filtros.</div>
+                            <div className="flex items-center justify-center h-[300px] text-[var(--fc-text-muted)] text-sm">Nenhum gasto para os filtros.</div>
                         )}
                     </div>
 

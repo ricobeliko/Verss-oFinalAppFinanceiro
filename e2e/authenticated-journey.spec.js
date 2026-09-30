@@ -26,13 +26,15 @@ test.describe('E2E Real Browser - Jornada Autenticada Completa & Recursos Financ
 
         await page.goto('/dashboard');
         // Aguarda renderização inicial do Dashboard
-        await expect(page.getByText('Resumo Financeiro 💳')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByRole('heading', { name: /Resumo financeiro/i })).toBeVisible({ timeout: 10000 });
     });
 
-    test('Fluxo 1: Deve renderizar o Dashboard com cards de métricas, fatura total e badge Black Pro', async ({ page }) => {
+    test('Fluxo 1: Deve renderizar o Dashboard com cards de métricas, fatura total e badge Pro factual', async ({ page }) => {
         await expect(page.getByText('Fatura Total do Mês')).toBeVisible();
         await expect(page.getByText('Progresso de Pagamento')).toBeVisible();
-        await expect(page.getByText('BLACK PRO')).toBeVisible();
+        await expect(page.getByText('Pro', { exact: true })).toBeVisible();
+        await expect(page.getByText('BLACK PRO')).not.toBeVisible();
+        await expect(page.getByText('Ativar Mês VIP')).not.toBeVisible();
     });
 
     test('Fluxo 2: Central de Notificações - Deve abrir pelo sino, exibir ARIA correto e fechar com Escape', async ({ page }) => {

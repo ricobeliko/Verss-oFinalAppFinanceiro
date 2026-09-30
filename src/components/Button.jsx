@@ -25,14 +25,14 @@ export default function Button({
     type = 'button',
     ...rest
 }) {
-    const baseStyles = 'inline-flex items-center justify-center font-bold transition-all duration-200 cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-gold/40 focus:ring-offset-2 focus:ring-offset-carbon-900 disabled:cursor-not-allowed disabled:opacity-50';
+    const baseStyles = 'inline-flex items-center justify-center font-bold transition-all duration-200 cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:ring-offset-2 focus:ring-offset-[var(--fc-bg)] disabled:cursor-not-allowed disabled:opacity-50';
 
     const variantStyles = {
-        primary: 'bg-gradient-to-r from-gold-light to-gold hover:opacity-95 text-carbon-900 shadow-lg shadow-gold/20 active:scale-[0.98]',
-        secondary: 'bg-carbon-800 hover:bg-carbon-700 text-gray-200 border border-carbon-700 font-medium active:scale-[0.98]',
-        danger: 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 active:scale-[0.98]',
-        ghost: 'text-gray-400 hover:text-gold-cream hover:bg-carbon-800/60 font-medium',
-        'outline-gold': 'bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 font-bold active:scale-[0.98]'
+        primary: 'bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] text-[var(--fc-accent-contrast)] shadow-lg shadow-[var(--fc-accent)]/20 active:scale-[0.98]',
+        secondary: 'bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] font-medium active:scale-[0.98]',
+        danger: 'bg-[var(--fc-danger)] hover:opacity-90 text-white shadow-lg shadow-[var(--fc-danger)]/20 active:scale-[0.98]',
+        ghost: 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] font-medium',
+        'outline-gold': 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 hover:bg-[var(--fc-accent)]/20 font-bold active:scale-[0.98]'
     };
 
     const sizeStyles = {
