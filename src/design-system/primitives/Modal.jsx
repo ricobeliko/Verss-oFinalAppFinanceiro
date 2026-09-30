@@ -25,6 +25,8 @@ export default function Modal({
 }) {
   const modalRef = useRef(null);
   const previousActiveElementRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -36,6 +38,17 @@ export default function Modal({
     // Delay focus slightly so the modal element is attached to DOM
     const timer = setTimeout(() => {
       if (modalRef.current) {
+        if (modalRef.current.contains(document.activeElement)) {
+          return;
+        }
+
+        // Prioritize first editable input control
+        const firstInput = modalRef.current.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
+        if (firstInput && typeof firstInput.focus === 'function') {
+          firstInput.focus();
+          return;
+        }
+
         const focusable = modalRef.current.querySelectorAll(focusableSelector);
         if (focusable.length > 0) {
           focusable[0].focus();
@@ -45,10 +58,27 @@ export default function Modal({
       }
     }, 40);
 
+    return () => {
+      clearTimeout(timer);
+      if (
+        previousActiveElementRef.current &&
+        typeof previousActiveElementRef.current.focus === 'function' &&
+        document.contains(previousActiveElementRef.current)
+      ) {
+        previousActiveElementRef.current.focus();
+      }
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current?.();
         return;
       }
 
@@ -79,13 +109,9 @@ export default function Modal({
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
-      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
-        previousActiveElementRef.current.focus();
-      }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

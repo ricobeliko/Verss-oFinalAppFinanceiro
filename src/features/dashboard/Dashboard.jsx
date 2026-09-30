@@ -28,7 +28,19 @@ import CategoryBudgetsWidget from '../../components/CategoryBudgetsWidget';
 import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
 import NotificationSettingsModal from '../../components/NotificationSettingsModal';
 import ProSummary from './ProSummary';
+import ProFeatureLock from '../../components/ProFeatureLock';
+import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import Surface from '../../design-system/primitives/Surface';
+import Badge from '../../design-system/primitives/Badge';
+
+
+const CreditCardKpiIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect width="20" height="14" x="2" y="5" rx="2" />
+        <line x1="2" x2="22" y1="10" y2="10" />
+    </svg>
+);
 
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
@@ -41,7 +53,8 @@ const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18"
 const TargetIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
 
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, userProfile, getUserCollectionPathSegments, showToast } = useAppContext();
+    const { db, userId, isAuthReady, theme, userProfile, getUserCollectionPathSegments, showToast, isPro, isTrialActive, handleUpgradeClick, activateFreeTrial } = useAppContext();
+    const hasProAccess = isPro || isTrialActive;
 
     const [dashboardData, setDashboardData] = useState({
         loans: [],
@@ -60,8 +73,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
     const [isBudgetsModalOpen, setIsBudgetsModalOpen] = useState(false);
     const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
+
 
     const handleSaveBudgets = async (newBudgets) => {
         try {
@@ -263,7 +278,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast(`${item.type} atualizada para ${newStatus}!`, "success");
         } catch (error) {
             console.error(`Erro ao atualizar ${item.type}:`, error);
-            showToast(`Erro ao atualizar: ${error.message}`, "error");
+            showToast('Não foi possível atualizar o item. Tente novamente.', "error");
         }
     };
     
@@ -330,7 +345,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast(`Parcela marcada como ${newStatus}!`, "success");
         } catch (error) {
             console.error("Erro ao atualizar parcela:", error);
-            showToast(`Erro ao atualizar parcela: ${error.message}`, "error");
+            showToast('Não foi possível atualizar a parcela. Tente novamente.', "error");
         }
     };
 
@@ -360,6 +375,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     };
 
     const handleExportMonthCsv = () => {
+        if (!hasProAccess) {
+            showToast('Exportação de extrato CSV é exclusiva do plano Pro.', 'warning');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (!displayableItems || displayableItems.length === 0) {
             showToast('Nenhuma transação disponível para exportar no mês selecionado.', 'warning');
             return;
@@ -387,6 +408,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     };
 
     const handleExportAnnualCsv = () => {
+        if (!hasProAccess) {
+            showToast('Relatório Anual consolidado é exclusivo do plano Pro.', 'warning');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         try {
             const currentYear = selectedMonth.slice(0, 4);
             const csv = generateAnnualReportCsv({
@@ -404,6 +431,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast('Erro ao exportar relatório anual CSV.', 'error');
         }
     };
+
 
     const {
         displayableItems,
@@ -647,6 +675,92 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         });
     }, [selectedMonth, loans, expenses, subscriptions, cards, clients, userProfile?.notificationSettings]);
 
+    // Infraestrutura de dispensas de alertas individuais reutilizando a mesma chave da Central de Notificações
+    const alertsStorageKey = useMemo(() => {
+        const uid = userId || 'anonymous';
+        return `fincontrol:dismissed-alerts:${uid}`;
+    }, [userId]);
+
+    const [dismissedAlertIds, setDismissedAlertIds] = useState(() => {
+        try {
+            const raw = localStorage.getItem(alertsStorageKey);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.map(item => item.id) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(alertsStorageKey);
+            if (!raw) {
+                setDismissedAlertIds([]);
+            } else {
+                const parsed = JSON.parse(raw);
+                setDismissedAlertIds(Array.isArray(parsed) ? parsed.map(item => item.id) : []);
+            }
+        } catch {
+            setDismissedAlertIds([]);
+        }
+    }, [alertsStorageKey]);
+
+    const handleDismissAlert = (alertId) => {
+        const updated = [...dismissedAlertIds, alertId];
+        setDismissedAlertIds(updated);
+        try {
+            const payload = updated.map(id => ({ id, dismissedAt: new Date().toISOString() }));
+            localStorage.setItem(alertsStorageKey, JSON.stringify(payload));
+        } catch {
+            // Silencioso
+        }
+    };
+
+    const activeFinancialAlerts = useMemo(() => {
+        return financialAlerts.filter(alert => !dismissedAlertIds.includes(alert.id));
+    }, [financialAlerts, dismissedAlertIds]);
+
+    // Projeção futura filtrada por pessoa (reutiliza selectedClientFilter sem alterar arrays originais)
+    const filteredLoansForProjection = useMemo(() => {
+        if (!selectedClientFilter) return loans;
+        const result = [];
+        (loans || []).forEach(loan => {
+            if (!loan) return;
+            if (loan.isShared && loan.sharedDetails) {
+                if (loan.sharedDetails.person1?.clientId === selectedClientFilter) {
+                    result.push({
+                        ...loan,
+                        id: `${loan.id}-p1`,
+                        isShared: false,
+                        installments: loan.sharedDetails.person1.installments || []
+                    });
+                }
+                if (loan.sharedDetails.person2?.clientId === selectedClientFilter) {
+                    result.push({
+                        ...loan,
+                        id: `${loan.id}-p2`,
+                        isShared: false,
+                        installments: loan.sharedDetails.person2.installments || []
+                    });
+                }
+            } else if (loan.clientId === selectedClientFilter) {
+                result.push(loan);
+            }
+        });
+        return result;
+    }, [loans, selectedClientFilter]);
+
+    const filteredSubscriptionsForProjection = useMemo(() => {
+        if (!selectedClientFilter) return subscriptions;
+        return (subscriptions || []).filter(s => s && s.clientId === selectedClientFilter);
+    }, [subscriptions, selectedClientFilter]);
+
+    const selectedClientNameForProjection = useMemo(() => {
+        if (!selectedClientFilter) return '';
+        return (clients || []).find(c => c && c.id === selectedClientFilter)?.name || '';
+    }, [clients, selectedClientFilter]);
+
     const requestSort = (key) => {
         let direction = 'ascending';
         if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -778,7 +892,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     if (isLoading) {
         return (
-            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl">
+            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)]">
                 <Spinner />
             </div>
         );
@@ -787,75 +901,87 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     return (
         <div className="space-y-8 animate-fadeIn">
             {isSyncStale && (
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 text-amber-300 text-sm animate-fade-in shadow-lg" role="alert">
-                    <svg className="w-5 h-5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="p-4 rounded-2xl bg-[var(--fc-warning-soft)] border border-[var(--fc-warning)]/30 flex items-center gap-3 text-[var(--fc-warning)] text-sm animate-fade-in shadow-sm" role="alert">
+                    <svg className="w-5 h-5 flex-shrink-0 text-[var(--fc-warning)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <span>Não foi possível atualizar os dados em tempo real. Os valores exibidos podem estar desatualizados.</span>
                 </div>
             )}
-            {/* Header com Filtros em Cards Carbono/Dourado */}
-            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+            {/* Header com Filtros em Surface DS2 */}
+            <Surface variant="elevated" padding="lg" className="space-y-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">
-                            Resumo Financeiro 💳
+                        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">
+                            Resumo financeiro
                         </h2>
-                        <p className="text-sm text-gray-400 mt-1">
-                            Acompanhe suas faturas e o controle do seu cartão Black.
+                        <p className="text-sm text-[var(--fc-text-secondary)] mt-1">
+                            Visão consolidada do período selecionado.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
                         <button
                             type="button"
                             onClick={handleCurrentMonth}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition cursor-pointer"
+                            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 hover:bg-[var(--fc-accent)]/20 transition cursor-pointer"
                         >
                             Mês Atual
                         </button>
                         <button
                             type="button"
-                            onClick={() => setIsExecutiveSummaryOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/15 text-gold border border-gold/40 hover:bg-gold/25 transition cursor-pointer"
+                            onClick={() => {
+                                if (!hasProAccess) {
+                                    showToast('Resumo Executivo é exclusivo do plano Pro.', 'warning');
+                                    setIsUpgradeModalOpen(true);
+                                } else {
+                                    setIsExecutiveSummaryOpen(true);
+                                }
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
                             title="Abrir Resumo Executivo Semanal e Mensal"
                         >
-                            <span>📋</span>
                             <span>Resumo Executivo</span>
+                            {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
                         </button>
                         <button
                             type="button"
-                            onClick={() => setIsSimulatorOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition cursor-pointer"
+                            onClick={() => {
+                                if (!hasProAccess) {
+                                    showToast('Simulador Sandbox é exclusivo do plano Pro.', 'warning');
+                                    setIsUpgradeModalOpen(true);
+                                } else {
+                                    setIsSimulatorOpen(true);
+                                }
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
                             title="Abrir Simulador Financeiro Sandbox (E se...?)"
                         >
-                            <span>🧪</span>
                             <span>Simulador</span>
+                            {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
                         </button>
+
                         <button
                             type="button"
                             onClick={() => setIsNotificationSettingsOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-carbon-800 text-gray-300 border border-carbon-700 hover:text-gold hover:bg-carbon-700 transition cursor-pointer"
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
                             title="Configurar Preferências de Alertas"
                         >
-                            <span>⚙️</span>
                             <span>Alertas</span>
                         </button>
                         <button
                             type="button"
                             onClick={handleExportMonthCsv}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-carbon-800 text-gold-cream border border-carbon-700 hover:bg-carbon-700 transition cursor-pointer"
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
                             title="Exportar lançamentos do mês em CSV"
                         >
-                            <span>📥</span>
                             <span>CSV Mês</span>
                         </button>
                         <button
                             type="button"
                             onClick={handleExportAnnualCsv}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-gold/10 text-gold border border-gold/30 hover:bg-gold/20 transition cursor-pointer"
+                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
                             title={`Exportar Relatório Anual Consolidado (${selectedMonth.slice(0, 4)})`}
                         >
-                            <span>📊</span>
                             <span>Relatório Anual {selectedMonth.slice(0, 4)}</span>
                         </button>
                     </div>
@@ -869,7 +995,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             onClick={handlePrevMonth}
                             aria-label="Mês anterior"
                             title="Mês anterior"
-                            className="p-3 bg-carbon-800 hover:bg-carbon-700 text-gold-cream border border-carbon-700 rounded-2xl shadow-sm transition cursor-pointer flex-shrink-0"
+                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ◀
                         </button>
@@ -878,14 +1004,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             value={selectedMonth} 
                             onChange={(e) => setSelectedMonth(e.target.value)} 
                             aria-label="Selecionar mês e ano de competência"
-                            className="w-full p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition" 
+                            className="w-full min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition" 
                         />
                         <button 
                             type="button"
                             onClick={handleNextMonth}
                             aria-label="Próximo mês"
                             title="Próximo mês"
-                            className="p-3 bg-carbon-800 hover:bg-carbon-700 text-gold-cream border border-carbon-700 rounded-2xl shadow-sm transition cursor-pointer flex-shrink-0"
+                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ▶
                         </button>
@@ -894,7 +1020,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         value={selectedCardFilter} 
                         onChange={(e) => setSelectedCardFilter(e.target.value)} 
                         aria-label="Filtrar por cartão"
-                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
+                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
                     >
                         <option value="">Todos os Cartões</option>
                         {cards.map(card => (<option key={card.id} value={card.id}>{card.name}</option>))}
@@ -903,69 +1029,74 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         value={selectedClientFilter} 
                         onChange={(e) => setSelectedClientFilter(e.target.value)} 
                         aria-label="Filtrar por pessoa"
-                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl shadow-sm text-gold-cream focus:ring-2 focus:ring-gold focus:outline-none transition"
+                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
                     >
                         <option value="">Todas as Pessoas</option>
                         {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
                     </select>
                 </div>
-            </div>
+            </Surface>
 
-            {/* Banner de Alertas Financeiros Internos */}
-            <FinancialAlertsBanner alerts={financialAlerts} />
+            {/* Banner de Alertas Financeiros Internos com Ação de Dispensar */}
+            <FinancialAlertsBanner alerts={activeFinancialAlerts} onDismiss={handleDismissAlert} />
 
             {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
-                    {/* Card Fatura Total com Gradiente Dourado Sutil */}
-                    <div className="bg-gradient-to-br from-carbon-900 via-carbon-900 to-carbon-800 border border-carbon-700 p-6 rounded-3xl shadow-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-gold-glow">
+                    {/* Card Fatura Total com Surface DS2 */}
+                    <Surface variant="elevated" padding="md" className="transition-all hover:border-[var(--fc-accent)]/30">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-gray-400">Fatura Total do Mês</h3>
-                            <div className="w-10 h-10 rounded-2xl bg-gold/10 text-gold flex items-center justify-center font-bold border border-gold/20">
-                                💳
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Fatura Total do Mês</h3>
+                            <div className="w-8 h-8 rounded-lg bg-[var(--fc-surface-1)] text-[var(--fc-accent)] flex items-center justify-center border border-[var(--fc-border-subtle)]">
+                                <CreditCardKpiIcon />
                             </div>
                         </div>
-                        <p className="text-3xl font-extrabold tracking-tight text-gold-cream mt-4">
+                        <p className="text-3xl font-extrabold tracking-tight text-[var(--fc-text-primary)] mt-3">
                             {formatCurrencyDisplay(summary.totalFatura)}
                         </p>
                         <div className="mt-3 flex items-center gap-2">
                             {monthlyComparison.previousInvoiceTotal > 0 ? (
-                                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-lg border ${
-                                    monthlyComparison.invoiceDelta.direction === 'up'
-                                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                                        : (monthlyComparison.invoiceDelta.direction === 'down'
-                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                            : 'bg-carbon-800 text-gray-400 border-carbon-700')
-                                }`}>
+                                <Badge variant={monthlyComparison.invoiceDelta.direction === 'up' ? 'warning' : monthlyComparison.invoiceDelta.direction === 'down' ? 'success' : 'neutral'}>
                                     <span>{monthlyComparison.invoiceDelta.direction === 'up' ? '▲' : (monthlyComparison.invoiceDelta.direction === 'down' ? '▼' : '•')}</span>
                                     <span>{monthlyComparison.invoiceDelta.label} vs mês anterior</span>
-                                </span>
+                                </Badge>
                             ) : (
-                                <span className="text-[11px] text-gray-500 font-medium">Mês base de referência</span>
+                                <span className="text-xs text-[var(--fc-text-muted)] font-medium">Mês base de referência</span>
                             )}
                         </div>
-                    </div>
+                    </Surface>
 
-                    {/* Card Progresso de Pagamento */}
-                    <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                        <h3 className="text-sm font-medium text-gray-400">Progresso de Pagamento</h3>
-                        <div className="w-full bg-carbon-800 rounded-full h-3 my-4 overflow-hidden border border-carbon-700">
-                            <div className="bg-gradient-to-r from-gold-light to-gold h-3 rounded-full transition-all duration-500" style={{ width: `${paidPercentage}%` }}></div>
+                    {/* Card Progresso de Pagamento com Surface DS2 */}
+                    <Surface variant="elevated" padding="md" className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Progresso de Pagamento</h3>
+                            <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage}%</span>
                         </div>
-                        <div className="flex justify-between text-xs sm:text-sm font-medium">
-                            <span className="text-gold font-semibold">{formatCurrencyDisplay(summary.totalRecebido)} <span className="text-gray-400 font-normal">Pago</span></span>
-                            <span className="text-amber-300">{formatCurrencyDisplay(summary.totalPendente)} <span className="text-gray-400 font-normal">Pendente</span></span>
+                        <div className="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]">
+                            <div className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300" style={{ width: `${paidPercentage}%` }}></div>
                         </div>
-                    </div>
+                        <div className="flex justify-between text-xs font-medium pt-1">
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
+                                <span className="text-[var(--fc-text-secondary)]">Pago:</span>
+                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalRecebido)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
+                                <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
+                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalPendente)}</span>
+                            </div>
+                        </div>
+                    </Surface>
 
-                    {/* ProSummary em Card Carbono */}
-                    <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl">
+                    {/* ProSummary */}
+                    <div className="overflow-hidden">
                         <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
                     </div>
                 </div>
 
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl">
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)]">
                         <ProAnalyticsCharts
                             loans={filteredLoansForChart}
                             clients={clients}
@@ -976,82 +1107,115 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     </div>
 
                     {/* Novos Widgets de Inteligência (Auditoria Relâmpago & Metas de Quitação) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        
-                        {/* Widget 1: Auditoria Relâmpago (Mini Modo Crise) */}
-                        <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl space-y-4">
-                            <div className="flex items-center gap-2.5 text-amber-400">
-                                <ShieldAlertIcon />
-                                <h3 className="text-sm font-bold uppercase tracking-wider">Auditoria Relâmpago</h3>
-                            </div>
-                            <div className="space-y-2.5 text-xs text-gray-300">
-                                <div className="p-3 bg-carbon-800/60 border border-carbon-700/60 rounded-2xl flex justify-between items-center">
-                                    <span>Compromissos Recorrentes (Assinaturas)</span>
-                                    <span className="font-mono font-bold text-gold">{formatCurrencyDisplay(intelligenceData.activeSubscriptionsTotal)}/mês</span>
+                    {hasProAccess ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Widget 1: Auditoria Relâmpago (Mini Modo Crise) */}
+                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
+                                <div className="flex items-center gap-2.5 text-[var(--fc-warning)]">
+                                    <ShieldAlertIcon />
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Auditoria Relâmpago</h3>
                                 </div>
-                                <p className="text-[11px] text-gray-400 leading-relaxed px-1">
-                                    💡 <strong className="text-gold-cream">Dica de Ouro:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.
-                                </p>
+                                <div className="space-y-2.5 text-xs text-[var(--fc-text-secondary)]">
+                                    <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
+                                        <span>Compromissos Recorrentes (Assinaturas)</span>
+                                        <span className="font-mono font-bold text-[var(--fc-accent)]">{formatCurrencyDisplay(intelligenceData.activeSubscriptionsTotal)}/mês</span>
+                                    </div>
+                                    <p className="text-[11px] text-[var(--fc-text-muted)] leading-relaxed px-1">
+                                        💡 <strong className="text-[var(--fc-text-primary)] font-semibold">Dica:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.
+                                    </p>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Widget 2: Metas & Timeline de Quitação */}
-                        <div className="bg-carbon-900 border border-carbon-800 p-6 rounded-3xl shadow-2xl space-y-4">
-                            <div className="flex items-center gap-2.5 text-gold">
-                                <TargetIcon />
-                                <h3 className="text-sm font-bold uppercase tracking-wider">Metas & Quitação de Dívidas</h3>
-                            </div>
-                            {intelligenceData.upcomingFinishes.length > 0 ? (
-                                <div className="space-y-2.5">
-                                    {intelligenceData.upcomingFinishes.map((item, idx) => (
-                                        <div key={idx} className="p-3 bg-carbon-800/60 border border-carbon-700/60 rounded-2xl flex justify-between items-center">
-                                            <div className="truncate pr-2">
-                                                <span className="text-xs font-bold text-gold-cream block truncate">{item.description}</span>
-                                                <span className="text-[10px] text-gray-400">Faltam {item.remaining} parcelas</span>
+                            {/* Widget 2: Metas & Timeline de Quitação */}
+                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
+                                <div className="flex items-center gap-2.5 text-[var(--fc-accent)]">
+                                    <TargetIcon />
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Metas & Quitação de Dívidas</h3>
+                                </div>
+                                {intelligenceData.upcomingFinishes.length > 0 ? (
+                                    <div className="space-y-2.5">
+                                        {intelligenceData.upcomingFinishes.map((item, idx) => (
+                                            <div key={idx} className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
+                                                <div className="truncate pr-2">
+                                                    <span className="text-xs font-bold text-[var(--fc-text-primary)] block truncate">{item.description}</span>
+                                                    <span className="text-[10px] text-[var(--fc-text-muted)]">Faltam {item.remaining} parcelas</span>
+                                                </div>
+                                                <span className="text-[11px] font-semibold text-[var(--fc-success)] whitespace-nowrap bg-[var(--fc-success-soft)] px-2.5 py-1 rounded-lg border border-[var(--fc-success)]/20">
+                                                    Até {new Date(item.finalDate + 'T00:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                                                </span>
                                             </div>
-                                            <span className="text-[11px] font-semibold text-emerald-400 whitespace-nowrap bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
-                                                Até {new Date(item.finalDate + 'T00:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6 text-xs text-gray-500">
-                                    Nenhuma compra parcelada ativa para projetar quitação no momento.
-                                </div>
-                            )}
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6 text-xs text-[var(--fc-text-muted)]">
+                                        Nenhuma compra parcelada ativa para projetar quitação no momento.
+                                    </div>
+                                )}
+                            </div>
                         </div>
-
-                    </div>
+                    ) : (
+                        <ProFeatureLock
+                            title="Auditoria Relâmpago & Metas de Quitação"
+                            description="Análise cirúrgica de recorrências e projeção de encerramento de parcelas no plano Pro."
+                            onAction={() => setIsUpgradeModalOpen(true)}
+                        />
+                    )}
                 </div>
             </div>
 
             {/* Insights Financeiros Automáticos */}
-            <DeterministicInsightsWidget insights={deterministicInsights} />
+            {hasProAccess ? (
+                <DeterministicInsightsWidget insights={deterministicInsights} />
+            ) : (
+                <ProFeatureLock
+                    title="Insights Financeiros Determinísticos"
+                    description="Detecção inteligente de variações de fatura, anomalias e concentração de gastos."
+                    onAction={() => setIsUpgradeModalOpen(true)}
+                />
+            )}
 
-            {/* Projeção de Faturas e Descompressão Futura */}
-            <FutureCommitmentsCard 
-                loans={loans} 
-                subscriptions={subscriptions} 
-                selectedMonth={selectedMonth} 
-            />
+            {/* Projeção de Faturas e Descompressão Futura (com suporte a filtro por pessoa) */}
+            {hasProAccess ? (
+                <FutureCommitmentsCard 
+                    loans={filteredLoansForProjection} 
+                    subscriptions={filteredSubscriptionsForProjection} 
+                    selectedMonth={selectedMonth} 
+                    selectedClientName={selectedClientNameForProjection}
+                />
+            ) : (
+                <ProFeatureLock
+                    title="Projeção de Faturas Futuras"
+                    description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
+                    onAction={() => setIsUpgradeModalOpen(true)}
+                />
+            )}
 
             {/* Metas de Orçamento por Categoria (Budgets) */}
-            <CategoryBudgetsWidget
-                budgets={userProfile?.budgets || {}}
-                expenses={expenses}
-                loans={loans}
-                selectedMonth={selectedMonth}
-                onOpenBudgetModal={() => setIsBudgetsModalOpen(true)}
-            />
+            {hasProAccess ? (
+                <CategoryBudgetsWidget
+                    budgets={userProfile?.budgets || {}}
+                    expenses={expenses}
+                    loans={loans}
+                    selectedMonth={selectedMonth}
+                    onOpenBudgetModal={() => setIsBudgetsModalOpen(true)}
+                />
+            ) : (
+                <ProFeatureLock
+                    title="Metas de Orçamento por Categoria"
+                    description="Defina limites por categoria para manter suas despesas sob controle."
+                    onAction={() => setIsUpgradeModalOpen(true)}
+                />
+            )}
 
             {/* Tabela de Itens da Fatura */}
-            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
-                <div className="p-6 border-b border-carbon-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-lg font-bold text-gold-cream">Itens da Fatura</h3>
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
+                <div className="p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+
+                    <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>
                     <button 
+                        type="button"
                         onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
-                        className="bg-gold/10 text-gold border border-gold/30 px-4 py-2 rounded-2xl hover:bg-gold/20 text-xs font-semibold transition cursor-pointer"
+                        className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 px-4 py-2 rounded-xl hover:bg-[var(--fc-accent)]/20 text-xs font-semibold transition cursor-pointer"
                     >
                         Marcar Tudo Como Pago
                     </button>
@@ -1060,7 +1224,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-left border-collapse">
                         <thead>
-                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                            <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
                                 <th scope="col" aria-sort={sortConfig.key === 'type' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('type')}>
                                     Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
                                 </th>
@@ -1077,16 +1241,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-carbon-800 text-sm">
+                        <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
                             {displayableItems.length > 0 ? displayableItems.map((item) => {
                                 const client = clients.find(c => c.id === item.clientId);
                                 const card = cards.find(c => c.id === item.cardId);
                                 return (
-                                    <tr key={item.id} className="hover:bg-carbon-800/40 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400 font-medium">{item.type}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream">{item.description}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">{client?.name || '---'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">
+                                    <tr key={item.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)] font-medium">{item.type}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--fc-text-primary)]">{item.description}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">{client?.name || '---'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             {card ? (
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }} aria-hidden="true"></div>
@@ -1094,16 +1258,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                                 </div>
                                             ) : '---'}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-bold text-gold">{formatCurrencyDisplay(item.value)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-400">
+                                        <td className="px-6 py-4 whitespace-nowrap font-bold text-[var(--fc-accent)] font-mono">{formatCurrencyDisplay(item.value)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                                                item.currentStatus === 'Paga' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                item.currentStatus === 'Pendente' ? 'bg-gold/10 text-gold border-gold/20' :
-                                                item.currentStatus === 'Atrasado' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                                                'bg-gray-800 text-gray-400 border-gray-700'
+                                                item.currentStatus === 'Paga' ? 'bg-[var(--fc-success-soft)] text-[var(--fc-success)] border-[var(--fc-success)]/30' :
+                                                item.currentStatus === 'Pendente' ? 'bg-[var(--fc-warning-soft)] text-[var(--fc-warning)] border-[var(--fc-warning)]/30' :
+                                                item.currentStatus === 'Atrasado' ? 'bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] border-[var(--fc-danger)]/30' :
+                                                'bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border-[var(--fc-border-default)]'
                                             }`}>
                                                 {item.currentStatus}
                                             </span>
@@ -1111,18 +1275,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {item.currentStatus !== 'Paga' && (
                                                 <button 
+                                                    type="button"
                                                     onClick={() => updateItemStatus(item, 'Paga')} 
                                                     aria-label={`Marcar ${item.description} como paga`}
-                                                    className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-emerald-500/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                                    className="bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-success)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                 >
                                                     Marcar Paga
                                                 </button>
                                             )}
                                             {item.currentStatus === 'Paga' && (
                                                  <button 
+                                                    type="button"
                                                     onClick={() => updateItemStatus(item, 'Pendente')} 
                                                     aria-label={`Desmarcar ${item.description}`}
-                                                    className="bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-rose-500/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                                                    className="bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-danger)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                  >
                                                      Desmarcar
                                                  </button>
@@ -1132,7 +1298,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 );
                             }) : (
                                 <tr>
-                                    <td colSpan="8" className="text-center py-12 text-gray-500">
+                                    <td colSpan="8" className="text-center py-12 text-[var(--fc-text-muted)]">
                                         Nenhum item na fatura para os filtros selecionados.
                                     </td>
                                 </tr>
@@ -1145,11 +1311,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             <GenericModal 
                 isOpen={isMarkAllPaidConfirmationOpen} 
                 onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
-                onConfirm={handleMarkAllAsPaid}
+                onConfirm={handleMarkAllAsPaid} 
                 title="Confirmar Ação" 
                 message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
                 isConfirmation={true} 
-                theme={theme} 
             />
 
             <ExecutiveSummaryModal
@@ -1184,8 +1349,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 currentSettings={userProfile?.notificationSettings || {}}
                 onSaveSettings={handleSaveNotificationSettings}
             />
+
+            {/* Modal de Upgrade Pro */}
+            <GenericModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                maxWidth="max-w-lg"
+            >
+                <UpgradePrompt
+                    onUpgradeClick={handleUpgradeClick}
+                    onActivateTrial={activateFreeTrial}
+                />
+            </GenericModal>
         </div>
     );
 }
 
-export default Dashboard;
+export default Dashboard;

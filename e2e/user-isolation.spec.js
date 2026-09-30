@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('E2E Real Browser - Isolamento Estrito entre Usuários (User A vs User B)', () => {
-    test('User A (Black Pro) deve ver seu plano e métricas Pro', async ({ page }) => {
+    test('User A (Pro) deve ver seu plano e métricas Pro', async ({ page }) => {
         await page.addInitScript(() => {
             window.__FINCONTROL_E2E_USER__ = {
                 uid: 'e2e-user-alpha',
@@ -25,11 +25,11 @@ test.describe('E2E Real Browser - Isolamento Estrito entre Usuários (User A vs 
         });
 
         await page.goto('/dashboard');
-        await expect(page.getByText('Resumo Financeiro 💳')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText('BLACK PRO')).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Resumo financeiro/i })).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('aside').getByText('Pro', { exact: true })).toBeVisible();
     });
 
-    test('User B (Standard) deve ver plano Standard e NÃO ver privilégios Pro do User A', async ({ page }) => {
+    test('User B (Free) deve ver plano Free e NÃO ver privilégios Pro do User A', async ({ page }) => {
         await page.addInitScript(() => {
             window.__FINCONTROL_E2E_USER__ = {
                 uid: 'e2e-user-beta',
@@ -52,8 +52,9 @@ test.describe('E2E Real Browser - Isolamento Estrito entre Usuários (User A vs 
         });
 
         await page.goto('/dashboard');
-        await expect(page.getByText('Resumo Financeiro 💳')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText('STANDARD')).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Resumo financeiro/i })).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('aside').getByText('Free', { exact: true })).toBeVisible();
+        await expect(page.locator('aside').getByText('Pro', { exact: true })).not.toBeVisible();
         await expect(page.getByText('BLACK PRO')).not.toBeVisible();
     });
 });

@@ -34,58 +34,58 @@ const WelcomeModal = ({ isOpen, onClose, onActivateTrial, isTrialAvailable }) =>
       aria-modal="true"
       aria-labelledby="welcome-modal-title"
     >
-      <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl w-full max-w-md transform transition-all duration-300 overflow-hidden relative">
+      <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-lg)] w-full max-w-md transform transition-all duration-300 overflow-hidden relative">
         
         {/* Botão Fechar */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-gray-400 hover:text-white p-2 rounded-2xl bg-carbon-800 hover:bg-carbon-700 transition cursor-pointer z-10 focus:outline-none focus:ring-2 focus:ring-gold/50"
+          className="absolute top-5 right-5 text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] p-2 rounded-2xl bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] transition cursor-pointer z-10 focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
           aria-label="Fechar modal de boas-vindas"
         >
           <XIcon />
         </button>
 
-        <div className="p-8 text-white text-center space-y-6">
+        <div className="p-8 text-[var(--fc-text-primary)] text-center space-y-6">
           {isTrialAvailable ? (
-            // Versão "Mês Grátis"
+            // Versão "30 Dias Grátis"
             <>
               <div className="flex justify-center items-center">
-                <div className="p-4 bg-gold/10 text-gold border border-gold/20 rounded-2xl shadow-inner">
+                <div className="p-4 bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 rounded-2xl shadow-inner">
                   <GiftIcon />
                 </div>
               </div>
               <div className="space-y-2">
-                <h2 id="welcome-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Um Presente Para Você!</h2>
-                <p className="text-sm text-gray-400 leading-relaxed max-w-xs mx-auto">
+                <h2 id="welcome-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Um Presente Para Você!</h2>
+                <p className="text-sm text-[var(--fc-text-secondary)] leading-relaxed max-w-xs mx-auto">
                   Desbloqueie todos os recursos Pro por 30 dias, totalmente grátis. Sem compromisso!
                 </p>
               </div>
               <button
                 onClick={handleActivate}
-                className="w-full bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-gold/25 hover:opacity-95 transition cursor-pointer tracking-wide focus:outline-none focus:ring-2 focus:ring-gold/50"
+                className="w-full bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] text-[var(--fc-accent-contrast)] font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition cursor-pointer tracking-wide focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
               >
-                Ativar Mês Grátis Agora!
+                Ativar 30 Dias Grátis Agora!
               </button>
             </>
           ) : (
             // Versão "Torne-se Pro"
             <>
               <div className="flex justify-center items-center">
-                 <div className="p-4 bg-gold/10 text-gold border border-gold/20 rounded-2xl shadow-inner">
+                 <div className="p-4 bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 rounded-2xl shadow-inner">
                     <StarIcon />
                  </div>
               </div>
               <div className="space-y-2">
-                <h2 id="welcome-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Evolua sua Gestão!</h2>
-                <p className="text-sm text-gray-400 leading-relaxed max-w-xs mx-auto">
+                <h2 id="welcome-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Evolua sua Gestão!</h2>
+                <p className="text-sm text-[var(--fc-text-secondary)] leading-relaxed max-w-xs mx-auto">
                   Tenha acesso a gráficos detalhados, relatórios completos e muito mais com o plano Pro.
                 </p>
               </div>
               <button
                 onClick={onClose}
-                className="w-full bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3.5 px-6 rounded-2xl shadow-lg shadow-gold/25 hover:opacity-95 transition cursor-pointer tracking-wide focus:outline-none focus:ring-2 focus:ring-gold/50"
+                className="w-full bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] text-[var(--fc-accent-contrast)] font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition cursor-pointer tracking-wide focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
               >
-                Ver Planos Pro
+                Ver Recursos Pro
               </button>
             </>
           )}
@@ -93,7 +93,7 @@ const WelcomeModal = ({ isOpen, onClose, onActivateTrial, isTrialAvailable }) =>
           <div>
             <button
               onClick={onClose}
-              className="text-xs font-semibold text-gray-400 hover:text-gold transition cursor-pointer tracking-wider uppercase focus:outline-none focus:underline"
+              className="text-xs font-semibold text-[var(--fc-text-muted)] hover:text-[var(--fc-accent)] transition cursor-pointer tracking-wider uppercase focus:outline-none focus:underline"
             >
               Talvez depois
             </button>

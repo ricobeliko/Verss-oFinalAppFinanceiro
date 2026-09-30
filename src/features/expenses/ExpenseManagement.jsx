@@ -16,7 +16,8 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" heig
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 function ExpenseManagement() {
-    const { userId, db, showToast, getUserCollectionPathSegments, theme } = useAppContext();
+    const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
+
 
     const { expenses } = useExpenses();
     const { cards } = useCards();
@@ -117,7 +118,7 @@ function ExpenseManagement() {
             handleCloseModal();
         } catch (error) {
             console.error("Erro ao salvar despesa:", error);
-            showToast(`Erro ao salvar despesa: ${error.message}`, 'error');
+            showToast('Não foi possível salvar a despesa. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -136,8 +137,8 @@ function ExpenseManagement() {
             await deleteDoc(expenseDocRef);
             showToast('Despesa deletada com sucesso!', 'success');
         } catch (error) {
-            console.error("Erro ao deletar despesa:", error);
-            showToast(`Erro ao deletar despesa: ${error.message}`, 'error');
+            console.error("Erro ao excluir despesa:", error);
+            showToast('Não foi possível excluir a despesa. Tente novamente.', 'error');
         } finally {
             setIsConfirmationModalOpen(false);
             setExpenseToDelete(null);
@@ -148,11 +149,11 @@ function ExpenseManagement() {
     
     return (
         <div className="space-y-8 animate-fadeIn">
-            {/* Header Carbono & Dourado */}
-            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Header Harmonizado */}
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Despesas</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione e acompanhe seus gastos avulsos do dia a dia.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Despesas</h1>
+                    <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Adicione e acompanhe seus gastos avulsos do dia a dia.</p>
                 </div>
                 <Button 
                     variant="primary" 
@@ -165,11 +166,11 @@ function ExpenseManagement() {
             </div>
 
             {/* Tabela de Despesas */}
-            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>
-                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                            <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
                                 <th scope="col" className="px-6 py-4">Descrição</th>
                                 <th scope="col" className="px-6 py-4">Valor</th>
                                 <th scope="col" className="px-6 py-4">Data</th>
@@ -178,21 +179,21 @@ function ExpenseManagement() {
                                 <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-carbon-800 text-sm">
+                        <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
                             {expenses.length > 0 ? expenses.map((expense) => (
-                                <tr key={expense.id} className="hover:bg-carbon-800/40 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream">{expense.description}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-rose-400">{formatCurrencyDisplay(expense.value)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{expense.category}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{getCardName(expense.cardId)}</td>
+                                <tr key={expense.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--fc-text-primary)]">{expense.description}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-extrabold text-rose-600 dark:text-rose-400">{formatCurrencyDisplay(expense.value)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--fc-text-secondary)]">{new Date(expense.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--fc-text-secondary)]">{expense.category}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--fc-text-secondary)]">{getCardName(expense.cardId)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap font-medium">
                                         <div className="flex items-center gap-4">
                                             <button 
                                                 type="button"
                                                 onClick={() => handleOpenModal(expense)} 
                                                 aria-label={`Editar despesa ${expense.description || ''}`.trim()}
-                                                className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                                className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer p-1" 
                                                 title="Editar"
                                             >
                                                 <EditIcon />
@@ -201,7 +202,7 @@ function ExpenseManagement() {
                                                 type="button"
                                                 onClick={() => confirmDelete(expense.id)} 
                                                 aria-label={`Excluir despesa ${expense.description || ''}`.trim()}
-                                                className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                                className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition cursor-pointer p-1" 
                                                 title="Deletar"
                                             >
                                                 <DeleteIcon />
@@ -211,7 +212,7 @@ function ExpenseManagement() {
                                 </tr>
                             )) : (
                                <tr>
-                                    <td colSpan="6" className="text-center py-12 text-gray-500">
+                                    <td colSpan="6" className="text-center py-12 text-[var(--fc-text-secondary)]">
                                         Nenhuma despesa cadastrada.
                                     </td>
                                 </tr>
@@ -222,39 +223,39 @@ function ExpenseManagement() {
             </div>
 
             {/* Modal de Cadastro/Edição */}
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingExpense ? 'Editar Despesa' : 'Adicionar Despesa'} theme="dark" maxWidth="max-w-lg">
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingExpense ? 'Editar Despesa' : 'Adicionar Despesa'} maxWidth="max-w-lg">
                 <div className="space-y-4">
                     <div>
-                        <label htmlFor="expenseDescription" className="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+                        <label htmlFor="expenseDescription" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Descrição</label>
                         <input id="expenseDescription" type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex: Supermercado" required />
                     </div>
                     <div>
-                        <label htmlFor="expenseValue" className="block text-sm font-medium text-gray-300 mb-1">Valor</label>
+                        <label htmlFor="expenseValue" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Valor</label>
                         <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gold font-bold pointer-events-none z-10" aria-hidden="true">R$</span>
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10" aria-hidden="true">R$</span>
                             <input id="expenseValue" type="text" value={valueInput} onChange={handleCurrencyInputChange(setValueInput)} className="w-full currency-input !pl-14" required inputMode="decimal" placeholder="0,00" />
                         </div>
                     </div>
                     <div>
-                        <label htmlFor="expenseDate" className="block text-sm font-medium text-gray-300 mb-1">Data</label>
+                        <label htmlFor="expenseDate" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Data</label>
                         <input id="expenseDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
                     </div>
                     <div>
-                        <label htmlFor="expenseCategory" className="block text-sm font-medium text-gray-300 mb-1">Categoria</label>
+                        <label htmlFor="expenseCategory" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Categoria</label>
                         <select id="expenseCategory" value={category} onChange={(e) => setCategory(e.target.value)} required>
                             <option value="">Selecione uma categoria</option>
                             {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="expensePaymentMethod" className="block text-sm font-medium text-gray-300 mb-1">Forma de Pagamento</label>
+                        <label htmlFor="expensePaymentMethod" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Forma de Pagamento</label>
                         <select id="expensePaymentMethod" value={cardId} onChange={(e) => setCardId(e.target.value)}>
                             <option value="">Dinheiro/Pix</option>
                             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="expenseClient" className="block text-sm font-medium text-gray-300 mb-1">Pessoa (Opcional)</label>
+                        <label htmlFor="expenseClient" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Pessoa (Opcional)</label>
                         <select id="expenseClient" value={clientId} onChange={(e) => setClientId(e.target.value)}>
                             <option value="">Nenhuma</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
@@ -287,7 +288,6 @@ function ExpenseManagement() {
                 title="Confirmar Exclusão" 
                 message={`Tem certeza que deseja deletar a despesa "${expenses.find(e => e.id === expenseToDelete)?.description}"?`}
                 isConfirmation={true} 
-                theme={theme} 
             />
         </div>
     );

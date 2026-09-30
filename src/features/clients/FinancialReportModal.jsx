@@ -103,8 +103,9 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
         if (reportElement) {
             showToast('Gerando PDF... Aguarde.', 'info');
             try {
+                const isLight = document.documentElement.getAttribute('data-theme') === 'light';
                 const canvas = await html2canvas(reportElement, {
-                    backgroundColor: '#141414', 
+                    backgroundColor: isLight ? '#FFFFFF' : '#141414', 
                     scale: 2 
                 });
                 const { jsPDF } = await import('jspdf');
@@ -158,26 +159,26 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" onClick={onClose}></div>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity" onClick={onClose}></div>
 
             <div 
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="financial-report-title"
-                className="relative z-10 w-full max-w-4xl max-h-[90vh] bg-[#141414] border border-[#3A3A3A] rounded-3xl shadow-2xl flex flex-col text-gray-200 overflow-hidden animate-scaleUp"
+                className="relative z-10 w-full max-w-4xl max-h-[90vh] bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl flex flex-col text-[var(--fc-text-primary)] overflow-hidden animate-scaleUp"
             >
                 
                 {/* Cabeçalho */}
-                <div className="flex justify-between items-center p-6 border-b border-[#2A2A2A] flex-shrink-0">
+                <div className="flex justify-between items-center p-6 border-b border-[var(--fc-border-subtle)] flex-shrink-0">
                     <div>
-                        <h2 id="financial-report-title" className="text-xl font-bold text-[#FFF3D6] tracking-tight">Relatório Financeiro</h2>
-                        <p className="text-sm text-gold mt-0.5">{reportData?.clientName}</p>
+                        <h2 id="financial-report-title" className="text-xl font-bold text-[var(--fc-text-primary)] tracking-tight">Relatório Financeiro</h2>
+                        <p className="text-sm text-[var(--fc-accent)] mt-0.5">{reportData?.clientName}</p>
                     </div>
                     <button 
                         type="button"
                         onClick={onClose} 
                         aria-label="Fechar relatório"
-                        className="w-8 h-8 rounded-full bg-[#2A2A2A] text-gray-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                        className="w-8 h-8 rounded-full bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] flex items-center justify-center transition cursor-pointer"
                     >
                         <XIcon />
                     </button>
@@ -186,59 +187,59 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                 {/* Conteúdo */}
                 <div className="flex-grow overflow-y-auto p-6 relative">
                     {!hasProAccess ? (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#141414]/90 backdrop-blur-sm rounded-3xl">
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--fc-surface-1)]/90 backdrop-blur-sm rounded-3xl">
                             <UpgradePrompt />
                         </div>
                     ) : !reportData ? (
-                        <div className="text-center py-10 text-gray-400">Carregando dados...</div>
+                        <div className="text-center py-10 text-[var(--fc-text-muted)]">Carregando dados...</div>
                     ) : (
-                        <div id="financial-report-content" className="p-6 bg-carbon-900 border border-carbon-800 rounded-3xl space-y-6">
-                            <p className="text-xs text-gray-500">Gerado em: {reportData.generationDate}</p>
+                        <div id="financial-report-content" className="p-6 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl space-y-6">
+                            <p className="text-xs text-[var(--fc-text-muted)]">Gerado em: {reportData.generationDate}</p>
                             
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="bg-carbon-800 border border-carbon-700 p-5 rounded-2xl">
-                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Fatura do Mês (Compras + Despesas)</h3>
-                                    <p className="text-2xl font-black text-gold">{formatCurrencyDisplay(reportData.monthlyInvoice)}</p>
+                                <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-5 rounded-2xl">
+                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] mb-1">Fatura do Mês (Compras + Despesas)</h3>
+                                    <p className="text-2xl font-black text-[var(--fc-accent)]">{formatCurrencyDisplay(reportData.monthlyInvoice)}</p>
                                 </div>
-                                <div className="bg-carbon-800 border border-carbon-700 p-5 rounded-2xl">
-                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Compromisso Mensal (Assinaturas)</h3>
-                                    <p className="text-2xl font-black text-gold-cream">{formatCurrencyDisplay(reportData.monthlySubscriptions)}</p>
+                                <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-5 rounded-2xl">
+                                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] mb-1">Compromisso Mensal (Assinaturas)</h3>
+                                    <p className="text-2xl font-black text-[var(--fc-text-primary)]">{formatCurrencyDisplay(reportData.monthlySubscriptions)}</p>
                                 </div>
                             </div>
 
                             {/* Gastos do Mês por Categoria */}
-                            <div className="bg-carbon-800/60 border border-carbon-700 p-5 rounded-2xl space-y-3">
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-gold flex items-center gap-2">
+                            <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-5 rounded-2xl space-y-3">
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--fc-accent)] flex items-center gap-2">
                                     <span>📝</span> Gastos do Mês por Categoria
                                 </h3>
-                                <ul className="space-y-2 text-sm divide-y divide-carbon-700/50">
+                                <ul className="space-y-2 text-sm divide-y divide-[var(--fc-border-subtle)]">
                                     {Object.entries(reportData.monthlySpendingByCategory).map(([category, value]) => (
                                         <li key={category} className="flex justify-between pt-2 first:pt-0">
-                                            <span className="text-gray-300 font-medium">{category}</span>
-                                            <span className="font-mono font-bold text-gold-cream">{formatCurrencyDisplay(value)}</span>
+                                            <span className="text-[var(--fc-text-secondary)] font-medium">{category}</span>
+                                            <span className="font-mono font-bold text-[var(--fc-text-primary)]">{formatCurrencyDisplay(value)}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
 
                             {/* Próximas Parcelas a Vencer */}
-                            <div className="bg-carbon-800/60 border border-carbon-700 p-5 rounded-2xl space-y-3">
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-gold flex items-center gap-2">
+                            <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-5 rounded-2xl space-y-3">
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--fc-accent)] flex items-center gap-2">
                                     <span>📈</span> Próximas Parcelas a Vencer
                                 </h3>
-                                <ul className="space-y-2 text-sm divide-y divide-carbon-700/50">
+                                <ul className="space-y-2 text-sm divide-y divide-[var(--fc-border-subtle)]">
                                     {Object.entries(reportData.futureInstallments).map(([month, value]) => (
                                         <li key={month} className="flex justify-between pt-2 first:pt-0">
-                                            <span className="text-gray-300 font-medium">{month}</span>
-                                            <span className="font-mono font-bold text-gold-cream">{formatCurrencyDisplay(value)}</span>
+                                            <span className="text-[var(--fc-text-secondary)] font-medium">{month}</span>
+                                            <span className="font-mono font-bold text-[var(--fc-text-primary)]">{formatCurrencyDisplay(value)}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
                             
                             {/* Compras em Aberto */}
-                            <div className="bg-carbon-800/60 border border-carbon-700 p-5 rounded-2xl space-y-3">
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-gold flex items-center gap-2">
+                            <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] p-5 rounded-2xl space-y-3">
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--fc-accent)] flex items-center gap-2">
                                     <span>📂</span> Compras em Aberto (Sua Parte)
                                 </h3>
                                 <div className="space-y-3 text-sm">
@@ -253,10 +254,10 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                                         installments = Array.isArray(installments) ? installments : [];
                                         const nextInst = installments.find(i => i.status === 'Pendente' || i.status === 'Atrasado');
                                         return (
-                                            <div key={loan.id} className="p-3 bg-carbon-900 border border-carbon-700 rounded-xl space-y-1">
-                                                <p className="font-bold text-gold-cream">{loan.description || "Compra sem descrição"}</p>
-                                                {nextInst && <p className="text-xs text-gray-400">Próxima Parcela: <span className="text-gray-200 font-medium">{nextInst.number}/{installments.length}</span> de <span className="text-gold font-medium">{formatCurrencyDisplay(nextInst.value)}</span></p>}
-                                                <p className="text-xs text-gray-400">Saldo Devedor (sua parte): <span className="text-emerald-400 font-bold">{formatCurrencyDisplay(loan.balanceDueClient)}</span></p>
+                                            <div key={loan.id} className="p-3 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl space-y-1">
+                                                <p className="font-bold text-[var(--fc-text-primary)]">{loan.description || "Compra sem descrição"}</p>
+                                                {nextInst && <p className="text-xs text-[var(--fc-text-muted)]">Próxima Parcela: <span className="text-[var(--fc-text-secondary)] font-medium">{nextInst.number}/{installments.length}</span> de <span className="text-[var(--fc-accent)] font-medium">{formatCurrencyDisplay(nextInst.value)}</span></p>}
+                                                <p className="text-xs text-[var(--fc-text-muted)]">Saldo Devedor (sua parte): <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrencyDisplay(loan.balanceDueClient)}</span></p>
                                             </div>
                                         )
                                     })}
@@ -264,16 +265,16 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                             </div>
                             
                             {/* Saldo Devedor Total */}
-                            <div className="p-5 bg-gradient-to-r from-carbon-900 via-carbon-800 to-carbon-900 border border-gold/30 rounded-2xl flex justify-between items-center shadow-xl">
-                                <h3 className="text-sm font-extrabold uppercase tracking-wider text-gold">💰 SALDO DEVEDOR TOTAL (SUA PARTE)</h3>
-                                <p className="text-2xl font-black font-mono text-emerald-400">{formatCurrencyDisplay(reportData.totalDebt)}</p>
+                            <div className="p-5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-2xl flex justify-between items-center shadow-sm">
+                                <h3 className="text-sm font-extrabold uppercase tracking-wider text-[var(--fc-accent)]">💰 SALDO DEVEDOR TOTAL (SUA PARTE)</h3>
+                                <p className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyDisplay(reportData.totalDebt)}</p>
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* Rodapé */}
-                <div className="flex flex-wrap justify-end items-center p-4 border-t border-[#2A2A2A] flex-shrink-0 gap-3">
+                <div className="flex flex-wrap justify-end items-center p-4 border-t border-[var(--fc-border-subtle)] flex-shrink-0 gap-3">
                     <Button 
                         variant="secondary" 
                         size="md" 

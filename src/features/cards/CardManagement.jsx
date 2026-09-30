@@ -1,11 +1,13 @@
-// src/features/cards/CardManagement.jsx
 import React, { useState, useCallback } from 'react';
 import { collection, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
+import Button from '../../components/Button';
+import UpgradePrompt from '../../components/UpgradePrompt';
 import CarbonCard from '../../components/CarbonCard';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { calculateCardLimitIntelligence, calculateCardInvoiceDetails } from '../../services/financialService';
+import { canAddCard } from '../../config/planEntitlements';
 import { useCards } from '../../hooks/useCards';
 import { useLoans } from '../../hooks/useLoans';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
@@ -19,7 +21,7 @@ const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height
 const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 
 export default function CardManagement() {
-    const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
+    const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
     
     const { cards } = useCards();
     const { loans: allLoans } = useLoans();
@@ -32,6 +34,7 @@ export default function CardManagement() {
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
     const [cardToDelete, setCardToDelete] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [formValues, setFormValues] = useState({
         name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705'
     });
@@ -51,13 +54,20 @@ export default function CardManagement() {
         if (card) {
             setEditingCard(card);
             setFormValues({
-                name: card.name,
-                limitInput: formatCurrencyForInput(card.limit),
-                closingDay: card.closingDay.toString(),
-                dueDay: card.dueDay.toString(),
+                name: card.name || '',
+                limitInput: card.limit !== undefined && card.limit !== null ? formatCurrencyForInput(card.limit) : '',
+                closingDay: card.closingDay !== undefined && card.closingDay !== null ? card.closingDay.toString() : '',
+                dueDay: card.dueDay !== undefined && card.dueDay !== null ? card.dueDay.toString() : '',
                 color: card.color || '#F2B705'
             });
         } else {
+            // Guard canônico para criação de novos cartões no Free
+            const check = canAddCard({ isPro, isTrialActive, cardCount: cards.length });
+            if (!check.allowed) {
+                showToast(check.message, 'warning');
+                setIsUpgradeModalOpen(true);
+                return;
+            }
             setEditingCard(null);
             setFormValues({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705' });
         }
@@ -68,6 +78,16 @@ export default function CardManagement() {
 
     const handleSaveCard = async () => {
         if (isSubmitting) return;
+
+        // Validação canônica do limite do plano Free ao adicionar
+        if (!editingCard) {
+            const check = canAddCard({ isPro, isTrialActive, cardCount: cards.length });
+            if (!check.allowed) {
+                showToast(check.message, 'warning');
+                setIsUpgradeModalOpen(true);
+                return;
+            }
+        }
 
         if (!formValues.name.trim() || !formValues.limitInput || !formValues.closingDay || !formValues.dueDay) {
             showToast('Todos os campos são obrigatórios.', 'warning');
@@ -112,6 +132,15 @@ export default function CardManagement() {
                     }
                     showToast('Cartão atualizado com sucesso!', 'success');
                 } else {
+                    const currentMockCount = (window.__FINCONTROL_E2E_MOCK_DATA__.cards || []).length;
+                    const mockCheck = canAddCard({ isPro, isTrialActive, cardCount: currentMockCount });
+                    if (!mockCheck.allowed) {
+                        showToast(mockCheck.message, 'warning');
+                        setIsUpgradeModalOpen(true);
+                        setIsSubmitting(false);
+                        return;
+                    }
+
                     const newCard = { id: `card-e2e-${Date.now()}`, ...cardData, userId };
                     window.__FINCONTROL_E2E_MOCK_DATA__.cards = [...(window.__FINCONTROL_E2E_MOCK_DATA__.cards || []), newCard];
                     showToast('Cartão adicionado com sucesso!', 'success');
@@ -132,7 +161,8 @@ export default function CardManagement() {
             }
             handleCloseModal();
         } catch (error) {
-            showToast(`Erro ao salvar cartão: ${error.message}`, 'error');
+            console.error("Erro ao salvar cartão:", error);
+            showToast('Não foi possível salvar o cartão. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -148,30 +178,31 @@ export default function CardManagement() {
             await deleteDoc(doc(db, ...userCollectionPath, userId, 'cards', cardToDelete));
             showToast('Cartão excluído com sucesso!', 'success');
         } catch (error) {
-            showToast(`Erro ao excluir cartão: ${error.message}`, 'error');
+            console.error("Erro ao excluir cartão:", error);
+            showToast('Não foi possível excluir o cartão. Tente novamente.', 'error');
         } finally {
             setIsSubmitting(false);
             setIsConfirmationModalOpen(false);
             setCardToDelete(null);
         }
     };
-    
+
     return (
         <div className="space-y-8 animate-fadeIn">
-            {/* Header Carbono & Dourado */}
-            <div className="bg-carbon-900 border border-carbon-800 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Header DS2 */}
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gold-cream">Gerenciamento de Cartões</h1>
-                    <p className="text-sm text-gray-400 mt-1">Adicione, edite e acompanhe o limite e as faturas dos seus cartões Black.</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Cartões</h1>
+                    <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione, edite e acompanhe o limite e as faturas dos seus cartões.</p>
                 </div>
                  <div className="flex items-center gap-4 w-full sm:w-auto">
                     <input 
                         type="month" 
                         value={filterMonth} 
                         onChange={(e) => setFilterMonth(e.target.value)}
-                        className="p-3 bg-carbon-800 border border-carbon-700 rounded-2xl text-gold-cream w-full focus:ring-2 focus:ring-gold focus:outline-none"
+                        className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-2xl text-[var(--fc-text-primary)] w-full focus:border-[var(--fc-accent)] focus:outline-none"
                     />
-                    <button onClick={() => handleOpenModal()} className="flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg shadow-gold/20 hover:opacity-90 transition cursor-pointer">
+                    <button onClick={() => handleOpenModal()} className="flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg hover:opacity-90 transition cursor-pointer">
                         <PlusIcon />
                         <span className="hidden sm:inline">Adicionar Cartão</span>
                     </button>
@@ -179,18 +210,18 @@ export default function CardManagement() {
             </div>
 
             {/* Tabela de Cartões */}
-            <div className="bg-carbon-900 border border-carbon-800 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>
-                            <tr className="border-b border-carbon-800 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-carbon-800/50">
+                            <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
                                 <th scope="col" className="px-6 py-4">Nome do Cartão</th>
                                 <th scope="col" className="px-6 py-4">Limite Utilizado & Disponível</th>
                                 <th scope="col" className="px-6 py-4">Fatura ({new Date(filterMonth + '-02').toLocaleString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })})</th>
                                 <th scope="col" className="px-6 py-4">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-carbon-800 text-sm">
+                        <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
                             {cards.length > 0 ? cards.map((card) => {
                                 const limitInfo = calculateCardLimitIntelligence({
                                     card,
@@ -200,19 +231,19 @@ export default function CardManagement() {
                                 const { total: invoiceValue, isPending: isInvoicePending } = calculateInvoiceDetails(card, filterMonth);
                                 
                                 return (
-                                    <tr key={card.id} className="hover:bg-carbon-800/40 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-gold-cream flex items-center">
+                                    <tr key={card.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--fc-text-primary)] flex items-center">
                                             <span className="w-4 h-4 rounded-md mr-3 border border-white/20 shadow-sm" style={{ backgroundColor: card.color }}></span>
                                             {card.name}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="font-bold text-gold-cream">{formatCurrencyDisplay(limitInfo.registeredLimit)}</span>
-                                                <span className={`text-[11px] font-semibold ${limitInfo.isHighUtilization ? 'text-amber-300' : 'text-gray-400'}`}>
+                                                <span className="font-bold text-[var(--fc-text-primary)]">{formatCurrencyDisplay(limitInfo.registeredLimit)}</span>
+                                                <span className={`text-[11px] font-semibold ${limitInfo.isHighUtilization ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--fc-text-muted)]'}`}>
                                                     {limitInfo.utilizationLabel} utilizado
                                                 </span>
                                             </div>
-                                            <div className="w-full bg-carbon-800 rounded-full h-2.5 my-1.5 overflow-hidden border border-carbon-700">
+                                            <div className="w-full bg-[var(--fc-surface-2)] rounded-full h-2.5 my-1.5 overflow-hidden border border-[var(--fc-border-default)]">
                                                 <div 
                                                     className={`h-2.5 rounded-full transition-all duration-500 ${
                                                         limitInfo.isHighUtilization
@@ -222,29 +253,29 @@ export default function CardManagement() {
                                                     style={{ width: `${limitInfo.utilizationPercentage > 100 ? 100 : limitInfo.utilizationPercentage}%` }}
                                                 ></div>
                                             </div>
-                                            <div className="text-xs text-gray-400 flex flex-wrap items-center gap-2">
-                                                <span>Comprometido no app: <strong className="text-gray-300 font-mono">{formatCurrencyDisplay(limitInfo.committedAmount)}</strong></span> 
+                                            <div className="text-xs text-[var(--fc-text-muted)] flex flex-wrap items-center gap-2">
+                                                <span>Comprometido no app: <strong className="text-[var(--fc-text-primary)] font-mono">{formatCurrencyDisplay(limitInfo.committedAmount)}</strong></span> 
                                                 <span>•</span> 
-                                                <span>Disp. estimado: <strong className="text-emerald-400 font-mono">{formatCurrencyDisplay(limitInfo.estimatedAvailable)}</strong></span>
+                                                <span>Disp. estimado: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{formatCurrencyDisplay(limitInfo.estimatedAvailable)}</strong></span>
                                                 {limitInfo.isHighUtilization && (
-                                                    <span className="text-[10px] uppercase font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                    <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                                         85%+ no app
                                                     </span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             <div className="flex items-center gap-3">
-                                                <span className="font-extrabold text-lg text-gold">{formatCurrencyDisplay(invoiceValue)}</span>
+                                                <span className="font-extrabold text-lg text-[var(--fc-accent)]">{formatCurrencyDisplay(invoiceValue)}</span>
                                                 {invoiceValue > 0 && (
                                                      isInvoicePending ? (
-                                                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gold/10 text-gold border border-gold/20">Pendente</span>
+                                                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-border-default)]">Pendente</span>
                                                      ) : (
-                                                         <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                         <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                                              <CheckCircleIcon/> Paga
                                                          </span>
                                                      )
-                                                )}
+                                                 )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap font-medium">
@@ -253,7 +284,7 @@ export default function CardManagement() {
                                                     type="button"
                                                     onClick={() => handleOpenModal(card)} 
                                                     aria-label={`Editar cartão ${card.name || ''}`.trim()}
-                                                    className="text-gold hover:text-gold-light transition cursor-pointer" 
+                                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer" 
                                                     title="Editar"
                                                 >
                                                     <EditIcon />
@@ -262,7 +293,7 @@ export default function CardManagement() {
                                                     type="button"
                                                     onClick={() => confirmDeleteCard(card.id)} 
                                                     aria-label={`Excluir cartão ${card.name || ''}`.trim()}
-                                                    className="text-rose-400 hover:text-rose-300 transition cursor-pointer" 
+                                                    className="text-rose-500 hover:text-rose-400 transition cursor-pointer" 
                                                     title="Excluir"
                                                 >
                                                     <DeleteIcon />
@@ -272,47 +303,93 @@ export default function CardManagement() {
                                     </tr>
                                 )
                             }) : (
-                                <tr><td colSpan="4" className="text-center py-12 text-gray-500">Nenhum cartão cadastrado ainda.</td></tr>
+                                <tr><td colSpan="4" className="text-center py-12 text-[var(--fc-text-muted)]">Nenhum cartão cadastrado ainda.</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
             
-            {/* Modal de Cadastro/Edição */}
-            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingCard ? 'Editar Cartão' : 'Adicionar Cartão'} theme="dark" maxWidth="max-w-lg">
+            {/* Modal de Cadastro/Edição com Grid Estruturada e Consistente DS2 */}
+            <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingCard ? 'Editar Cartão' : 'Adicionar Cartão'} maxWidth="max-w-lg">
                 <div className="space-y-4">
-                    <div>
-                        <label htmlFor="cardNameInput" className="block text-sm font-medium text-gray-300 mb-1">Nome do Cartão</label>
-                        <input id="cardNameInput" type="text" value={formValues.name} onChange={(e) => setFormValues({...formValues, name: e.target.value})} placeholder="Ex: Nubank Black" />
+                    <div className="w-full">
+                        <label htmlFor="cardNameInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Nome do Cartão</label>
+                        <input 
+                            id="cardNameInput" 
+                            type="text" 
+                            value={formValues.name} 
+                            onChange={(e) => setFormValues({...formValues, name: e.target.value})} 
+                            placeholder="Ex: Nubank" 
+                            className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm"
+                            required 
+                        />
                     </div>
-                    <div>
-                        <label htmlFor="cardLimitInput" className="block text-sm font-medium text-gray-300 mb-1">Limite do Cartão</label>
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 font-bold pointer-events-none z-10" aria-hidden="true">R$</span>
-                            <input id="cardLimitInput" type="text" value={formValues.limitInput} onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} className="w-full currency-input !pl-14" inputMode="decimal" placeholder="0,00" />
+                    <div className="w-full">
+                        <label htmlFor="cardLimitInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Limite do Cartão</label>
+                        <div className="relative w-full">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm" aria-hidden="true">R$</span>
+                            <input 
+                                id="cardLimitInput" 
+                                type="text" 
+                                value={formValues.limitInput} 
+                                onChange={handleCurrencyInputChange(val => setFormValues({...formValues, limitInput: val}))} 
+                                className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
+                                inputMode="decimal" 
+                                placeholder="0,00" 
+                                required 
+                            />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="cardClosingDayInput" className="block text-sm font-medium text-gray-300 mb-1">Dia de Fechamento</label>
-                            <input id="cardClosingDayInput" type="number" value={formValues.closingDay} onChange={(e) => setFormValues({...formValues, closingDay: e.target.value})} min="1" max="31" placeholder="Ex: 5" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="w-full">
+                            <label htmlFor="cardClosingDayInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Dia de Fechamento</label>
+                            <input 
+                                id="cardClosingDayInput" 
+                                type="number" 
+                                value={formValues.closingDay} 
+                                onChange={(e) => setFormValues({...formValues, closingDay: e.target.value})} 
+                                min="1" 
+                                max="31" 
+                                placeholder="Ex: 5" 
+                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
+                                required 
+                            />
                         </div>
-                        <div>
-                            <label htmlFor="cardDueDayInput" className="block text-sm font-medium text-gray-300 mb-1">Dia de Vencimento</label>
-                            <input id="cardDueDayInput" type="number" value={formValues.dueDay} onChange={(e) => setFormValues({...formValues, dueDay: e.target.value})} min="1" max="31" placeholder="Ex: 12" />
+                        <div className="w-full">
+                            <label htmlFor="cardDueDayInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Dia de Vencimento</label>
+                            <input 
+                                id="cardDueDayInput" 
+                                type="number" 
+                                value={formValues.dueDay} 
+                                onChange={(e) => setFormValues({...formValues, dueDay: e.target.value})} 
+                                min="1" 
+                                max="31" 
+                                placeholder="Ex: 12" 
+                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
+                                required 
+                            />
                         </div>
                     </div>
-                     <div>
-                        <label htmlFor="cardColorInput" className="block text-sm font-medium text-gray-300 mb-1">Cor do Identificador</label>
-                        <input id="cardColorInput" type="color" value={formValues.color} onChange={(e) => setFormValues({...formValues, color: e.target.value})} className="w-full h-12 p-1.5 bg-carbon-800 border border-carbon-700 rounded-2xl cursor-pointer" />
+                    <div className="w-full">
+                        <label htmlFor="cardColorInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Cor do Identificador</label>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                id="cardColorInput" 
+                                type="color" 
+                                value={formValues.color} 
+                                onChange={(e) => setFormValues({...formValues, color: e.target.value})} 
+                                className="w-16 min-h-[48px] h-12 p-1 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl cursor-pointer" 
+                            />
+                            <span className="text-xs font-mono text-[var(--fc-text-secondary)] uppercase">{formValues.color}</span>
+                        </div>
                     </div>
                 </div>
-                <div className="mt-6 flex justify-end gap-4">
-                    <button onClick={handleCloseModal} className="py-2.5 px-5 bg-carbon-800 hover:bg-carbon-700 rounded-2xl text-gray-300 transition cursor-pointer font-medium focus:outline-none focus:ring-2 focus:ring-gold/50">Cancelar</button>
-                    <button onClick={handleSaveCard} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg shadow-gold/20 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-gold/50">
-                        {isSubmitting ? 'Salvando...' : editingCard ? 'Atualizar Cartão' : 'Salvar Cartão'}
-                    </button>
+                <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-[var(--fc-border-subtle)]">
+                    <Button variant="secondary" onClick={handleCloseModal}>Cancelar</Button>
+                    <Button variant="primary" onClick={handleSaveCard} isLoading={isSubmitting}>
+                        {editingCard ? 'Atualizar Cartão' : 'Salvar Cartão'}
+                    </Button>
                 </div>
             </GenericModal>
 
@@ -323,20 +400,19 @@ export default function CardManagement() {
                 onConfirm={handleDeleteCardConfirmed}
                 title="Confirmar Exclusão do Cartão"
                 isConfirmation={true}
-                theme="dark"
             >
                 <div className="space-y-3">
-                    <p className="text-sm text-gray-300">
-                        Tem certeza que deseja deletar o cartão <strong className="text-gold">{cards.find(c => c.id === cardToDelete)?.name}</strong>?
+                    <p className="text-sm text-[var(--fc-text-primary)]">
+                        Tem certeza que deseja deletar o cartão <strong className="text-[var(--fc-accent)]">{cards.find(c => c.id === cardToDelete)?.name}</strong>?
                     </p>
                     {(() => {
                         const linkedLoans = allLoans.filter(l => l.cardId === cardToDelete).length;
                         const linkedSubs = allSubscriptions.filter(s => s.cardId === cardToDelete).length;
                         if (linkedLoans > 0 || linkedSubs > 0) {
                             return (
-                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 space-y-1">
+                                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-600 dark:text-amber-300 space-y-1">
                                     <p className="font-bold flex items-center gap-1.5">⚠️ Registros Financeiros Vinculados:</p>
-                                    <p className="text-gray-300">
+                                    <p className="text-[var(--fc-text-secondary)]">
                                         Este cartão possui {linkedLoans > 0 ? `${linkedLoans} compra(s)` : ''}{linkedLoans > 0 && linkedSubs > 0 ? ' e ' : ''}{linkedSubs > 0 ? `${linkedSubs} assinatura(s)` : ''} associadas.
                                     </p>
                                 </div>
@@ -345,6 +421,18 @@ export default function CardManagement() {
                         return null;
                     })()}
                 </div>
+            </GenericModal>
+
+            {/* Modal de Upgrade Pro (Disparado ao atingir o limite de 2 cartões do Free) */}
+            <GenericModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                maxWidth="max-w-lg"
+            >
+                <UpgradePrompt 
+                    onUpgradeClick={handleUpgradeClick}
+                    onActivateTrial={activateFreeTrial}
+                />
             </GenericModal>
         </div>
     );

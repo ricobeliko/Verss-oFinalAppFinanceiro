@@ -43,13 +43,88 @@
   animation: fcScaleUp var(--fc-motion-normal) forwards;
 }
 
+/* Motion System v1 Additive Patterns */
+@keyframes fcShellEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fcPageEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fcDrawerOverlayEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fcDrawerSlideEnter {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fcPopoverEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.fc-shell-enter {
+  animation: fcShellEnter var(--fc-motion-normal) forwards;
+}
+
+.fc-page-enter {
+  animation: fcPageEnter var(--fc-motion-fast) forwards;
+}
+
+.fc-drawer-overlay {
+  animation: fcDrawerOverlayEnter var(--fc-motion-fast) forwards;
+}
+
+.fc-drawer-slide {
+  animation: fcDrawerSlideEnter var(--fc-motion-normal) forwards;
+}
+
+.fc-popover-enter {
+  animation: fcPopoverEnter var(--fc-motion-fast) forwards;
+}
+
 /* Reduced Motion Safety */
 @media (prefers-reduced-motion: reduce) {
   .fc-transition-fast,
   .fc-transition-normal,
   .fc-transition-colors,
   .fc-animate-fade-in,
-  .fc-animate-scale-up {
+  .fc-animate-scale-up,
+  .fc-shell-enter,
+  .fc-page-enter,
+  .fc-drawer-overlay,
+  .fc-drawer-slide,
+  .fc-popover-enter {
     animation: none !important;
     transition: none !important;
     transform: none !important;

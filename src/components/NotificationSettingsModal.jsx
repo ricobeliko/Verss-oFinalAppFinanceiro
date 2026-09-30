@@ -50,16 +50,16 @@ export default function NotificationSettingsModal({
             maxWidth="max-w-lg"
         >
             <form onSubmit={handleSave} className="space-y-5">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--fc-text-muted)]">
                     Personalize como e quando o FinControl deve alertar sobre faturas, repasses e vencimentos.
                 </p>
 
-                <div className="space-y-4 divide-y divide-carbon-800">
+                <div className="space-y-4 divide-y divide-[var(--fc-border-subtle)]">
                     {/* 1. Vencimento de Cartão */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label htmlFor="cardDueCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Vencimento de Fatura</label>
-                            <span className="text-xs text-gray-400">Notificar quando a fatura estiver perto de fechar</span>
+                            <label htmlFor="cardDueCheckbox" className="text-sm font-bold text-[var(--fc-text-primary)] block cursor-pointer">Vencimento de Fatura</label>
+                            <span className="text-xs text-[var(--fc-text-muted)]">Notificar quando a fatura estiver perto de fechar</span>
                         </div>
                         <div className="flex items-center gap-3">
                             {cardDueEnabled && (
@@ -68,7 +68,7 @@ export default function NotificationSettingsModal({
                                     value={cardDueDays}
                                     onChange={(e) => setCardDueDays(e.target.value)}
                                     aria-label="Dias de antecedência para vencimento de fatura"
-                                    className="p-1.5 bg-carbon-800 border border-carbon-700 rounded-xl text-xs text-gold font-bold focus:outline-none"
+                                    className="p-1.5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl text-xs text-[var(--fc-text-primary)] font-bold focus:outline-none focus:border-[var(--fc-accent)]"
                                 >
                                     <option value="1">1 dia antes</option>
                                     <option value="2">2 dias antes</option>
@@ -83,7 +83,7 @@ export default function NotificationSettingsModal({
                                 checked={cardDueEnabled}
                                 onChange={(e) => setCardDueEnabled(e.target.checked)}
                                 aria-label="Ativar notificação de vencimento de fatura"
-                                className="w-5 h-5 accent-gold rounded cursor-pointer"
+                                className="w-5 h-5 accent-[var(--fc-accent)] rounded cursor-pointer"
                             />
                         </div>
                     </div>
@@ -91,8 +91,8 @@ export default function NotificationSettingsModal({
                     {/* 2. Repasses de Terceiros */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label htmlFor="receivablesCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Repasses de Terceiros</label>
-                            <span className="text-xs text-gray-400">Alertar sobre valores pendentes de cobrança</span>
+                            <label htmlFor="receivablesCheckbox" className="text-sm font-bold text-[var(--fc-text-primary)] block cursor-pointer">Repasses de Terceiros</label>
+                            <span className="text-xs text-[var(--fc-text-muted)]">Alertar sobre valores pendentes de cobrança</span>
                         </div>
                         <input
                             id="receivablesCheckbox"
@@ -100,15 +100,15 @@ export default function NotificationSettingsModal({
                             checked={receivablesEnabled}
                             onChange={(e) => setReceivablesEnabled(e.target.checked)}
                             aria-label="Ativar alerta de repasses de terceiros pendentes"
-                            className="w-5 h-5 accent-gold rounded cursor-pointer"
+                            className="w-5 h-5 accent-[var(--fc-accent)] rounded cursor-pointer"
                         />
                     </div>
 
                     {/* 3. Limite Alto de Cartão */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label htmlFor="highLimitCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Comprometimento de Limite</label>
-                            <span className="text-xs text-gray-400">Avisar quando faturas superarem o limite cadastrado</span>
+                            <label htmlFor="highLimitCheckbox" className="text-sm font-bold text-[var(--fc-text-primary)] block cursor-pointer">Comprometimento de Limite</label>
+                            <span className="text-xs text-[var(--fc-text-muted)]">Avisar quando faturas superarem o limite cadastrado</span>
                         </div>
                         <div className="flex items-center gap-3">
                             {highLimitEnabled && (
@@ -117,7 +117,7 @@ export default function NotificationSettingsModal({
                                     value={highLimitThreshold}
                                     onChange={(e) => setHighLimitThreshold(e.target.value)}
                                     aria-label="Limiar percentual de comprometimento de limite"
-                                    className="p-1.5 bg-carbon-800 border border-carbon-700 rounded-xl text-xs text-gold font-bold focus:outline-none"
+                                    className="p-1.5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl text-xs text-[var(--fc-text-primary)] font-bold focus:outline-none focus:border-[var(--fc-accent)]"
                                 >
                                     <option value="70">&ge; 70%</option>
                                     <option value="80">&ge; 80%</option>
@@ -131,7 +131,7 @@ export default function NotificationSettingsModal({
                                 checked={highLimitEnabled}
                                 onChange={(e) => setHighLimitEnabled(e.target.checked)}
                                 aria-label="Ativar alerta de alto comprometimento de limite"
-                                className="w-5 h-5 accent-gold rounded cursor-pointer"
+                                className="w-5 h-5 accent-[var(--fc-accent)] rounded cursor-pointer"
                             />
                         </div>
                     </div>
@@ -139,8 +139,8 @@ export default function NotificationSettingsModal({
                     {/* 4. Assinaturas Recorrentes */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label htmlFor="subscriptionsCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Assinaturas Recorrentes</label>
-                            <span className="text-xs text-gray-400">Avisar sobre cobranças programadas nos próximos 2 dias</span>
+                            <label htmlFor="subscriptionsCheckbox" className="text-sm font-bold text-[var(--fc-text-primary)] block cursor-pointer">Assinaturas Recorrentes</label>
+                            <span className="text-xs text-[var(--fc-text-muted)]">Avisar sobre cobranças programadas nos próximos 2 dias</span>
                         </div>
                         <input
                             id="subscriptionsCheckbox"
@@ -148,15 +148,15 @@ export default function NotificationSettingsModal({
                             checked={subscriptionsEnabled}
                             onChange={(e) => setSubscriptionsEnabled(e.target.checked)}
                             aria-label="Ativar notificação de assinaturas recorrentes próximas"
-                            className="w-5 h-5 accent-gold rounded cursor-pointer"
+                            className="w-5 h-5 accent-[var(--fc-accent)] rounded cursor-pointer"
                         />
                     </div>
 
                     {/* 5. Anomalias de Gastos */}
                     <div className="pt-3 flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <label htmlFor="anomaliesCheckbox" className="text-sm font-bold text-gold-cream block cursor-pointer">Anomalias de Gastos</label>
-                            <span className="text-xs text-gray-400">Detectar aumentos repentinos &gt; 50% vs média trimestral</span>
+                            <label htmlFor="anomaliesCheckbox" className="text-sm font-bold text-[var(--fc-text-primary)] block cursor-pointer">Anomalias de Gastos</label>
+                            <span className="text-xs text-[var(--fc-text-muted)]">Detectar aumentos repentinos &gt; 50% vs média trimestral</span>
                         </div>
                         <input
                             id="anomaliesCheckbox"
@@ -164,16 +164,16 @@ export default function NotificationSettingsModal({
                             checked={anomaliesEnabled}
                             onChange={(e) => setAnomaliesEnabled(e.target.checked)}
                             aria-label="Ativar detecção de anomalias de gastos"
-                            className="w-5 h-5 accent-gold rounded cursor-pointer"
+                            className="w-5 h-5 accent-[var(--fc-accent)] rounded cursor-pointer"
                         />
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-carbon-800">
+                <div className="flex justify-end gap-3 pt-4 border-t border-[var(--fc-border-subtle)]">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white rounded-xl bg-carbon-800 transition cursor-pointer"
+                        className="px-4 py-2 text-xs font-semibold text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] transition cursor-pointer"
                     >
                         Cancelar
                     </button>
