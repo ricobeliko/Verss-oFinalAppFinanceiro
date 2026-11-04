@@ -92,6 +92,10 @@ export default function DashboardLayout() {
     waveSweepRef.current?.sweep({
       waitFor: modulePromise,
       onPeak: () => {
+        if (typeof window !== 'undefined' && window.__fincontrol_simulate_peak_error__) {
+          window.__fincontrol_simulate_peak_error__ = false;
+          throw new Error('Simulated onPeak crash in DashboardLayout');
+        }
         flushSync(() => {
           setActivePage(targetPage);
         });

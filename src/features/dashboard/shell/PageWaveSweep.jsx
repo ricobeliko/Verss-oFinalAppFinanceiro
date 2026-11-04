@@ -3,51 +3,16 @@ import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react
 import gsap from 'gsap';
 import usePrefersReducedMotion from '../../../hooks/usePrefersReducedMotion';
 import { MOTION } from '../../../design-system/motion';
+import { waitForScreenSettle } from './waitForScreenSettle';
 
-/**
- * Utilitário para aguardar a estabilização completa da tela montada sob o véu.
- * Utiliza requestIdleCallback para aguardar que o scheduler do React (performWorkUntilDeadline)
- * processe todos os useEffects pendentes (ex: carregamento de dados em hooks e remoção de skeletons),
- * seguido de requestAnimationFrame para garantir que a renderização pesada ocorra enquanto
- * a tela está 100% oculta sob o véu.
- * Respeita o tempo mínimo configurado em motion.pageTransition.hold e impõe timeout de segurança.
- */
-function waitForScreenSettle(minHoldMs = 120, maxHoldMs = 600) {
-  return new Promise((resolve) => {
-    const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    let settled = false;
-
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      const elapsed = now - startTime;
-      if (elapsed < minHoldMs) {
-        setTimeout(resolve, minHoldMs - elapsed);
-      } else {
-        resolve();
-      }
-    };
-
-    const maxTimer = setTimeout(finish, maxHoldMs);
-
-    // Permite que o scheduler do React drene a fila de trabalho antes de iniciar o reveal
-    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(() => {
-        requestAnimationFrame(() => {
-          clearTimeout(maxTimer);
-          finish();
-        });
-      }, { timeout: Math.min(maxHoldMs, 250) });
-    } else {
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          clearTimeout(maxTimer);
-          finish();
-        });
-      }, 80);
+function dispatchRevealEvent(eventName) {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent(eventName));
+    } catch (_err) {
+      // Ignora falha de despacho em ambientes restritos
     }
-  });
+  }
 }
 
 /**
@@ -75,6 +40,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const cancelActiveAnimations = () => {
+    const wasTransitioning = isTransitioningRef.current;
     isTransitioningRef.current = false;
     if (activeAnimationsRef.current.length > 0) {
       activeAnimationsRef.current.forEach((anim) => {
@@ -106,12 +72,16 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
       t.style.transform = '';
       t.style.willChange = '';
     });
+    if (wasTransitioning) {
+      dispatchRevealEvent('fc:page-reveal-cancel');
+    }
   };
 
   // Cleanup de animações no unmount
   useEffect(() => {
     return () => {
       cancelActiveAnimations();
+      dispatchRevealEvent('fc:page-reveal-cancel');
     };
   }, []);
 
@@ -123,8 +93,13 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
       // Caminho rápido para acessibilidade e mobile (troca imediata sem travar)
       if (isReduced || isMobile) {
         cancelActiveAnimations();
-        if (typeof onPeak === 'function') onPeak();
-        if (typeof onComplete === 'function') onComplete();
+        dispatchRevealEvent('fc:page-reveal-start');
+        if (typeof onPeak === 'function') {
+          try { onPeak(); } catch (e) { console.error(e); }
+        }
+        if (typeof onComplete === 'function') {
+          try { onComplete(); } catch (e) { console.error(e); }
+        }
         return;
       }
 
@@ -134,8 +109,13 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
       const track3 = track3Ref.current;
 
       if (!container || !track1) {
-        if (typeof onPeak === 'function') onPeak();
-        if (typeof onComplete === 'function') onComplete();
+        dispatchRevealEvent('fc:page-reveal-start');
+        if (typeof onPeak === 'function') {
+          try { onPeak(); } catch (e) { console.error(e); }
+        }
+        if (typeof onComplete === 'function') {
+          try { onComplete(); } catch (e) { console.error(e); }
+        }
         return;
       }
 
@@ -215,7 +195,17 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
           });
 
           if (typeof onPeak === 'function') {
-            onPeak();
+            try {
+              onPeak();
+            } catch (peakErr) {
+              console.error('[PageWaveSweep] Erro capturado em onPeak:', peakErr);
+              cancelActiveAnimations();
+              dispatchRevealEvent('fc:page-reveal-cancel');
+              if (typeof onComplete === 'function') {
+                try { onComplete(); } catch (_err) { /* noop */ }
+              }
+              return;
+            }
           }
 
           // =========================================================================
@@ -225,9 +215,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
           if (!isTransitioningRef.current) return;
 
           // Dispara evento global autorizando a inicialização das animações de entrada
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('fc:page-reveal-start'));
-          }
+          dispatchRevealEvent('fc:page-reveal-start');
 
           // =========================================================================
           // FASE 4: REVEAL (Descida do Véu e Saída Suave)
@@ -310,8 +298,13 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
         } catch (err) {
           console.warn('[PageWaveSweep] WAAPI transição abortada ou com erro:', err);
           cancelActiveAnimations();
-          if (typeof onPeak === 'function') onPeak();
-          if (typeof onComplete === 'function') onComplete();
+          dispatchRevealEvent('fc:page-reveal-cancel');
+          if (typeof onPeak === 'function') {
+            try { onPeak(); } catch (_err) { /* noop */ }
+          }
+          if (typeof onComplete === 'function') {
+            try { onComplete(); } catch (_err) { /* noop */ }
+          }
         }
 
       } else {
@@ -378,11 +371,9 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
 
           tl.call(() => {
             if (typeof onPeak === 'function') {
-              try { onPeak(); } catch (e) { console.error(e); }
+              try { onPeak(); } catch (e) { console.error('[PageWaveSweep] Erro em onPeak (GSAP):', e); }
             }
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('fc:page-reveal-start'));
-            }
+            dispatchRevealEvent('fc:page-reveal-start');
           }, null, coverIn);
 
           const revealStart = coverIn + hold;
@@ -418,8 +409,13 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
         } catch (err) {
           console.error('[PageWaveSweep] Erro GSAP sweep fallback:', err);
           cancelActiveAnimations();
-          if (typeof onPeak === 'function') onPeak();
-          if (typeof onComplete === 'function') onComplete();
+          dispatchRevealEvent('fc:page-reveal-cancel');
+          if (typeof onPeak === 'function') {
+            try { onPeak(); } catch (_err) { /* noop */ }
+          }
+          if (typeof onComplete === 'function') {
+            try { onComplete(); } catch (_err) { /* noop */ }
+          }
         }
       }
     },

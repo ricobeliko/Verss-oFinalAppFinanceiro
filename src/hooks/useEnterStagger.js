@@ -128,7 +128,7 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems, dela
       document.documentElement.classList.contains('fc-transitioning');
 
     let fallbackTimer = null;
-    let onRevealStart = null;
+    let onRelease = null;
 
     if (isTransitioning) {
       // Oculta preventivamente sob o véu para não piscar
@@ -137,29 +137,36 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems, dela
       if (titleEl) titleEl.style.opacity = '0';
       allItems.forEach((el) => { el.style.opacity = '0'; });
 
-      onRevealStart = () => {
-        if (typeof window !== 'undefined' && onRevealStart) {
-          window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      onRelease = () => {
+        if (typeof window !== 'undefined' && onRelease) {
+          window.removeEventListener('fc:page-reveal-start', onRelease);
+          window.removeEventListener('fc:page-reveal-cancel', onRelease);
         }
-        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
         runStagger();
       };
 
       if (typeof window !== 'undefined') {
-        window.addEventListener('fc:page-reveal-start', onRevealStart, { once: true });
-        // Timeout de resiliência: se o evento não disparar em 1s, inicia de qualquer forma
-        fallbackTimer = setTimeout(onRevealStart, 1000);
+        window.addEventListener('fc:page-reveal-start', onRelease, { once: true });
+        window.addEventListener('fc:page-reveal-cancel', onRelease, { once: true });
+        // Timeout de resiliência: se nenhum evento disparar em 1500ms, libera a entrada sozinho
+        fallbackTimer = setTimeout(onRelease, 1500);
       }
     } else {
       runStagger();
     }
 
     return () => {
-      if (typeof window !== 'undefined' && onRevealStart) {
-        window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      if (typeof window !== 'undefined' && onRelease) {
+        window.removeEventListener('fc:page-reveal-start', onRelease);
+        window.removeEventListener('fc:page-reveal-cancel', onRelease);
       }
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
+        fallbackTimer = null;
       }
       if (ctx) {
         ctx.revert();

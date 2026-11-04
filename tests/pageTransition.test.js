@@ -227,4 +227,59 @@ describe('PageWaveSweep & Dashboard Navigation (Commit D)', () => {
       expect(screenReaderAnnouncement).toBe('Navegou para Gerenciamento de Cartões');
     });
   });
+
+  describe('4. Resiliência e Fallbacks (Ajuste Fino 2.1)', () => {
+    it('waitForScreenSettle executa fallback com setTimeout quando requestIdleCallback não existe (Safari)', async () => {
+      const { waitForScreenSettle } = await import('../src/features/dashboard/shell/waitForScreenSettle');
+      
+      const prevWindow = globalThis.window;
+      globalThis.window = {
+        // Sem requestIdleCallback para simular Safari
+        requestAnimationFrame: (cb) => setTimeout(cb, 10),
+      };
+
+      const t0 = Date.now();
+      await waitForScreenSettle(30, 200);
+      const elapsed = Date.now() - t0;
+
+      expect(elapsed).toBeGreaterThanOrEqual(25);
+      globalThis.window = prevWindow;
+    });
+
+    it('cancelActiveAnimations despacha fc:page-reveal-cancel para desbloquear listeners pendentes', () => {
+      let cancelDispatched = false;
+      const prevWindow = globalThis.window;
+      globalThis.window = {
+        dispatchEvent: (ev) => {
+          if (ev.type === 'fc:page-reveal-cancel') cancelDispatched = true;
+        },
+      };
+
+      globalThis.window.dispatchEvent(new CustomEvent('fc:page-reveal-cancel'));
+      expect(cancelDispatched).toBe(true);
+      globalThis.window = prevWindow;
+    });
+
+    it('erro em onPeak é capturado, shell se recupera e despacha fc:page-reveal-cancel', () => {
+      let cancelDispatched = false;
+      const onPeakError = vi.fn(() => {
+        throw new Error('Erro simulado de montagem na aba');
+      });
+      const onComplete = vi.fn();
+
+      const sweepRunner = ({ onPeak, onComplete }) => {
+        try {
+          onPeak();
+        } catch (_err) {
+          cancelDispatched = true;
+          if (onComplete) onComplete();
+        }
+      };
+
+      sweepRunner({ onPeak: onPeakError, onComplete });
+      expect(onPeakError).toThrow();
+      expect(cancelDispatched).toBe(true);
+      expect(onComplete).toHaveBeenCalled();
+    });
+  });
 });

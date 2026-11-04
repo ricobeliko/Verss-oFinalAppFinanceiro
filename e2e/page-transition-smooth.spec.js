@@ -1,10 +1,28 @@
 // e2e/page-transition-smooth.spec.js
 import { test, expect } from '@playwright/test';
 
-test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit B & C Ajuste Fino 2)', () => {
+test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit B & C Ajuste Fino 2 / 2.1)', () => {
   const setupMockSession = async (page) => {
     await page.addInitScript(() => {
       localStorage.setItem('theme', 'dark');
+      window.__FC_ACTIVE_LISTENERS_COUNT__ = 0;
+
+      // Rastreamento estrito de listeners para o Cenário (e)
+      const origAdd = window.addEventListener;
+      const origRemove = window.removeEventListener;
+      window.addEventListener = function(type, ...args) {
+        if (type === 'fc:page-reveal-start' || type === 'fc:page-reveal-cancel') {
+          window.__FC_ACTIVE_LISTENERS_COUNT__ = (window.__FC_ACTIVE_LISTENERS_COUNT__ || 0) + 1;
+        }
+        return origAdd.apply(this, [type, ...args]);
+      };
+      window.removeEventListener = function(type, ...args) {
+        if (type === 'fc:page-reveal-start' || type === 'fc:page-reveal-cancel') {
+          window.__FC_ACTIVE_LISTENERS_COUNT__ = Math.max(0, (window.__FC_ACTIVE_LISTENERS_COUNT__ || 0) - 1);
+        }
+        return origRemove.apply(this, [type, ...args]);
+      };
+
       window.__FINCONTROL_E2E_USER__ = {
         uid: 'smooth-trans-tester',
         email: 'smooth@fincontrol.local',
@@ -148,7 +166,7 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     }
   });
 
-  test('Interrupção Limpa: cliques rápidos consecutivos cancelam transição anterior sem travar o shell', async ({ page }) => {
+  test('Cenário (a) — Clique rápido A→B→C: a tela final mostra tudo, sem opacity 0/valores zerados residuais', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setupMockSession(page);
     await page.goto('/dashboard');
@@ -157,24 +175,67 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
 
     const html = page.locator('html');
 
-    // Clica em Cartões e logo em seguida clica em Pessoas (interrupção)
+    // Cliques rápidos encadeados A -> B -> C
     const cardsBtn = page.getByRole('button', { name: 'Cartões' }).first();
     const pessoasBtn = page.getByRole('button', { name: 'Pessoas' }).first();
+    const movBtn = page.getByRole('button', { name: 'Movimentações' }).first();
 
     await cardsBtn.click();
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(80);
     await pessoasBtn.click();
+    await page.waitForTimeout(80);
+    await movBtn.click();
 
-    // Deve resolver para Pessoas e limpar fc-transitioning
+    // Deve resolver na tela final (Movimentações) e remover fc-transitioning
     await expect(async () => {
       const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
       expect(isTrans).toBe(false);
-    }).toPass({ timeout: 3500 });
+    }).toPass({ timeout: 4000 });
 
-    await expect(page.locator('h1:has-text("Gerenciamento de Pessoas")')).toBeVisible();
+    // Conteúdo da aba final Movimentações visível
+    const heading = page.locator('h1, h2').filter({ hasText: /Movimentações/i }).first();
+    await expect(heading).toBeVisible();
+
+    // Invariante: nenhum elemento filho preso com opacity: 0
+    const stuckInvisibleCount = await page.evaluate(() => {
+      const main = document.querySelector('main');
+      if (!main) return 0;
+      const elements = main.querySelectorAll('*');
+      let stuck = 0;
+      elements.forEach((el) => {
+        if (el.style.opacity === '0' && window.getComputedStyle(el).display !== 'none') {
+          stuck++;
+        }
+      });
+      return stuck;
+    });
+    expect(stuckInvisibleCount).toBe(0);
   });
 
-  test('Reduced Motion: troca de aba é instantânea sem disparar classe fc-transitioning nem animação', async ({ page }) => {
+  test('Cenário (b) — Navegação sem sweep enquanto não há transição (primeiro carregamento, troca de tema) funciona', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const html = page.locator('html');
+
+    // 1. Primeiro carregamento: Resumo visível e fc-transitioning falso
+    const resumoHeading = page.locator('h1, h2').filter({ hasText: /Resumo/i }).first();
+    await expect(resumoHeading).toBeVisible();
+    expect(await html.evaluate((el) => el.classList.contains('fc-transitioning'))).toBe(false);
+
+    // 2. Troca de tema: alterna sem congelar e sem reter fc-transitioning
+    const themeBtn = page.getByRole('button', { name: /Alternar tema/i }).first();
+    await themeBtn.click();
+    await page.waitForTimeout(700);
+
+    expect(await html.evaluate((el) => el.getAttribute('data-theme'))).toBe('light');
+    expect(await html.evaluate((el) => el.classList.contains('fc-transitioning'))).toBe(false);
+    await expect(resumoHeading).toBeVisible();
+  });
+
+  test('Cenário (c) — Reduced Motion: tudo imediato sem disparar classe fc-transitioning nem animação', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await setupMockSession(page);
@@ -189,5 +250,69 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     await expect(page.locator('h1:has-text("Gerenciamento de Pessoas")')).toBeVisible();
     const isTransitioning = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
     expect(isTransitioning).toBe(false);
+  });
+
+  test('Cenário (d) — Erro simulado no onPeak: o shell se recupera e o conteúdo aparece', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const html = page.locator('html');
+
+    // Arma o gatilho de erro simulado no onPeak
+    await page.evaluate(() => {
+      window.__fincontrol_simulate_peak_error__ = true;
+    });
+
+    // Clica em Cartões
+    const cardsBtn = page.getByRole('button', { name: 'Cartões' }).first();
+    await cardsBtn.click();
+
+    // O shell deve se recuperar: fc-transitioning é removido e não fica travado
+    await expect(async () => {
+      const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
+      expect(isTrans).toBe(false);
+    }).toPass({ timeout: 3500 });
+
+    // O conteúdo da tela continua visível e o main tem opacidade adequada
+    const mainOpacity = await page.locator('main').evaluate((el) => {
+      return parseFloat(window.getComputedStyle(el).opacity || '1');
+    });
+    expect(mainOpacity).toBeGreaterThan(0.9);
+  });
+
+  test('Cenário (e) — Listeners não acumulam (contagem após 20 trocas permanece controlada)', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const html = page.locator('html');
+    const tabs = ['Pessoas', 'Cartões', 'Assinaturas', 'Resumo'];
+
+    // Realiza 20 trocas de abas sequenciais
+    for (let i = 0; i < 20; i++) {
+      const targetTab = tabs[i % tabs.length];
+      const btn = page.getByRole('button', { name: targetTab }).first();
+      await btn.click();
+
+      await expect(async () => {
+        const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
+        expect(isTrans).toBe(false);
+      }).toPass({ timeout: 3500 });
+    }
+
+    // Após 20 trocas, verifica se os listeners foram limpos corretamente
+    const activeListeners = await page.evaluate(() => {
+      return window.__FC_ACTIVE_LISTENERS_COUNT__ || 0;
+    });
+
+    // Como os listeners possuem cleanup estrito no unmount e no disparo,
+    // não deve haver acúmulo de listeners (deve ser <= 4, correspondendo apenas aos componentes ativos da tela)
+    expect(activeListeners).toBeLessThanOrEqual(4);
   });
 });

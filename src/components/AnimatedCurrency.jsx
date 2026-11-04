@@ -79,7 +79,6 @@ export default function AnimatedCurrency({ value, className = '', delay, duratio
     const ease = MOTION?.counter?.ease ?? 'power2.out';
 
     let tween = null;
-    let onRevealStart = null;
     let fallbackTimer = null;
 
     const startCountAnimation = () => {
@@ -115,29 +114,39 @@ export default function AnimatedCurrency({ value, className = '', delay, duratio
     const isTransitioning = typeof document !== 'undefined' &&
       document.documentElement.classList.contains('fc-transitioning');
 
+    let onRelease = null;
+
     if (isFirst && isTransitioning) {
-      onRevealStart = () => {
-        if (typeof window !== 'undefined' && onRevealStart) {
-          window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      onRelease = () => {
+        if (typeof window !== 'undefined' && onRelease) {
+          window.removeEventListener('fc:page-reveal-start', onRelease);
+          window.removeEventListener('fc:page-reveal-cancel', onRelease);
         }
-        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
         startCountAnimation();
       };
 
       if (typeof window !== 'undefined') {
-        window.addEventListener('fc:page-reveal-start', onRevealStart, { once: true });
-        fallbackTimer = setTimeout(onRevealStart, 1000);
+        window.addEventListener('fc:page-reveal-start', onRelease, { once: true });
+        window.addEventListener('fc:page-reveal-cancel', onRelease, { once: true });
+        // Timeout de resiliência: se nenhum evento disparar em 1500ms, inicia a contagem sozinho
+        fallbackTimer = setTimeout(onRelease, 1500);
       }
     } else {
       startCountAnimation();
     }
 
     return () => {
-      if (typeof window !== 'undefined' && onRevealStart) {
-        window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      if (typeof window !== 'undefined' && onRelease) {
+        window.removeEventListener('fc:page-reveal-start', onRelease);
+        window.removeEventListener('fc:page-reveal-cancel', onRelease);
       }
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
+        fallbackTimer = null;
       }
       if (tween) {
         tween.kill();

@@ -45,7 +45,6 @@ export default function useAnimatedProgressBar(barRef, {
 
     const el = barRef.current;
     let ctx = null;
-    let onRevealStart = null;
     let fallbackTimer = null;
 
     const startBarAnimation = () => {
@@ -76,33 +75,43 @@ export default function useAnimatedProgressBar(barRef, {
     const isTransitioning = typeof document !== 'undefined' &&
       document.documentElement.classList.contains('fc-transitioning');
 
+    let onRelease = null;
+
     if (isTransitioning) {
       // Oculta escala durante a subida e assentamento sob o véu
       el.style.transform = 'scaleX(0)';
       el.style.transformOrigin = 'left center';
 
-      onRevealStart = () => {
-        if (typeof window !== 'undefined' && onRevealStart) {
-          window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      onRelease = () => {
+        if (typeof window !== 'undefined' && onRelease) {
+          window.removeEventListener('fc:page-reveal-start', onRelease);
+          window.removeEventListener('fc:page-reveal-cancel', onRelease);
         }
-        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
         startBarAnimation();
       };
 
       if (typeof window !== 'undefined') {
-        window.addEventListener('fc:page-reveal-start', onRevealStart, { once: true });
-        fallbackTimer = setTimeout(onRevealStart, 1000);
+        window.addEventListener('fc:page-reveal-start', onRelease, { once: true });
+        window.addEventListener('fc:page-reveal-cancel', onRelease, { once: true });
+        // Timeout de resiliência: se nenhum evento disparar em 1500ms, libera a barra sozinho
+        fallbackTimer = setTimeout(onRelease, 1500);
       }
     } else {
       startBarAnimation();
     }
 
     return () => {
-      if (typeof window !== 'undefined' && onRevealStart) {
-        window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      if (typeof window !== 'undefined' && onRelease) {
+        window.removeEventListener('fc:page-reveal-start', onRelease);
+        window.removeEventListener('fc:page-reveal-cancel', onRelease);
       }
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
+        fallbackTimer = null;
       }
       if (ctx) ctx.revert();
       if (el) {
