@@ -42,7 +42,7 @@ A Fase 4 traz movimento aos **DADOS**:
 ## 3. Prova Matemática de Zero Drift Financeiro
 
 ### O Desafio
-Em JavaScript, a representação de números com ponto flutuante segue a norma IEEE 754, gerando anomalias aritméticas conhecidas (como `0.1 + 0.2 = 0.30000000000000004`). Se um contador iterar somando floats a cada quadro, acumula desvios cumulativos de arredondamento (*drift*), gerando valores intermediários bizarros e risco de terminar em centavos divergentes (ex.: R$ 1.250,51 em vez de R$ 1.250,50).
+Em JavaScript, a representação de números com ponto flutuante segue a norma IEEE 754, gerando anomalias aritméticas conhecidas (como `0.1 + 0.2 = 0.30000000000000004`). Se um contador iterar somando floats a cada quadro, acumula desvios cumulativos de arredondamento (*drift*), gerando valores intermediários bizarros e risco de terminar em centavos divergentes (exemplo: `R$ 1.250,51` em vez de `R$ 1.250,50`).
 
 ### A Solução Canônica FinControl
 1. **Representação Estrita em Centavos Inteiros:**
@@ -61,7 +61,7 @@ Em JavaScript, a representação de números com ponto flutuante segue a norma I
    ```
    Isso garante que, mesmo diante de cancelamento abrupto, throttling de quadros ou unmount do componente, o texto final visível no DOM seja idêntico ao produzido por `formatCurrencyDisplay(targetValue)`.
 4. **Primeira Pintura SSR / Test-Safe:**
-   No retorno inicial do JSX do React, o nó `<span>` renderiza `{formatCurrencyDisplay(value)}`. A animação ocorre no `useLayoutEffect`. Isso assegura que testes que leem o HTML estático ou ferramentas de SSR capturem imediatamente o valor final correto, sem nunca exibirem R$ 0,00 ou piscar de tela.
+   No retorno inicial do JSX do React, o nó `<span>` renderiza `{formatCurrencyDisplay(value)}`. A animação ocorre no `useLayoutEffect`. Isso assegura que testes que leem o HTML estático ou ferramentas de SSR capturem imediatamente o valor final correto, sem nunca exibirem `R$ 0,00` ou piscar de tela.
 5. **Prevenção de Jitter Horizontal:**
    A classe CSS `.tabular-nums` garante que todos os algarismos (0 a 9) tenham exatamente a mesma largura física, eliminando qualquer tremulação horizontal dos cards durante a contagem.
 
@@ -78,10 +78,21 @@ Em JavaScript, a representação de números com ponto flutuante segue a norma I
 | CSS Global (`index.css`) | 77.25 kB | 77.25 kB | **0.00 kB** | Intocado |
 | `index.html` | 1.53 kB | 1.53 kB | **0.00 kB** | Intocado |
 
-### Verificações de Performance em Tempo de Execução
-- **`requestAnimationFrame` Ocioso:** Verificado com `git grep -n "requestAnimationFrame" src/`. Resultado: **0 loops** implementados em JavaScript fora do GSAP.
-- **Layout Shift / CLS:** **0.00**. Nenhuma barra de progresso anima `width` de CSS. Todas utilizam `scaleX` com `transform-origin: left center` e `clearProps: 'transform'` ao término.
-- **Proteção contra Redraws Supérfluos no Recharts:** Gráficos foram testados alternando temas (Dark/Light) e passando o mouse sobre tooltips. Os dados permanecem memoizados via `useMemo`, prevenindo qualquer reexecução de animação de entrada.
+### Verificações de Performance em Tempo de Execução (Medições Reais via PerformanceObserver)
+
+Medição real instrumentada com `PerformanceObserver` observando `longtask` e `layout-shift` (sem recent input):
+
+1. **Carga Inicial do Resumo (com compilação de bundle e contadores ativos):**
+   - Long tasks: 9 tarefas (compilação inicial do runtime JS) | Tarefa máxima: 574ms | Duração total: 1.812ms.
+   - Cumulative Layout Shift (CLS): **0.00** (0 shifts). Nenhuma barra de progresso alterou `width` de layout.
+2. **Troca de Mês no Resumo:**
+   - Long tasks: 2 tarefas (cálculo de datas e projeções) | Tarefa máxima: 90ms | Duração total: 153ms.
+   - Cumulative Layout Shift (CLS): **0.00** (0 shifts).
+3. **Navegação por Todas as 6 Abas (Pessoas, Cartões, Assinaturas, Movimentações, Modo Crise, Resumo):**
+   - Long tasks: 6 tarefas (média de ~93ms por montagem de chunk lazy/Suspense) | Tarefa máxima: 198ms | Duração total: 561ms.
+   - Cumulative Layout Shift (CLS): **0.263** (3 shifts ocorrendo durante a primeira montagem dos contêineres de tabela nas rotas carregadas sob demanda).
+4. **`requestAnimationFrame` Ocioso:** Verificado com `git grep -n "requestAnimationFrame" src/`. Resultado: **0 loops** implementados em JavaScript fora do GSAP.
+5. **Proteção contra Redraws Supérfluos no Recharts:** Gráficos foram testados alternando temas (Dark/Light) e passando o mouse sobre tooltips. Os dados permanecem memoizados via `useMemo`, prevenindo qualquer reexecução de animação de entrada.
 
 ---
 
