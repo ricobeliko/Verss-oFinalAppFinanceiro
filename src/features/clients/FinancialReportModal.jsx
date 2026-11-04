@@ -105,7 +105,7 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
             try {
                 const isLight = document.documentElement.getAttribute('data-theme') === 'light';
                 const canvas = await html2canvas(reportElement, {
-                    backgroundColor: isLight ? '#FFFFFF' : '#141414', 
+                    backgroundColor: isLight ? '#F8FDFE' : '#0A222B', 
                     scale: 2 
                 });
                 const { jsPDF } = await import('jspdf');
@@ -284,7 +284,7 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                         Copiar Texto
                     </Button>
                     <Button 
-                        variant="outline-gold" 
+                        variant="outline-accent" 
                         size="md" 
                         onClick={handleExportCSV} 
                         disabled={!hasProAccess}

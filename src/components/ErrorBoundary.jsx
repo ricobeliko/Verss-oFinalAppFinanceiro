@@ -81,7 +81,7 @@ class ErrorBoundary extends React.Component {
               <button
                 type="button"
                 onClick={this.handleRetry}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold rounded-xl text-sm hover:from-gold hover:to-gold-light transition-all shadow-lg cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] hover:bg-[var(--fc-accent-hover)] font-bold rounded-xl text-sm transition-all shadow-lg cursor-pointer"
               >
                 Tentar novamente
               </button>

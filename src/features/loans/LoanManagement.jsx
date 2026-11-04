@@ -479,7 +479,7 @@ function LoanManagement() {
                                    <div className="text-xs text-[var(--fc-text-muted)] mt-0.5 truncate">{loan.isShared ? `${getClientNameById(loan.sharedDetails.person1.clientId)} / ${getClientNameById(loan.sharedDetails.person2.clientId)}` : getClientNameById(loan.clientId)}</div>
                                </div>
                                <div className="hidden md:flex items-center text-sm text-[var(--fc-text-secondary)]">
-                                   <span className="w-3.5 h-3.5 rounded-md mr-2.5 border border-white/20 shadow-sm" style={{ backgroundColor: card ? card.color : '#F2B705' }}></span>
+                                   <span className="w-3.5 h-3.5 rounded-md mr-2.5 border border-white/20 shadow-sm" style={{ backgroundColor: card ? card.color : '#5CCCCC' }}></span>
                                    <span className="truncate">{card ? card.name : 'N/A'}</span>
                                </div>
                                <div className="hidden md:block text-sm font-mono text-[var(--fc-text-secondary)]">{formatCurrencyDisplay(loan.installments?.[0]?.value || 0)}</div>

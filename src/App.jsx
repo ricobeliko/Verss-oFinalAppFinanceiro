@@ -14,7 +14,7 @@ const DesignSystemLab = import.meta.env.DEV
   : null;
 
 const RouteFallback = () => (
-  <div className="flex justify-center items-center h-screen bg-carbon-900">
+  <div className="flex justify-center items-center h-screen bg-[var(--fc-bg)]">
     <Spinner />
   </div>
 );

@@ -109,7 +109,7 @@ export default function FinancialSandboxSimulatorModal({
                         <span>🧪</span>
                         <strong>Simulação Temporária:</strong> Nenhum dado real é alterado ou gravado no seu banco.
                     </span>
-                    <span className="text-[10px] uppercase font-bold tracking-wider bg-[var(--fc-accent)] text-carbon-900 px-2.5 py-0.5 rounded-full">
+                    <span className="text-[10px] uppercase font-bold tracking-wider bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] px-2.5 py-0.5 rounded-full">
                         Sandbox
                     </span>
                 </div>
@@ -121,7 +121,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('new_purchase')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'new_purchase'
-                                ? 'bg-[var(--fc-accent)] text-carbon-900 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -132,7 +132,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('cancel_sub')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'cancel_sub'
-                                ? 'bg-[var(--fc-accent)] text-carbon-900 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -143,7 +143,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('simulated_income')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'simulated_income'
-                                ? 'bg-[var(--fc-accent)] text-carbon-900 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >

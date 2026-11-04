@@ -20,35 +20,45 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 
 ## 2. Paletas de Cores & Tokens de Tema
 
-### Modo Escuro (Obsidian & Champagne Gold)
-- **Background Primário:** `#0D0E11`
-- **Background Secundário:** `#13151A`
-- **Superfície Card / Stage:** `#1A1D24`
-- **Superfície Elevada:** `#222630`
-- **Texto Principal:** `#F9FAFB`
-- **Texto Secundário:** `#9CA3AF`
-- **Acento Primário (Champagne Gold):** `#E5B842`
-- **Acento Suave:** `#F5D580`
-- **Bordas Translúcidas:** `rgba(255, 255, 255, 0.08)`
+> [!NOTE]
+> A identidade visual principal do FinControl (App, Dashboard, Auth e Primitivas) adota a paleta **Abyss Teal** com o tema escuro como padrão desde o primeiro paint. A **Landing Page** permanece temporariamente em *Champagne Gold* por isolamento estético até a **Fase 6** do redesign.
 
-### Modo Claro (Warm White & Refined Gold)
-- **Background Primário:** `#FAFAF8`
-- **Background Secundário:** `#F4F3EF`
-- **Superfície Card / Stage:** `#FFFFFF`
-- **Superfície Elevada:** `#F7F7F5`
-- **Texto Principal:** `#15171B`
-- **Texto Secundário:** `#5F6670`
-- **Acento Primário (Refined Gold):** `#C99116`
-- **Acento Suave:** `#E5B842`
-- **Bordas Translúcidas:** `rgba(20, 24, 30, 0.10)`
+### Modo Escuro — Padrão do Sistema (Abyss Teal)
+- **Background Primário (`--fc-bg`):** `#04171F`
+- **Background Sutil (`--fc-bg-subtle`):** `#061D26`
+- **Superfície 1 (`--fc-surface-1`):** `#0A222B`
+- **Superfície 2 (`--fc-surface-2`):** `#0E2B35`
+- **Superfície 3 (`--fc-surface-3`):** `#133641`
+- **Texto Principal (`--fc-text-primary`):** `#EAF7F7`
+- **Texto Secundário (`--fc-text-secondary`):** `#A9C4C7`
+- **Texto Muted (`--fc-text-muted`):** `#7E9FA3`
+- **Texto Inverso (`--fc-text-inverse`):** `#04171F`
+- **Acento Primário Aqua (`--fc-accent`):** `#5CCCCC`
+- **Acento Hover (`--fc-accent-hover`):** `#7FE0DC`
+- **Acento Soft (`--fc-accent-soft`):** `rgba(92, 204, 204, 0.14)`
+- **Acento Contraste (`--fc-accent-contrast`):** `#04171F`
+- **Glow Frio (`--fc-glow-cool`):** `rgba(92, 204, 204, 0.16)`
+- **Glow Quente Ambiente (`--fc-glow-warm`):** `rgba(214, 150, 80, 0.12)`
+- **Bordas Translúcidas:** `rgba(140, 220, 225, 0.07)` (sutil) / `rgba(140, 220, 225, 0.12)` (default) / `rgba(140, 220, 225, 0.24)` (forte)
 
----
+### Modo Claro — Opção Alternativa (Crisp Teal)
+- **Background Primário (`--fc-bg`):** `#E6F4F7`
+- **Background Sutil (`--fc-bg-subtle`):** `#EEF8FA`
+- **Superfície 1 (`--fc-surface-1`):** `#F8FDFE`
+- **Superfície 2 (`--fc-surface-2`):** `#E9F6F8`
+- **Superfície 3 (`--fc-surface-3`):** `#D4EBF0`
+- **Texto Principal (`--fc-text-primary`):** `#0B2530`
+- **Texto Secundário (`--fc-text-secondary`):** `#2F5560`
+- **Texto Muted (`--fc-text-muted`):** `#4C6F78`
+- **Texto Inverso (`--fc-text-inverse`):** `#FFFFFF`
+- **Acento Primário Deep Teal (`--fc-accent`):** `#047C84`
+- **Acento Hover (`--fc-accent-hover`):** `#036A71`
+- **Acento Soft (`--fc-accent-soft`):** `rgba(4, 124, 132, 0.10)`
+- **Acento Contraste (`--fc-accent-contrast`):** `#FFFFFF`
+- **Glow Frio (`--fc-glow-cool`):** `rgba(4, 124, 132, 0.10)`
+- **Glow Quente Ambiente (`--fc-glow-warm`):** `rgba(246, 190, 120, 0.30)`
+- **Bordas Translúcidas:** `rgba(8, 60, 72, 0.08)` (sutil) / `rgba(8, 60, 72, 0.14)` (default) / `rgba(8, 60, 72, 0.26)` (forte)
 
-## 3. Arquitetura de Cena em Camadas (Layer Hierarchy)
-
-O palco do Hero é uma **cena tridimensional integrada** de alta precisão (`LANDING_FIN=false`):
-
-| Camada | Nome | Descrição & Comportamento |
 |---|---|---|
 | **Layer 0** | Atmosphere / Deep Background | Vinheta perimetral escura, radial glow difuso, grid sutil e linhas de profundidade em SVG. Parallax sutil (1-2px) via `gsap.quickTo`. |
 | **Layer 1** | Typography / Headline & CTA | Headline, subheadline e botões com entrada escalonada fluida (stagger). Deslocamento sutil no scroll. |

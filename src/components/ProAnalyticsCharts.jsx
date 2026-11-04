@@ -42,14 +42,14 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
         }
     };
     const isLight = theme === 'light';
-    const textColor = isLight ? '#434A56' : '#9CA3AF';
-    const gridStroke = isLight ? 'rgba(20, 24, 30, 0.08)' : 'rgba(255, 255, 255, 0.08)';
-    const axisLineStroke = isLight ? 'rgba(20, 24, 30, 0.15)' : 'rgba(255, 255, 255, 0.15)';
-    const barFill = isLight ? '#8E5E00' : '#E5B842';
-    const cellStroke = isLight ? '#FFFFFF' : '#1A1D24';
-    const pieTooltipBg = isLight ? '#FFFFFF' : '#1A1D24';
-    const pieTooltipBorder = isLight ? 'rgba(20, 24, 30, 0.15)' : 'rgba(255, 255, 255, 0.15)';
-    const pieTooltipColor = isLight ? '#121417' : '#F9FAFB';
+    const textColor = isLight ? '#2F5560' : '#A9C4C7';
+    const gridStroke = isLight ? 'rgba(8, 60, 72, 0.08)' : 'rgba(140, 220, 225, 0.08)';
+    const axisLineStroke = isLight ? 'rgba(8, 60, 72, 0.14)' : 'rgba(140, 220, 225, 0.14)';
+    const barFill = isLight ? '#047C84' : '#5CCCCC';
+    const cellStroke = isLight ? '#F8FDFE' : '#0A222B';
+    const pieTooltipBg = isLight ? '#F8FDFE' : '#0A222B';
+    const pieTooltipBorder = isLight ? 'rgba(8, 60, 72, 0.14)' : 'rgba(140, 220, 225, 0.14)';
+    const pieTooltipColor = isLight ? '#0B2530' : '#EAF7F7';
 
     const handleUpgrade = async () => {
         if (!currentUser) {
@@ -105,8 +105,8 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
     }, [expenses, loans, subscriptions]);
 
     const COLORS = isLight 
-        ? ['#8E5E00', '#B45309', '#D97706', '#92400E', '#78350F', '#451A03', '#B7791F']
-        : ['#F2B705', '#F29F05', '#D97904', '#BF5B04', '#8C3F02', '#592501', '#E8C547'];
+        ? ['#047C84', '#B7791F', '#2563EB', '#C2410C', '#6D5BD0', '#15803D', '#64808A']
+        : ['#5CCCCC', '#E3A857', '#6EA8FF', '#E8806A', '#A596F2', '#7ADBA0', '#B8CBD0'];
 
     return (
         <div className="relative min-h-[380px]">
@@ -132,7 +132,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                     <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                                     <XAxis dataKey="name" tick={{ fill: textColor, fontSize: 12 }} axisLine={{ stroke: axisLineStroke }} />
                                     <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={formatYAxis} axisLine={{ stroke: axisLineStroke }} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: isLight ? 'rgba(142, 94, 0, 0.05)' : 'rgba(229, 184, 66, 0.05)' }} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: isLight ? 'rgba(4, 124, 132, 0.08)' : 'rgba(92, 204, 204, 0.08)' }} />
                                     <Bar dataKey="Total Gasto" fill={barFill} radius={[8, 8, 0, 0]}>
                                         <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill={barFill} fontSize={11} fontWeight="bold" />
                                     </Bar>

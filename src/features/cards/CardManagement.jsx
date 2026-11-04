@@ -36,7 +36,7 @@ export default function CardManagement() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [formValues, setFormValues] = useState({
-        name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705'
+        name: '', limitInput: '', closingDay: '', dueDay: '', color: '#5CCCCC'
     });
     
     const calculateInvoiceDetails = useCallback((card, selectedMonth) => {
@@ -58,7 +58,7 @@ export default function CardManagement() {
                 limitInput: card.limit !== undefined && card.limit !== null ? formatCurrencyForInput(card.limit) : '',
                 closingDay: card.closingDay !== undefined && card.closingDay !== null ? card.closingDay.toString() : '',
                 dueDay: card.dueDay !== undefined && card.dueDay !== null ? card.dueDay.toString() : '',
-                color: card.color || '#F2B705'
+                color: card.color || '#5CCCCC'
             });
         } else {
             // Guard canônico para criação de novos cartões no Free
@@ -69,7 +69,7 @@ export default function CardManagement() {
                 return;
             }
             setEditingCard(null);
-            setFormValues({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '#F2B705' });
+            setFormValues({ name: '', limitInput: '', closingDay: '', dueDay: '', color: '#5CCCCC' });
         }
         setIsModalOpen(true);
     };
@@ -119,7 +119,7 @@ export default function CardManagement() {
             limit: cardLimit,
             closingDay: closingDay,
             dueDay: dueDay,
-            color: formValues.color || '#F2B705',
+            color: formValues.color || '#5CCCCC',
         };
 
         try {
@@ -202,7 +202,7 @@ export default function CardManagement() {
                         onChange={(e) => setFilterMonth(e.target.value)}
                         className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-2xl text-[var(--fc-text-primary)] w-full focus:border-[var(--fc-accent)] focus:outline-none"
                     />
-                    <button onClick={() => handleOpenModal()} className="flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-5 rounded-2xl shadow-lg hover:opacity-90 transition cursor-pointer">
+                    <button onClick={() => handleOpenModal()} className="flex-shrink-0 flex items-center justify-center gap-2 bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] hover:bg-[var(--fc-accent-hover)] font-bold py-3 px-5 rounded-2xl shadow-lg transition cursor-pointer">
                         <PlusIcon />
                         <span className="hidden sm:inline">Adicionar Cartão</span>
                     </button>
@@ -248,7 +248,7 @@ export default function CardManagement() {
                                                     className={`h-2.5 rounded-full transition-all duration-500 ${
                                                         limitInfo.isHighUtilization
                                                             ? 'bg-gradient-to-r from-amber-500 to-rose-500'
-                                                            : 'bg-gradient-to-r from-gold-light to-gold'
+                                                            : 'bg-[var(--fc-accent)]'
                                                     }`} 
                                                     style={{ width: `${limitInfo.utilizationPercentage > 100 ? 100 : limitInfo.utilizationPercentage}%` }}
                                                 ></div>

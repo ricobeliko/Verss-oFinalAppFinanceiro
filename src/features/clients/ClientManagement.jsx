@@ -194,7 +194,7 @@ export default function ClientManagement() {
                         type="submit" 
                         disabled={isSubmitting}
                         aria-label="Adicionar pessoa"
-                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg hover:opacity-90 transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
+                        className="flex-shrink-0 flex items-center gap-2 bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] font-bold py-3 px-6 rounded-2xl shadow-lg hover:bg-[var(--fc-accent-hover)] transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
                     >
                         {isSubmitting ? <Spinner /> : <PlusIcon />}
                         <span className="hidden sm:inline">{isSubmitting ? 'Salvando...' : 'Adicionar Pessoa'}</span>
@@ -331,7 +331,7 @@ export default function ClientManagement() {
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseEditModal} className="py-2.5 px-5 bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] rounded-2xl text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg disabled:opacity-50">
+                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] rounded-2xl text-[var(--fc-accent-contrast)] font-bold transition cursor-pointer shadow-lg disabled:opacity-50">
                         {isSubmitting ? 'Salvando...' : 'Salvar'}
                     </button>
                 </div>

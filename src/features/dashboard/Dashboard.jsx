@@ -118,7 +118,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         if (import.meta.env.DEV && (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_MOCK_DATA__ || sessionStorage.getItem('fincontrol_e2e_data')))) {
             const mock = window.__FINCONTROL_E2E_MOCK_DATA__ || JSON.parse(sessionStorage.getItem('fincontrol_e2e_data'));
             setDashboardData({
-                cards: mock.cards || [{ id: 'card-1', name: 'Cartão E2E Master', limit: 5000, color: '#C5A059' }],
+                cards: mock.cards || [{ id: 'card-1', name: 'Cartão E2E Master', limit: 5000, color: '#5CCCCC' }],
                 loans: mock.loans || [{ id: 'loan-1', description: 'Compra E2E 12x', cardId: 'card-1', totalAmount: 1200, installmentsCount: 12, installmentValue: 100, currentInstallment: 1, startDate: `${selectedMonth}-05`, isMyDebt: true, category: 'Alimentação' }],
                 expenses: mock.expenses || [{ id: 'exp-1', description: 'Mercado E2E', cardId: 'card-1', value: 250, date: new Date(), category: 'Alimentação' }],
                 subscriptions: mock.subscriptions || [{ id: 'sub-1', name: 'Streaming E2E', value: 49.90, cardId: 'card-1', category: 'Lazer' }],
@@ -1253,7 +1253,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             {card ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }} aria-hidden="true"></div>
+                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#5CCCCC' }} aria-hidden="true"></div>
                                                     <span>{card.name}</span>
                                                 </div>
                                             ) : '---'}

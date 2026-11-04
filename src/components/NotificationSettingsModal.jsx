@@ -180,7 +180,7 @@ export default function NotificationSettingsModal({
                     <button
                         type="submit"
                         disabled={isSaving}
-                        className="px-5 py-2 text-xs font-bold text-carbon-900 bg-gradient-to-r from-gold-light to-gold rounded-xl shadow-lg hover:opacity-90 transition cursor-pointer disabled:opacity-50"
+                        className="px-5 py-2 text-xs font-bold text-[var(--fc-accent-contrast)] bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] rounded-xl shadow-lg transition cursor-pointer disabled:opacity-50"
                     >
                         {isSaving ? 'Salvando...' : 'Salvar Preferências'}
                     </button>

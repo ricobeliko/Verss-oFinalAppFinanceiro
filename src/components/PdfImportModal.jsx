@@ -319,7 +319,7 @@ export default function PdfImportModal({
                                     O leitor identifica automaticamente compras à vista, parcelamentos (ex: 02/10), datas, valores e detecta compras já cadastradas no seu cartão.
                                 </p>
                             </div>
-                            <label className="bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3 px-7 rounded-2xl shadow-lg cursor-pointer hover:opacity-90 text-xs transition uppercase tracking-wider">
+                            <label className="bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] hover:bg-[var(--fc-accent-hover)] font-extrabold py-3 px-7 rounded-2xl shadow-lg cursor-pointer text-xs transition uppercase tracking-wider">
                                 Escolher Arquivo PDF
                                 <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileUpload} />
                             </label>
@@ -492,8 +492,8 @@ export default function PdfImportModal({
                             <button 
                                 onClick={handleConfirmImport} 
                                 disabled={stats.selectedToImport === 0 || isSubmitting}
-                                className={`px-6 py-2.5 rounded-2xl bg-gradient-to-r from-gold-light to-gold text-carbon-900 text-xs font-black shadow-lg transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
-                                    stats.selectedToImport === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
+                                className={`px-6 py-2.5 rounded-2xl bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] text-xs font-black shadow-lg transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
+                                    stats.selectedToImport === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[var(--fc-accent-hover)]'
                                 }`}
                             >
                                 {isSubmitting && <Spinner />}
