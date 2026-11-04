@@ -13,6 +13,7 @@ import { MOTION } from '../../design-system/motion';
 import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
 
 // Shell Desacoplado DS2
+import AppSidebar from './shell/AppSidebar';
 import AppTopbar from './shell/AppTopbar';
 import MobileNavigation from './shell/MobileNavigation';
 import LivingBackground from './shell/LivingBackground';
@@ -40,6 +41,7 @@ export default function DashboardLayout() {
   const { currentUser, isPro, isTrialActive, logout, showToast } = useAppContext();
 
   const [activePage, setActivePage] = useState('resumo');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -219,12 +221,29 @@ export default function DashboardLayout() {
   return (
     <div
       data-theme={theme}
-      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex flex-col overflow-x-hidden font-sans fc-shell-enter transition-colors relative"
+      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors relative"
     >
       {/* Camada Atmosférica Viva (Fixed Background) */}
       <LivingBackground />
 
-      {/* Drawer Móvel (< 768px via Hamburger) */}
+      {/* Sidebar Desktop (>= 1024px) */}
+      <AppSidebar
+        activePage={activePage}
+        onSelectPage={navigateTo}
+        onPrefetch={prefetchTab}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+        currentUser={currentUser}
+        isPro={isPro}
+        isTrialActive={isTrialActive}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        onOpenDeleteModal={() => setIsDeleteModalOpen(true)}
+        onLogout={logout}
+        onLockedFeatureClick={handleLockedFeatureClick}
+      />
+
+      {/* Drawer Móvel (< 1024px) */}
       <MobileNavigation
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
@@ -242,28 +261,19 @@ export default function DashboardLayout() {
         triggerRef={mobileMenuTriggerRef}
       />
 
-      {/* Topbar Superior em Vidro com TopNavPill */}
-      <AppTopbar
-        activePage={activePage}
-        onSelectPage={navigateTo}
-        onPrefetch={prefetchTab}
-        onOpenSearch={() => setIsSearchOpen(true)}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-        mobileMenuTriggerRef={mobileMenuTriggerRef}
-        currentUser={currentUser}
-        isPro={isPro}
-        isTrialActive={isTrialActive}
-        onOpenDeleteModal={() => setIsDeleteModalOpen(true)}
-        onLogout={logout}
-      />
-
-      {/* Canvas Principal: Conteúdo em Coluna Única */}
+      {/* Canvas Principal: Topbar + Conteúdo */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 flex flex-col min-w-0 relative z-10"
+        className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative z-10"
       >
+        <AppTopbar
+          onOpenSearch={() => setIsSearchOpen(true)}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          mobileMenuTriggerRef={mobileMenuTriggerRef}
+        />
+
         <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 relative z-10">
           <PageWaveSweep ref={waveSweepRef} />
           <div ref={contentWrapperRef} className="w-full">

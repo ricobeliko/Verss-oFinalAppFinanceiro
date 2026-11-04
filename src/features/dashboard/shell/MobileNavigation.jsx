@@ -246,6 +246,7 @@ export default function MobileNavigation({
                   aria-current={isActive ? 'page' : undefined}
                   onMouseEnter={() => onPrefetch(link.id)}
                   onFocus={() => onPrefetch(link.id)}
+                  onTouchStart={() => onPrefetch(link.id)}
                   className={`w-full group min-h-[44px] flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                     isActive
                       ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-text-primary)] border-[var(--fc-accent)] font-semibold'
