@@ -70,7 +70,7 @@ export default function DesignSystemLab() {
               }`}
             >
               <FiMoon className="w-4 h-4" aria-hidden="true" />
-              <span>Escuro (Obsidian)</span>
+              <span>Escuro (Abyss Teal)</span>
             </button>
 
             <button
@@ -84,7 +84,7 @@ export default function DesignSystemLab() {
               }`}
             >
               <FiSun className="w-4 h-4" aria-hidden="true" />
-              <span>Claro (Warm White)</span>
+              <span>Claro (Crisp Teal)</span>
             </button>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function DesignSystemLab() {
                 Stage A — Prova de Conceito Arquitetural
               </span>
               <p className="text-sm text-[var(--fc-text-secondary)] mt-1">
-                Este laboratório valida os tokens semânticos e os 6 componentes primitivos fundamentais com conformidade estrita de acessibilidade (touch targets &ge; 44px, contraste, focus rings Champagne Gold e safe motion).
+                Este laboratório valida os tokens semânticos e os 6 componentes primitivos fundamentais com conformidade estrita de acessibilidade (touch targets &ge; 44px, contraste, focus rings Abyss Teal e safe motion).
               </p>
             </div>
             <Badge variant="accent" icon={<FiCheck />}>
@@ -147,7 +147,7 @@ export default function DesignSystemLab() {
             </div>
 
             <div className="p-3.5 rounded-xl border border-[var(--fc-accent)] bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] flex flex-col justify-between h-24 shadow-md">
-              <span className="text-xs font-bold">Accent Gold</span>
+              <span className="text-xs font-bold">Accent Teal</span>
               <span className="text-[11px] font-mono opacity-90">--fc-accent</span>
             </div>
 

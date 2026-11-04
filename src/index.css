@@ -104,7 +104,7 @@
     background-color: var(--fc-field-bg-hover) !important;
   }
 
-  /* Foco e Focus-Visible nítidos no padrão Gold/DS2 */
+  /* Foco e Focus-Visible nitidos no padrao Teal/DS2 */
   input[type="text"]:focus,
   input[type="number"]:focus,
   input[type="month"]:focus,
@@ -282,7 +282,7 @@
 
 
 /* ============================================================
-   FinControl Dashboard � Top Radial Glow (Bloco 2)
+   FinControl Dashboard - Top Living Ambient Glow
    ============================================================ */
 
 .dashboard-content-glow {
@@ -295,14 +295,11 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 320px;
-  background: radial-gradient(ellipse 80% 100% at 50% 0%, var(--fc-accent-soft) 0%, transparent 70%);
+  height: 380px;
+  background: radial-gradient(ellipse 75% 85% at 50% -10%, var(--fc-glow-cool) 0%, transparent 70%),
+              radial-gradient(ellipse 45% 55% at 85% -5%, var(--fc-glow-warm) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
-}
-
-[data-theme="light"] .dashboard-content-glow::before {
-  background: radial-gradient(ellipse 80% 100% at 50% 0%, rgba(142, 94, 0, 0.04) 0%, transparent 70%);
 }
 
 .dashboard-content-glow > * {

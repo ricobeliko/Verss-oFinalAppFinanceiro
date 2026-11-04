@@ -5,6 +5,7 @@ import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
 import Spinner from '../../components/Spinner';
+import { getInitialTheme, applyTheme } from '../../utils/theme';
 
 // Shell Desacoplado DS2
 import AppSidebar from './shell/AppSidebar';
@@ -32,18 +33,11 @@ export default function DashboardLayout() {
 
   const mobileMenuTriggerRef = useRef(null);
 
-  // Tema Dark / Light sincronizado com localStorage e data-theme
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  // Tema Dark / Light sincronizado via utilitário canônico
+  const [theme, setTheme] = useState(getInitialTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', theme);
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
+    applyTheme(theme);
   }, [theme]);
 
   const handleToggleTheme = () => {

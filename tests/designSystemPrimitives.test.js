@@ -80,8 +80,8 @@ describe('FinControl — Design System 2.0 Primitives (Fase 8.5 — Stage A)', (
         return (lighter + 0.05) / (darker + 0.05);
       };
 
-      // DARK: text-inverse (#0D0E11) sobre danger (#F87171)
-      const darkDangerContrast = getContrast('#0D0E11', '#F87171');
+      // DARK: text-inverse (#04171F) sobre danger (#F87171)
+      const darkDangerContrast = getContrast('#04171F', '#F87171');
       expect(darkDangerContrast).toBeGreaterThanOrEqual(4.5);
 
       // LIGHT: text-inverse (#FFFFFF) sobre danger (#B91C1C)
