@@ -176,4 +176,29 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
     await page.waitForTimeout(300);
     await page.screenshot({ path: 'screenshots/fase2-mobile-resumo-light.png' });
   });
+
+  test('04. Fase 4 Dados Vivos: Contadores e Gráficos (~0.3s e ~1.5s Dark/Light + Lab)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // 1. Dashboard Dark aos ~300ms (contadores em contagem)
+    await setupMockSession(page, { theme: 'dark' });
+    await page.goto('/dashboard');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase4-dashboard-dark-300ms.png' });
+
+    // 2. Dashboard Dark aos ~1.5s (contadores convergidos e gráficos desenhados)
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: 'screenshots/fase4-dashboard-dark-1500ms.png' });
+
+    // 3. Dashboard Light aos ~1.5s
+    await page.getByRole('button', { name: /Alternar tema/i }).click();
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: 'screenshots/fase4-dashboard-light-1500ms.png' });
+
+    // 4. Laboratório Seção I (AnimatedCurrency)
+    await page.goto('/design-system');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: 'screenshots/fase4-design-system-lab-section-i.png', fullPage: true });
+  });
 });

@@ -176,3 +176,42 @@ A experiência de navegação do FinControl é fluida, escalonada e orquestrada 
 - **`clearProps` Obrigatório:** Toda timeline GSAP (de entrada ou de saída) e blocos `try/catch` devem invocar `gsap.set(el, { clearProps: 'transform,opacity' })` ao final.
 - **Zero Permanent `will-change`:** Propriedades de otimização de renderização (`will-change: transform`) são desativadas ou removidas no repouso para evitar consumo desnecessário de memória de textura na GPU.
 - **Anúncio de Tela (A11y):** Região `aria-live="polite"` (`aria-atomic="true"` e `.sr-only`) presente no shell do dashboard que anuncia "Navegou para [Nome da Aba]" a cada troca concluída.
+
+---
+
+## 9. Dados Vivos (Contadores, Barras de Progresso e Gráficos)
+
+Esta seção define as regras e arquitetura para exibição dinâmica de dados financeiros no FinControl, garantindo apresentação viva sem jamais violar a integridade matemática ou a estabilidade de layout.
+
+### Invariante Fundamental: Zero Drift Financeiro (Regra nº 4 e 9 da Constituição)
+1. **Apresentação Apenas:** A animação é estritamente uma camada cosmética de apresentação. Cálculos e serviços financeiros (`src/services/financialService.js` e `src/utils/currency.js`) permanecem 100% intocados.
+2. **Valor Final Garantido:** O texto final visível no DOM DEVE SER SEMPRE e EXATAMENTE o resultado de `formatCurrencyDisplay(value)`.
+3. **Interpolação em Centavos Inteiros:** Para prevenir anomalias de ponto flutuante do JavaScript (como `0.1 + 0.2 = 0.30000000000000004`), o contador interpola um proxy numérico em **centavos inteiros** (`Math.round(value * 100)`), dividindo por 100 apenas no momento de formatar para string.
+4. **Resiliência a Falhas:** Em caso de interrupção, troca rápida de abas, unmount, erro no GSAP ou valores anômalos (`NaN`, `Infinity`, `null`), o elemento escreve imediatamente `formatCurrencyDisplay(value)` no `textContent` do nó do DOM.
+5. **Primeiro Paint SSR-Safe:** Na primeira pintura do React, o componente renderiza o valor final formatado de forma estática, iniciando a interpolação no `useLayoutEffect`, eliminando flashes de valor zerado em SSR ou testes rápidos.
+
+### Componente `AnimatedCurrency` (`src/components/AnimatedCurrency.jsx`)
+- **Tag do DOM:** Renderiza exatamente **um único elemento `<span>`** sem tags filhas redundantes.
+- **Tipografia & A11y:** Possui classes `.tabular-nums` para largura de dígitos uniforme (evitando trepidação de layout horizontal) e `aria-live="off"` para impedir leitores de tela de anunciarem dezenas de valores intermediários a cada quadro da interpolação.
+- **Escopo Restrito a KPIs:** Utilizado exclusivamente em cards de topo e blocos de resumo executivo (Fatura Total, Total Receitas, Balanço Final, Auditoria Modo Crise). **Nunca deve ser aplicado em linhas de tabelas ou listas dinâmicas**, preservando a nitidez de leitura e os seletores automatizados.
+- **Parâmetros (`src/design-system/motion.js`):** `duration: 0.8s`, `updateDuration: 0.5s`, `ease: 'power2.out'`, `initialDelay: 0.3s`.
+
+### Barras de Progresso com Zero-Reflow (`AnimatedProgressBar` e `useAnimatedProgressBar`)
+- **Princípio GPU-Only:** A propriedade CSS `width` final (ex.: `width: 75%`) é calculada pelo React e atribuída estaticamente ao elemento.
+- **Animação via `scaleX`:** A animação de preenchimento é executada via GPU com `gsap.fromTo(el, { scaleX: 0, transformOrigin: 'left center' }, { scaleX: 1, duration: 0.8, ease: 'power3.out', clearProps: 'transform' })`. Nenhuma propriedade de layout (`width`) é animada a 60fps, prevenindo reflow e layout shifts (CLS = 0).
+- **Limpeza Estrita:** O uso de `clearProps: 'transform'` garante que a barra retorne ao estado nativo do React imediatamente após o término da transição.
+
+### Gráficos Vivos no Recharts (`ProAnalyticsCharts.jsx`)
+- **Props Nativas de Animação:**
+  - `isAnimationActive={!prefersReducedMotion}`
+  - `animationBegin={300}` (300ms, sincronizado com o stagger dos cards)
+  - `animationDuration={900}` (900ms para traçado fluido)
+  - `animationEasing="ease-out"`
+- **Proteção contra Redraws Supérfluos:** Os dados `dataForBarChart` e `dataForPieChart` são memoizados via `useMemo` com dependência estrita dos dados financeiros (`loans`, `clients`, `expenses`, `subscriptions`). A alternância de tema claro/escuro e o hover em tooltips alteram apenas atributos visuais (cores de preenchimento/stroke), sem redefinir instâncias ou disparar a animação de entrada novamente.
+
+### Acessibilidade & Reduced Motion (`usePrefersReducedMotion`)
+- Sob `prefers-reduced-motion: reduce`:
+  - `AnimatedCurrency` cancela qualquer interpolação e exibe o valor final imediatamente.
+  - `AnimatedProgressBar` permanece com `scaleX: 1` estático sem acionar GSAP.
+  - `ProAnalyticsCharts` define `isAnimationActive={false}`, renderizando as barras e fatias completas de imediato.
+
