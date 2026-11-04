@@ -215,3 +215,29 @@
     display: none !important;
   }
 }
+
+/* =========================================================================
+   THEME SWITCH CIRCULAR REVEAL (View Transition API)
+   ========================================================================= */
+
+/* Desliga transitions e animations durante a captura e snapshot do tema */
+html.fc-theme-switching,
+html.fc-theme-switching * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Pseudo-elementos da View Transition API para revelação circular */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}

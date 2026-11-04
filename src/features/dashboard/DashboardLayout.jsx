@@ -6,6 +6,7 @@ import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
 import { getInitialTheme, applyTheme } from '../../utils/theme';
+import { toggleThemeWithTransition } from '../../utils/themeTransition';
 import { SkeletonPage } from '../../design-system';
 import { MOTION } from '../../design-system/motion';
 import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
@@ -110,8 +111,15 @@ export default function DashboardLayout() {
     applyTheme(theme);
   }, [theme]);
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  const handleToggleTheme = (event) => {
+    const originElement = event?.currentTarget || event?.target || null;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    toggleThemeWithTransition({
+      nextTheme,
+      originElement,
+      applyTheme,
+      setTheme,
+    });
   };
 
   // Filtros Globais do Painel

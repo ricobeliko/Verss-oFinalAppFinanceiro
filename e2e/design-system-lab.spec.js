@@ -38,7 +38,7 @@ test.describe('E2E Real Browser — Design System 2.0 Lab (Stage A)', () => {
     await expect(labRoot).toHaveAttribute('data-theme', 'dark');
 
     // 5. Verificação de números financeiros canônicos
-    await expect(page.locator('text=R$ 0,00')).toBeVisible();
+    await expect(page.locator('text=R$ 0,00').first()).toBeVisible();
     await expect(page.locator('text=R$ 29,99')).toBeVisible();
     await expect(page.locator('text=+R$ 1.234,56')).toBeVisible();
     await expect(page.locator('text=R$ 12.480,75')).toBeVisible();

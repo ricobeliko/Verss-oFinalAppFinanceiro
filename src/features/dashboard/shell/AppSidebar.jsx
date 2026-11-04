@@ -301,8 +301,8 @@ export default function AppSidebar({
               <div className="py-1 space-y-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    onToggleTheme();
+                  onClick={(e) => {
+                    onToggleTheme(e);
                   }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
                 >

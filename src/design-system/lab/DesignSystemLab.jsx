@@ -23,6 +23,8 @@ import Modal from '../primitives/Modal';
 import Skeleton, { SkeletonPage } from '../primitives/Skeleton';
 import AnimatedCurrency from '../../components/AnimatedCurrency';
 import useEnterStagger from '../../hooks/useEnterStagger';
+import { toggleThemeWithTransition } from '../../utils/themeTransition';
+import { applyTheme } from '../../utils/theme';
 
 /**
  * FinControl Design System 2.0 — Local Visual Lab (Dev-Only)
@@ -139,7 +141,16 @@ export default function DesignSystemLab() {
           <div className="flex items-center gap-2 bg-[var(--fc-surface-2)] p-1 rounded-xl border border-[var(--fc-border-default)]">
             <button
               type="button"
-              onClick={() => setTheme('dark')}
+              onClick={(e) => {
+                if (theme !== 'dark') {
+                  toggleThemeWithTransition({
+                    nextTheme: 'dark',
+                    originElement: e.currentTarget,
+                    applyTheme,
+                    setTheme,
+                  });
+                }
+              }}
               aria-pressed={theme === 'dark'}
               className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                 theme === 'dark'
@@ -153,7 +164,16 @@ export default function DesignSystemLab() {
 
             <button
               type="button"
-              onClick={() => setTheme('light')}
+              onClick={(e) => {
+                if (theme !== 'light') {
+                  toggleThemeWithTransition({
+                    nextTheme: 'light',
+                    originElement: e.currentTarget,
+                    applyTheme,
+                    setTheme,
+                  });
+                }
+              }}
               aria-pressed={theme === 'light'}
               className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                 theme === 'light'
