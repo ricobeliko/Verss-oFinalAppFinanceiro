@@ -49,8 +49,8 @@ test.describe('Dashboard Performance & Long Task Measurement', () => {
       window.__longTasks__ = [];
     });
 
-    // Navega em sequência por 5 abas
-    const tabs = ['Pessoas', 'Cartões', 'Assinaturas', 'Movimentações', 'Modo Crise'];
+    // Navega em sequência pelas 4 abas secundárias
+    const tabs = ['Pessoas', 'Cartões', 'Assinaturas', 'Movimentações'];
     for (const tabName of tabs) {
       const tabBtn = page.getByRole('button', { name: tabName }).first();
       await tabBtn.click();

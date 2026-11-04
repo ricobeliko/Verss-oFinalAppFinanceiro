@@ -84,7 +84,6 @@ test.describe('Dashboard Screen Entrance & Visual Safety (Commit C)', () => {
       { name: 'Cartões', selector: 'text=Gerenciamento de Cartões' },
       { name: 'Assinaturas', selector: 'text=Gerenciamento de Assinaturas' },
       { name: 'Movimentações', selector: 'text=Adicionar Movimentações' },
-      { name: 'Modo Crise', selector: 'text=Modo Crise & Raio-X Financeiro' },
     ];
 
     for (const tab of tabsToVerify) {

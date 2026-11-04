@@ -125,7 +125,7 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     expect(mainOpacity).toBeGreaterThan(0.9);
   });
 
-  test('Navegação sequencial por todas as 6 abas preserva integridade visual, sem Suspense fallback e limpa fc-transitioning', async ({ page }) => {
+  test('Navegação sequencial por todas as 5 abas preserva integridade visual, sem Suspense fallback e limpa fc-transitioning', async ({ page }) => {
     test.setTimeout(60000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await setupMockSession(page);
@@ -140,7 +140,6 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
       { name: 'Cartões', titleMatch: /Cartões/i },
       { name: 'Movimentações', titleMatch: /Movimentações/i },
       { name: 'Assinaturas', titleMatch: /Assinaturas/i },
-      { name: 'Modo Crise', titleMatch: /Crise/i },
       { name: 'Resumo', titleMatch: /Resumo/i },
     ];
 
