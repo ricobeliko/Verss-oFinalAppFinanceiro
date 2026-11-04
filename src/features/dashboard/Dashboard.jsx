@@ -504,41 +504,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         });
     }, [selectedMonth, loans, expenses, subscriptions, incomes]);
 
-    // Projeção futura filtrada por pessoa (reutiliza selectedClientFilter sem alterar arrays originais)
-    const filteredLoansForProjection = useMemo(() => {
-        if (!selectedClientFilter) return loans;
-        const result = [];
-        (loans || []).forEach(loan => {
-            if (!loan) return;
-            if (loan.isShared && loan.sharedDetails) {
-                if (loan.sharedDetails.person1?.clientId === selectedClientFilter) {
-                    result.push({
-                        ...loan,
-                        id: `${loan.id}-p1`,
-                        isShared: false,
-                        installments: loan.sharedDetails.person1.installments || []
-                    });
-                }
-                if (loan.sharedDetails.person2?.clientId === selectedClientFilter) {
-                    result.push({
-                        ...loan,
-                        id: `${loan.id}-p2`,
-                        isShared: false,
-                        installments: loan.sharedDetails.person2.installments || []
-                    });
-                }
-            } else if (loan.clientId === selectedClientFilter) {
-                result.push(loan);
-            }
-        });
-        return result;
-    }, [loans, selectedClientFilter]);
-
-    const filteredSubscriptionsForProjection = useMemo(() => {
-        if (!selectedClientFilter) return subscriptions;
-        return (subscriptions || []).filter(s => s && s.clientId === selectedClientFilter);
-    }, [subscriptions, selectedClientFilter]);
-
     const selectedClientNameForProjection = useMemo(() => {
         if (!selectedClientFilter) return '';
         return (clients || []).find(c => c && c.id === selectedClientFilter)?.name || '';
@@ -842,12 +807,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             </div>
 
-            {/* Projeção de Faturas e Descompressão Futura (com suporte a filtro por pessoa) */}
+            {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
             {hasProAccess ? (
                 <FutureCommitmentsCard 
-                    loans={filteredLoansForProjection} 
-                    subscriptions={filteredSubscriptionsForProjection} 
+                    loans={loans} 
+                    subscriptions={subscriptions} 
                     selectedMonth={selectedMonth} 
+                    clients={clients}
                     selectedClientName={selectedClientNameForProjection}
                 />
             ) : (

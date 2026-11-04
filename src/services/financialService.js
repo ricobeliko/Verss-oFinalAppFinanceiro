@@ -415,6 +415,88 @@ export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCoun
 }
 
 /**
+ * Filtra compras e assinaturas atribuídas a uma pessoa específica para projeção futura,
+ * preservando integridade de centavos e desmembrando parcelas de compras compartilhadas.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.loans - Lista de compras
+ * @param {Array<Object>} params.subscriptions - Lista de assinaturas
+ * @param {string} [params.personId='all'] - ID da pessoa, 'all' para todos ou 'unassigned' para sem vínculo
+ * @returns {{ loans: Array<Object>, subscriptions: Array<Object> }}
+ */
+export function filterCommitmentsForPerson({ loans = [], subscriptions = [], personId = 'all' }) {
+    const safeLoans = asArray(loans);
+    const safeSubs = asArray(subscriptions);
+
+    if (!personId || personId === 'all') {
+        return { loans: safeLoans, subscriptions: safeSubs };
+    }
+
+    if (personId === 'unassigned') {
+        const unassignedLoans = safeLoans.filter(l => l && !l.isShared && !l.clientId);
+        const unassignedSubs = safeSubs.filter(s => s && !s.clientId);
+        return { loans: unassignedLoans, subscriptions: unassignedSubs };
+    }
+
+    const filteredLoans = [];
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+        if (loan.isShared && loan.sharedDetails) {
+            if (loan.sharedDetails.person1?.clientId === personId && loan.sharedDetails.person1?.installments) {
+                filteredLoans.push({
+                    ...loan,
+                    id: `${loan.id}-p1`,
+                    clientId: personId,
+                    isShared: false,
+                    installments: loan.sharedDetails.person1.installments
+                });
+            }
+            if (loan.sharedDetails.person2?.clientId === personId && loan.sharedDetails.person2?.installments) {
+                filteredLoans.push({
+                    ...loan,
+                    id: `${loan.id}-p2`,
+                    clientId: personId,
+                    isShared: false,
+                    installments: loan.sharedDetails.person2.installments
+                });
+            }
+        } else if (loan.clientId === personId) {
+            filteredLoans.push(loan);
+        }
+    });
+
+    const filteredSubs = safeSubs.filter(s => s && s.clientId === personId);
+
+    return { loans: filteredLoans, subscriptions: filteredSubs };
+}
+
+/**
+ * Calcula compromissos futuros filtrados por pessoa com garantia de centavos inteiros.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.loans - Lista de compras
+ * @param {Array<Object>} params.subscriptions - Lista de assinaturas
+ * @param {string} params.startMonth - Mês inicial 'YYYY-MM'
+ * @param {number} [params.monthsCount=4] - Quantidade de meses
+ * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
+ * @returns {Array<Object>}
+ */
+export function calculateFutureCommitmentsForPerson({ loans = [], subscriptions = [], startMonth, monthsCount = 4, personId = 'all' }) {
+    const { loans: filteredLoans, subscriptions: filteredSubs } = filterCommitmentsForPerson({
+        loans,
+        subscriptions,
+        personId
+    });
+
+    return calculateFutureCommitments({
+        loans: filteredLoans,
+        subscriptions: filteredSubs,
+        startMonth,
+        monthsCount
+    });
+}
+
+/**
  * Consolida os repasses de terceiros (valores que amigos/familiares devem ao titular)
  * para um mês específico e projeta o saldo devedor futuro total por pessoa.
  *
