@@ -1,7 +1,25 @@
+/* global process */
 // e2e/capture-screenshots.spec.js
+/**
+ * Execução opt-in para capturas visuais da aplicação FinControl.
+ * Por padrão, estes testes são ignorados durante a execução normal do test runner E2E.
+ * 
+ * Como executar:
+ * - Windows PowerShell:
+ *   $env:CAPTURE_SCREENSHOTS="1"; npm run test:e2e -- e2e/capture-screenshots.spec.js; Remove-Item Env:\CAPTURE_SCREENSHOTS
+ * - Linux / macOS:
+ *   CAPTURE_SCREENSHOTS=1 npm run test:e2e -- e2e/capture-screenshots.spec.js
+ */
 import { test, expect } from '@playwright/test';
 
-test.describe('Fase 1 — Captura de Screenshots Visuais (Abyss Teal & Default Dark)', () => {
+test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
+
+  test.beforeEach(() => {
+    test.skip(
+      process.env.CAPTURE_SCREENSHOTS !== '1',
+      'Screenshots desativados por padrão para velocidade do pipeline. Execute com CAPTURE_SCREENSHOTS=1 para gerar imagens.'
+    );
+  });
 
   const setupMockSession = async (page, { theme = 'dark' } = {}) => {
     await page.addInitScript(({ initialTheme }) => {

@@ -112,7 +112,7 @@
   --fc-field-border-focus: var(--fc-accent);
   --fc-field-focus-ring: rgba(4, 124, 132, 0.35);
   --fc-field-text: #0B2530;
-  --fc-field-placeholder: #5A7C85;
+  --fc-field-placeholder: #56777F;
   --fc-field-disabled-bg: rgba(8, 60, 72, 0.04);
   --fc-field-disabled-border: rgba(8, 60, 72, 0.10);
   --fc-field-disabled-text: var(--fc-text-muted);
