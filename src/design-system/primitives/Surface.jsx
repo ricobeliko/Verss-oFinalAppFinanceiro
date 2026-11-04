@@ -22,9 +22,9 @@ export default function Surface({
   const baseStyles = 'rounded-2xl border transition-all duration-200';
 
   const variantStyles = {
-    default: 'bg-[var(--fc-surface-1)] border-[var(--fc-border-default)] shadow-[var(--fc-shadow-sm)] text-[var(--fc-text-primary)]',
-    elevated: 'bg-[var(--fc-surface-2)] border-[var(--fc-border-strong)] shadow-[var(--fc-shadow-md)] text-[var(--fc-text-primary)]',
-    interactive: 'bg-[var(--fc-surface-1)] border-[var(--fc-border-default)] shadow-[var(--fc-shadow-sm)] hover:border-[var(--fc-accent)]/40 hover:shadow-[var(--fc-shadow-md)] motion-safe:hover:-translate-y-0.5 cursor-pointer text-[var(--fc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]',
+    default: 'bg-[var(--fc-surface-1)] fc-glass-card border-[var(--fc-border-default)] shadow-[var(--fc-shadow-sm)] text-[var(--fc-text-primary)]',
+    elevated: 'bg-[var(--fc-surface-2)] fc-glass-card-elevated border-[var(--fc-border-strong)] shadow-[var(--fc-shadow-md)] text-[var(--fc-text-primary)]',
+    interactive: 'bg-[var(--fc-surface-1)] fc-glass-card border-[var(--fc-border-default)] shadow-[var(--fc-shadow-sm)] hover:border-[var(--fc-accent)]/40 hover:shadow-[var(--fc-shadow-md)] motion-safe:hover:-translate-y-0.5 cursor-pointer text-[var(--fc-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]',
   };
 
   const paddingStyles = {

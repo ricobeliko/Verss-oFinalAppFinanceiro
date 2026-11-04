@@ -110,3 +110,30 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 - **Skiper UI / Cult UI:** Componentes de micro-interações elegantes e expandable card primitives.
 - **GetLayers / Curated.design / 60fps.design:** Composição cinematográfica, hierarquia de profundidade 3D em fintechs e timing refinado de transições.
 - **Lamp Login Concept:** Iluminação como elemento vivo de interface que responde à proximidade do usuário.
+
+---
+
+## 7. Atmosfera do Dashboard (Living Background & Glass Shell)
+
+A experiência interna do FinControl emprega um **fundo vivo em camadas cinemáticas** e um shell translúcido em vidro, criando profundidade atmosférica sem comprometer a leitura ou a performance.
+
+### Localização & Integração
+- **Componente:** [`src/features/dashboard/shell/LivingBackground.jsx`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/dashboard/shell/LivingBackground.jsx).
+- **Ponto de Injeção:** Renderizado em [`DashboardLayout.jsx`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/dashboard/DashboardLayout.jsx) como camada absoluta fixa (`fixed inset-0 z-0 pointer-events-none`) atrás do layout e do canvas principal.
+
+### Arquitetura das 5 Camadas
+1. **Camada 1 — Base & Vinheta:** Fundo sólido do tema (`--fc-bg`) com gradiente radial de vinheta perimetral (`--fc-atmos-vignette`) para foco central.
+2. **Camada 2 — Glow Quente Ambiente (Top-Right):** Radial grande difuso (`--fc-glow-warm`) no canto superior direito com micro-parallax elástico inverso de até ±10px via `gsap.quickTo`.
+3. **Camada 3 — Glow Frio Difuso:** Radial difuso (`--fc-glow-cool`) no topo esquerdo e elipse suave na base inferior.
+4. **Camada 4 — Ondas Periódicas no Rodapé:** 3 camadas SVG periódicas com curvas cúbicas suaves, stroke fino (`--fc-wave-1`, `--fc-wave-2`, `--fc-wave-3`) e preenchimento vertical sutil (`--fc-wave-fill`). Repetição periódica calculada para loop sem emenda (`translateX(-50%)`) com durações de 70s, 95s e 120s alternadas. Borda superior esmaecida via `mask-image`.
+5. **Camada 5 — Aura do Cursor:** Círculo radial de 360px com `--fc-glow-cool` que segue o ponteiro com amortecimento elástico (`gsap.quickTo` duração 0.6s, `power3.out`), desvanecendo para opacidade 0 ao sair da janela.
+
+### Shell & Cards em Vidro (Glass Surface)
+- **Topbar & Sidebar (`.fc-glass-shell`):** Fundo translúcido com token (`color-mix(in srgb, var(--fc-bg-subtle) 75%, transparent)`), `backdrop-filter: blur(12px)` e borda `var(--fc-border-subtle)`. Suporte a fallback sólido para navegadores sem backdrop-filter.
+- **Cards do Dashboard (`.fc-glass-card`):** Leve translucidez com token (`color-mix(in srgb, var(--fc-surface-1) 85%, transparent)`) e borda `var(--fc-border-default)`, **sem blur** para prevenir sobrecarga de renderização na GPU.
+- **Modais e Popovers:** Permanecem 100% opacos para isolamento cognitivo e máximo contraste em ações críticas.
+
+### Regras de Desativação e Acessibilidade (A11y & Motion Safety)
+- **`prefers-reduced-motion: reduce`:** O hook `usePrefersReducedMotion` desativa imediatamente o GSAP, os listeners de ponteiro e o tracking da aura. No CSS, as animações de onda são canceladas (`animation: none !important`).
+- **Touch / Mobile (`pointer: coarse` ou tela < 768px):** Aura e parallax desativados para economia de bateria e processamento; ondas permanecem estáticas.
+- **Acessibilidade:** O container possui `aria-hidden="true"`, `pointer-events-none` e zero elementos focáveis ou anunciáveis por leitores de tela.

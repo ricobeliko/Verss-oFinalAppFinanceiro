@@ -94,6 +94,7 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
   };
 
   test('01. Clean localStorage load: abre em Dark Mode sem piscar', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
     const htmlTheme = await page.locator('html').getAttribute('data-theme');
@@ -101,74 +102,78 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
     await page.screenshot({ path: 'screenshots/initial-load-clean-localstorage-dark.png', fullPage: true });
   });
 
-  test('02. /login: Dark Mode e Light Mode', async ({ page }) => {
-    // Dark
-    await page.goto('/login');
-    await page.waitForLoadState('networkidle');
-    await page.screenshot({ path: 'screenshots/login-dark.png', fullPage: true });
+  test('02. Desktop (1440x900): Resumo, Cartões e Transações (Dark e Light)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
 
-    // Light
-    await page.evaluate(() => {
-      localStorage.setItem('theme', 'light');
-      document.documentElement.setAttribute('data-theme', 'light');
-      document.documentElement.classList.remove('dark');
-    });
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: 'screenshots/login-light.png', fullPage: true });
-  });
-
-  test('03. Dashboard Resumo: Dark Mode e Light Mode', async ({ page }) => {
-    // Dark
+    // --- Dark Mode ---
     await setupMockSession(page, { theme: 'dark' });
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: 'screenshots/dashboard-resumo-dark.png', fullPage: true });
-
-    // Light
-    await page.getByRole('button', { name: /Alternar tema/i }).click();
     await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/dashboard-resumo-light.png', fullPage: true });
-  });
+    await page.screenshot({ path: 'screenshots/fase2-desktop-resumo-dark.png' });
 
-  test('04. Dashboard Cartões: Dark Mode e Light Mode', async ({ page }) => {
-    // Dark
-    await setupMockSession(page, { theme: 'dark' });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Cartões' }).first().click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/dashboard-cartoes-dark.png', fullPage: true });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-desktop-cartoes-dark.png' });
 
-    // Light
-    await page.getByRole('button', { name: /Alternar tema/i }).click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/dashboard-cartoes-light.png', fullPage: true });
-  });
-
-  test('05. Dashboard Movimentações/Transações: Dark Mode e Light Mode', async ({ page }) => {
-    // Dark
-    await setupMockSession(page, { theme: 'dark' });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Movimentações' }).first().click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/dashboard-transacoes-dark.png', fullPage: true });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-desktop-transacoes-dark.png' });
 
-    // Light
+    // --- Light Mode ---
     await page.getByRole('button', { name: /Alternar tema/i }).click();
     await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/dashboard-transacoes-light.png', fullPage: true });
+    await page.screenshot({ path: 'screenshots/fase2-desktop-transacoes-light.png' });
+
+    await page.getByRole('button', { name: 'Cartões' }).first().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-desktop-cartoes-light.png' });
+
+    await page.getByRole('button', { name: 'Resumo' }).first().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-desktop-resumo-light.png' });
   });
 
-  test('06. Modal Aberto no Dark Mode: Adicionar Cartão', async ({ page }) => {
+  test('03. Mobile (390x844): Resumo, Cartões e Transações (Dark e Light)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    // --- Dark Mode ---
     await setupMockSession(page, { theme: 'dark' });
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
-    await page.getByRole('button', { name: 'Cartões' }).first().click();
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: /Adicionar Cartão/i }).first().click();
     await page.waitForTimeout(400);
-    await page.screenshot({ path: 'screenshots/modal-adicionar-cartao-dark.png', fullPage: true });
+    await page.screenshot({ path: 'screenshots/fase2-mobile-resumo-dark.png' });
+
+    // Mobile nav trigger
+    await page.getByRole('button', { name: 'Abrir menu de navegação' }).click();
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Cartões' }).last().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-mobile-cartoes-dark.png' });
+
+    await page.getByRole('button', { name: 'Abrir menu de navegação' }).click();
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Movimentações' }).last().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-mobile-transacoes-dark.png' });
+
+    // Alternar tema direto na Topbar mobile
+    await page.getByRole('button', { name: /Alternar tema/i }).first().click();
+    await page.waitForTimeout(400);
+
+    // Light screenshots in mobile
+    await page.screenshot({ path: 'screenshots/fase2-mobile-transacoes-light.png' });
+
+    await page.getByRole('button', { name: 'Abrir menu de navegação' }).click();
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Cartões' }).last().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-mobile-cartoes-light.png' });
+
+    await page.getByRole('button', { name: 'Abrir menu de navegação' }).click();
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Resumo' }).last().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'screenshots/fase2-mobile-resumo-light.png' });
   });
 });

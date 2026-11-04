@@ -282,6 +282,33 @@
 
 
 /* ============================================================
+   FinControl Glass Shell & Glass Surfaces (Fase 2)
+   ============================================================ */
+
+.fc-glass-shell {
+  background-color: var(--fc-bg-subtle);
+  background-color: color-mix(in srgb, var(--fc-bg-subtle) 75%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+@supports not (backdrop-filter: blur(12px)) {
+  .fc-glass-shell {
+    background-color: var(--fc-bg-subtle) !important;
+  }
+}
+
+.fc-glass-card {
+  background-color: var(--fc-surface-1);
+  background-color: color-mix(in srgb, var(--fc-surface-1) 85%, transparent);
+}
+
+.fc-glass-card-elevated {
+  background-color: var(--fc-surface-2);
+  background-color: color-mix(in srgb, var(--fc-surface-2) 88%, transparent);
+}
+
+/* ============================================================
    FinControl Landing — Theme Tokens & Motion (Fase 8.4 CS2)
    ============================================================ */
 

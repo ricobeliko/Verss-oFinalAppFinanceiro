@@ -53,7 +53,7 @@ export default function AppTopbar({
   mobileMenuTriggerRef,
 }) {
   return (
-    <header className="sticky top-0 z-20 bg-[var(--fc-bg-subtle)]/90 backdrop-blur-md border-b border-[var(--fc-border-subtle)] h-16 px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors">
+    <header className="sticky top-0 z-20 fc-glass-shell border-b border-[var(--fc-border-subtle)] h-16 px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors">
       {/* Botão Hamburger e Logo Mobile */}
       <div className="flex items-center gap-2 lg:hidden">
         <button
