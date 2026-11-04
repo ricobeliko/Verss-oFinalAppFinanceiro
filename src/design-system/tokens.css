@@ -60,6 +60,13 @@
   /* Ambient Glows (New Tokens) */
   --fc-glow-cool: rgba(92, 204, 204, 0.16);
   --fc-glow-warm: rgba(214, 150, 80, 0.12);
+
+  /* Atmosphere & Wave Layers (Living Background) */
+  --fc-wave-1: rgba(92, 204, 204, 0.12);
+  --fc-wave-2: rgba(92, 204, 204, 0.08);
+  --fc-wave-3: rgba(92, 204, 204, 0.05);
+  --fc-wave-fill: rgba(12, 52, 60, 0.35);
+  --fc-atmos-vignette: rgba(2, 14, 20, 0.55);
 }
 
 [data-theme="light"] {
@@ -120,6 +127,13 @@
   /* Ambient Glows (New Tokens) */
   --fc-glow-cool: rgba(4, 124, 132, 0.10);
   --fc-glow-warm: rgba(246, 190, 120, 0.30);
+
+  /* Atmosphere & Wave Layers (Living Background) */
+  --fc-wave-1: rgba(60, 150, 175, 0.30);
+  --fc-wave-2: rgba(60, 150, 175, 0.20);
+  --fc-wave-3: rgba(60, 150, 175, 0.12);
+  --fc-wave-fill: rgba(140, 204, 220, 0.25);
+  --fc-atmos-vignette: rgba(230, 244, 247, 0);
 }
 
 :root {

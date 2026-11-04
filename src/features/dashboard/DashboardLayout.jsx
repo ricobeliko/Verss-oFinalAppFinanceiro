@@ -11,6 +11,7 @@ import { getInitialTheme, applyTheme } from '../../utils/theme';
 import AppSidebar from './shell/AppSidebar';
 import AppTopbar from './shell/AppTopbar';
 import MobileNavigation from './shell/MobileNavigation';
+import LivingBackground from './shell/LivingBackground';
 
 // Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
@@ -108,8 +109,11 @@ export default function DashboardLayout() {
   return (
     <div
       data-theme={theme}
-      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors"
+      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors relative"
     >
+      {/* Camada Atmosférica Viva (Fixed Background) */}
+      <LivingBackground />
+
       {/* Sidebar Desktop (>= 1024px) */}
       <AppSidebar
         activePage={activePage}
@@ -144,7 +148,7 @@ export default function DashboardLayout() {
       />
 
       {/* Canvas Principal: Topbar + Conteúdo */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative z-10">
         <AppTopbar
           onOpenSearch={() => setIsSearchOpen(true)}
           theme={theme}
@@ -153,7 +157,7 @@ export default function DashboardLayout() {
           mobileMenuTriggerRef={mobileMenuTriggerRef}
         />
 
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 fc-page-enter dashboard-content-glow">
+        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 fc-page-enter relative z-10">
           {renderActivePage()}
         </main>
       </div>

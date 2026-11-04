@@ -113,6 +113,63 @@
   animation: fcPopoverEnter var(--fc-motion-fast) forwards;
 }
 
+/* =========================================================================
+   LIVING BACKGROUND WAVES MOTION
+   Translates periodic wave SVGs with zero-seam loop
+   ========================================================================= */
+@keyframes fcWaveTranslate1 {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes fcWaveTranslate2 {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fcWaveTranslate3 {
+  0% {
+    transform: translate3d(-25%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-75%, 0, 0);
+  }
+}
+
+.fc-wave-layer-1 {
+  animation: fcWaveTranslate1 70s linear infinite alternate;
+  will-change: transform;
+}
+
+.fc-wave-layer-2 {
+  animation: fcWaveTranslate2 95s linear infinite alternate;
+  will-change: transform;
+}
+
+.fc-wave-layer-3 {
+  animation: fcWaveTranslate3 120s linear infinite alternate;
+  will-change: transform;
+}
+
+/* Deactivate wave motion under reduced-motion, coarse pointer, or mobile */
+@media (prefers-reduced-motion: reduce), (pointer: coarse), (max-width: 767px) {
+  .fc-wave-layer-1,
+  .fc-wave-layer-2,
+  .fc-wave-layer-3 {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
+
 /* Reduced Motion Safety */
 @media (prefers-reduced-motion: reduce) {
   .fc-transition-fast,
@@ -124,7 +181,10 @@
   .fc-page-enter,
   .fc-drawer-overlay,
   .fc-drawer-slide,
-  .fc-popover-enter {
+  .fc-popover-enter,
+  .fc-wave-layer-1,
+  .fc-wave-layer-2,
+  .fc-wave-layer-3 {
     animation: none !important;
     transition: none !important;
     transform: none !important;
