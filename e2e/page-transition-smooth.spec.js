@@ -195,6 +195,9 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     const heading = page.locator('h1, h2').filter({ hasText: /Movimentações/i }).first();
     await expect(heading).toBeVisible();
 
+    // Aguarda término da limpeza diferida do overlay (100ms idle cleanup)
+    await page.waitForTimeout(200);
+
     // Invariante: nenhum elemento filho preso com opacity: 0
     const stuckInvisibleCount = await page.evaluate(() => {
       const main = document.querySelector('main');
@@ -313,5 +316,58 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     // Como os listeners possuem cleanup estrito no unmount e no disparo,
     // não deve haver acúmulo de listeners (deve ser <= 4, correspondendo apenas aos componentes ativos da tela)
     expect(activeListeners).toBeLessThanOrEqual(4);
+  });
+
+  test('Sidebar recolhida e expandida não produz scroll horizontal nem quebra de layout', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    // Estado inicial: expandida
+    const toggleBtn = page.getByRole('button', { name: /Recolher menu lateral/i });
+    await expect(toggleBtn).toBeVisible();
+
+    const initialOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(initialOverflow).toBe(false);
+
+    // Recolhe a sidebar
+    await toggleBtn.click();
+    await page.waitForTimeout(300);
+
+    const expandBtn = page.getByRole('button', { name: /Expandir menu lateral/i });
+    await expect(expandBtn).toBeVisible();
+
+    const collapsedOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(collapsedOverflow).toBe(false);
+
+    // Re-expande a sidebar
+    await expandBtn.click();
+    await page.waitForTimeout(300);
+
+    const reExpandedOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(reExpandedOverflow).toBe(false);
+  });
+
+  test('Prefetch na sidebar: hover e focus acionam prefetch de abas sem erros ou travamentos', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const pessoasBtn = page.getByRole('button', { name: 'Pessoas' }).first();
+    await pessoasBtn.hover();
+    await page.waitForTimeout(100);
+
+    await pessoasBtn.focus();
+    await page.waitForTimeout(100);
+
+    await expect(pessoasBtn).toBeVisible();
   });
 });

@@ -326,10 +326,6 @@
     background-image: none !important;
   }
 }
-  .fc-glass-shell {
-    background-color: var(--fc-bg-subtle) !important;
-  }
-}
 
 .fc-glass-card {
   background-color: var(--fc-surface-1);

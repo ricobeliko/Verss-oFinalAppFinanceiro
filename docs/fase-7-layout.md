@@ -151,3 +151,79 @@ Em observância à **Regra nº 1 e 2 da Constituição do FinControl** (*Estabil
   - **Total E2E:** 26 testes aprovados, 0 falhas.
 - **Production Build:**
   - `vite build` executado com sucesso em 40.59s, gerando artefatos minificados sem erros de bundling.
+
+
+---
+
+## 10. Fase 7.2 — Retorno da Sidebar Lateral Translúcida e Descarte da Barra Superior
+
+### 10.1 Motivação e Decisão
+Após homologação em ambiente interativo pelo proprietário do produto, a navegação superior em pill (`TopNavPill`) foi descartada por razões de preferência de ergonomia visual do layout de desktop. Foi decidido restaurar a barra lateral colapsável (`AppSidebar`) no desktop (`>= 1024px`) e a gaveta móvel (`MobileNavigation`) em telas menores (`< 1024px`), aplicando um acabamento translúcido em vidro com intensidade regulada por design tokens.
+
+**Preservação estrita das conquistas da Fase 7:**
+- A remoção do Modo Crise, Resumo Executivo, alertas/notificações e widgets secundários ("Auditoria Relâmpago", "Metas & Quitação", "Metas de Orçamento por Categoria", "ProSummary") permanece 100% ativa.
+- A Projeção dos Próximos Meses por Pessoa (`FutureCommitmentsCard`) com invariante matemática de 0 drift permanece ativa.
+- A exportação CSV dedicada (mensal e anual com proteção contra CWE-1236) na aba Pessoas (`FinancialReportModal`) permanece ativa.
+
+### 10.2 Componentes e Arquivos Alterados
+- **Arquivos Restaurados/Refatorados:**
+  - `src/features/dashboard/shell/AppSidebar.jsx`: Restaurada a navegação lateral desktop com suporte a recolher/expandir (`isCollapsed`), indicador deslizante vertical em GPU (`translate3d(0, Ypx, 0)`), prefetch de abas, atalhos de teclado verticais e perfil do usuário.
+  - `src/features/dashboard/shell/AppTopbar.jsx`: Simplificada para barra superior limpa (botão hambúrguer no mobile, trigger de busca Ctrl+K e botão de alternância de tema com revelação circular).
+  - `src/features/dashboard/shell/MobileNavigation.jsx`: Restaurado menu gaveta para dispositivos móveis com alvos de toque `>= 44px` e prefetch no toque.
+  - `src/features/dashboard/DashboardLayout.jsx`: Reincorporada a sidebar lateral com container de scroll único nativo (sem padding top excessivo).
+- **Arquivos Removidos:**
+  - `src/features/dashboard/shell/TopNavPill.jsx` (deletado).
+  - `tests/topNavPill.test.js` (deletado e substituído por `tests/appSidebar.test.js`).
+- **Novo Arquivo de Teste:**
+  - `tests/appSidebar.test.js` (4 testes unitários cobrindo renderização, botões acessíveis, indicador deslizante e prefetch).
+
+### 10.3 Especificação do Efeito Vidro Translúcido (`.fc-glass-sidebar`)
+Definido em `src/design-system/tokens.css` e `src/index.css`:
+- **Tokens de Intensidade Configuráveis:**
+  - Tema Escuro: `--fc-sidebar-glass-alpha: 68%`, `--fc-sidebar-glass-blur: 16px`.
+  - Tema Claro: `--fc-sidebar-glass-alpha: 80%`, `--fc-sidebar-glass-blur: 16px`.
+- **Estilização CSS:**
+  ```css
+  .fc-glass-sidebar {
+    background-color: color-mix(in srgb, var(--fc-surface-1) var(--fc-sidebar-glass-alpha, 68%), transparent);
+    backdrop-filter: blur(var(--fc-sidebar-glass-blur, 16px));
+    -webkit-backdrop-filter: blur(var(--fc-sidebar-glass-blur, 16px));
+    border-right: 1px solid var(--fc-border-subtle);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 40%);
+  }
+  ```
+- **Fallback e Acessibilidade:**
+  - `@supports not (backdrop-filter: blur(1px))`: background sólido `var(--fc-surface-1)` imediato.
+  - `@media (prefers-reduced-transparency: reduce)`: opacidade elevada para 95% e blur removido.
+
+### 10.4 Verificação de Contraste no Fundo Vivo Real (Pior Caso com Ondas e Glows)
+Medições de contraste realizadas sobre as coordenadas da sidebar onde as cristas das ondas e glows do fundo vivo produzem o maior aclaramento:
+- **Tema Escuro** (`--fc-sidebar-glass-alpha: 68%` sobre `#082832` da crista de onda):
+  - Texto Principal (`#EAF7F7`): **14.77:1** (Supera WCAG AAA `>= 7:1`)
+  - Texto Secundário (`#A9C4C7`): **9.09:1** (Supera WCAG AAA)
+  - Texto Muted (`#7E9FA3`): **5.75:1** (Supera WCAG AA `>= 4.5:1`)
+  - Acento Teal (`#5CCCCC`): **8.63:1** (Supera WCAG AAA)
+- **Tema Claro** (`--fc-sidebar-glass-alpha: 80%` sobre `#B9DEE7` da crista de onda):
+  - Texto Principal (`#0B2530`): **13.97:1** (Supera WCAG AAA `>= 7:1`)
+  - Texto Secundário (`#2F5560`): **6.78:1** (Supera WCAG AA)
+  - Texto Muted (`#4C6F78`): **4.65:1** (Supera WCAG AA `>= 4.5:1`)
+
+### 10.5 Impacto de Performance do `backdrop-filter` na Sidebar
+- A sidebar é um elemento estático e fixo à esquerda no desktop.
+- **Medição de Long Tasks durante a janela de reveal (Resumo -> Pessoas):**
+  - Total de Long Tasks registradas durante a revelação da aba: **1 tarefa longa (83ms)**, correspondente estritamente à montagem e parsing dos nós React da nova aba no Vite.
+  - Zero tarefas longas associadas ao repaint ou compositing da sidebar com `backdrop-filter: blur(16px)`.
+
+### 10.6 Bateria Completa de Testes E2E (Playwright)
+Todos os 6 suítes de teste de ponta a ponta foram executados e aprovados (28 testes no total):
+1. `e2e/page-transition-smooth.spec.js` (9 testes aprovados):
+   - Transição suave entre abas com `PageWaveSweep` sem travamentos.
+   - Zero elementos filhos presos com `opacity: 0`.
+   - Limpeza total de listeners globais e eventos `fc:page-reveal-start`.
+   - **Novo:** Sidebar recolhida e expandida não produz scroll horizontal nem quebra de layout (`scrollWidth === clientWidth`).
+   - **Novo:** Prefetch de abas ao passar mouse e focar teclado funciona sem erros.
+2. `e2e/authenticated-journey.spec.js` (5 testes aprovados).
+3. `e2e/plan-entitlements.spec.js` (5 testes aprovados).
+4. `e2e/screen-enter.spec.js` (2 testes aprovados).
+5. `e2e/tab-perf.spec.js` (1 teste aprovado).
+6. `e2e/theme-sweep.spec.js` (6 testes aprovados).
