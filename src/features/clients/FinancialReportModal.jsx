@@ -4,13 +4,14 @@ import React, { useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { copyTextToClipboardFallback } from '../../utils/helpers';
-import { generateTransactionsCsv, downloadCsvFile } from '../../services/csvExportService';
+import { downloadPersonReportCsv } from '../../services/csvExportService';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Button from '../../components/Button';
 import html2canvas from 'html2canvas';
 import { useLoans } from '../../hooks/useLoans';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
+import { useCards } from '../../hooks/useCards';
 import { calculateClientFinancialReportSummary } from '../../services/financialService';
 
 // --- Ícones ---
@@ -21,11 +22,17 @@ const XIcon = () => (
     </svg>
 );
 
-export default function FinancialReportModal({ isOpen, onClose, client }) {
+export default function FinancialReportModal({
+    isOpen,
+    onClose,
+    client,
+    selectedMonth = new Date().toISOString().slice(0, 7)
+}) {
     const { isPro, isTrialActive, showToast } = useAppContext();
     const { loans: allLoans } = useLoans();
     const { expenses: allExpenses } = useExpenses();
     const { subscriptions: allSubscriptions } = useSubscriptions();
+    const { cards: allCards } = useCards();
 
     const hasProAccess = isPro || isTrialActive;
 
@@ -122,37 +129,44 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
         }
     };
 
-    const handleExportCSV = () => {
-        if (!reportData) return;
-        const clientItems = [];
-
-        reportData.openLoans?.forEach(loan => {
-            let installments = [];
-            if (loan.isShared) {
-                if (loan.sharedDetails?.person1?.clientId === client.id) installments = loan.sharedDetails.person1.installments;
-                else if (loan.sharedDetails?.person2?.clientId === client.id) installments = loan.sharedDetails.person2.installments;
-            } else {
-                installments = loan.installments;
-            }
-            installments = Array.isArray(installments) ? installments : [];
-            installments.forEach(inst => {
-                clientItems.push({
-                    type: 'Compra Parcelada',
-                    date: inst.dueDate,
-                    description: loan.description || 'Compra sem descrição',
-                    category: 'Parcelamento',
-                    clientName: reportData.clientName,
-                    cardName: '-',
-                    installment: `${inst.number}/${installments.length}`,
-                    value: inst.value || 0,
-                    status: inst.status || 'Pendente'
-                });
+    const handleExportMonthCsv = () => {
+        if (!client || !client.id) return;
+        try {
+            const targetPeriod = selectedMonth || new Date().toISOString().slice(0, 7);
+            const filename = downloadPersonReportCsv({
+                client,
+                periodType: 'month',
+                targetPeriod,
+                loans: allLoans,
+                expenses: allExpenses,
+                subscriptions: allSubscriptions,
+                cards: allCards
             });
-        });
+            showToast(`CSV do mês exportado com sucesso (${filename})!`, 'success');
+        } catch (err) {
+            console.error('Erro ao exportar CSV do mês:', err);
+            showToast('Erro ao exportar CSV do mês.', 'error');
+        }
+    };
 
-        const csvContent = generateTransactionsCsv(clientItems);
-        downloadCsvFile(csvContent, `relatorio_${client.name.toLowerCase().replace(/\s+/g, '_')}.csv`);
-        showToast('Relatório CSV exportado com sucesso!', 'success');
+    const handleExportAnnualCsv = () => {
+        if (!client || !client.id) return;
+        try {
+            const targetPeriod = (selectedMonth || new Date().toISOString()).slice(0, 4);
+            const filename = downloadPersonReportCsv({
+                client,
+                periodType: 'year',
+                targetPeriod,
+                loans: allLoans,
+                expenses: allExpenses,
+                subscriptions: allSubscriptions,
+                cards: allCards
+            });
+            showToast(`CSV do ano exportado com sucesso (${filename})!`, 'success');
+        } catch (err) {
+            console.error('Erro ao exportar CSV do ano:', err);
+            showToast('Erro ao exportar CSV do ano.', 'error');
+        }
     };
 
     if (!isOpen) return null;
@@ -269,6 +283,32 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-[var(--fc-accent)]">💰 SALDO DEVEDOR TOTAL (SUA PARTE)</h3>
                                 <p className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyDisplay(reportData.totalDebt)}</p>
                             </div>
+
+                            {/* Exportações CSV Exclusivas da Pessoa */}
+                            <div className="pt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-t border-[var(--fc-border-subtle)]">
+                                <div>
+                                    <p className="text-xs font-semibold text-[var(--fc-text-primary)]">Extratos Individuais em CSV</p>
+                                    <p className="text-[11px] text-[var(--fc-text-muted)]">Exportação com proteção contra fórmulas e centavos preservados.</p>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleExportMonthCsv}
+                                        aria-label="Exportar CSV do mês"
+                                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 transition-colors cursor-pointer"
+                                    >
+                                        Exportar CSV do mês ({selectedMonth})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleExportAnnualCsv}
+                                        aria-label="Exportar CSV do ano"
+                                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 transition-colors cursor-pointer"
+                                    >
+                                        Exportar CSV do ano ({(selectedMonth || '').slice(0, 4)})
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -286,10 +326,20 @@ export default function FinancialReportModal({ isOpen, onClose, client }) {
                     <Button 
                         variant="outline-accent" 
                         size="md" 
-                        onClick={handleExportCSV} 
+                        onClick={handleExportMonthCsv} 
                         disabled={!hasProAccess}
+                        aria-label="Exportar CSV do mês"
                     >
-                        Exportar CSV
+                        Exportar CSV do mês
+                    </Button>
+                    <Button 
+                        variant="outline-accent" 
+                        size="md" 
+                        onClick={handleExportAnnualCsv} 
+                        disabled={!hasProAccess}
+                        aria-label="Exportar CSV do ano"
+                    >
+                        Exportar CSV do ano
                     </Button>
                     <Button 
                         variant="primary" 

@@ -21,7 +21,7 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" heig
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 // --- Componente Principal ---
-export default function ClientManagement() {
+export default function ClientManagement({ selectedMonth }) {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const scopeRef = useRef(null);
     const { clients, loading: loadingClients } = useClients();
@@ -388,6 +388,7 @@ export default function ClientManagement() {
                 isOpen={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
                 client={reportClient}
+                selectedMonth={selectedMonth || currentMonth}
             />
 
             {/* Modal de Upgrade Pro (Disparado ao atingir o limite de 3 pessoas do Free) */}

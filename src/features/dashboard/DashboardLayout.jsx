@@ -201,7 +201,7 @@ export default function DashboardLayout() {
             case 'resumo':
               return <Dashboard {...pageProps} />;
             case 'pessoas':
-              return <ClientManagement />;
+              return <ClientManagement {...pageProps} />;
             case 'cards':
               return <CardManagement />;
             case 'transactions':

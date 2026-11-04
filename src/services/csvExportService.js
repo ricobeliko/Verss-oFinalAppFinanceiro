@@ -321,3 +321,204 @@ export function generateAnnualReportCsv({
     return '\uFEFF' + lines.join('\r\n');
 }
 
+/**
+ * Sanitiza valores contra vulnerabilidade de CSV Injection (CWE-1236).
+ * Previne execução de fórmulas no Excel/Calc se o valor iniciar com =, +, -, @.
+ * Preserva números e traços simples (-).
+ *
+ * @param {any} value
+ * @returns {any}
+ */
+export function sanitizeCsvFormula(value) {
+    if (typeof value !== 'string') return value;
+    // Se começar com fórmula perigosa do Excel/Sheets (=, +, @)
+    if (/^[=+@]/.test(value)) {
+        return `'${value}`;
+    }
+    // Se começar com hífen seguido de caracteres não numéricos (ex: -cmd, -2+5)
+    if (/^-[^0-9]/.test(value) && value !== '-') {
+        return `'${value}`;
+    }
+    return value;
+}
+
+/**
+ * Sanitiza o nome de uma pessoa para uso seguro em nomes de arquivos no sistema operacional.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function sanitizeFilename(name) {
+    if (!name) return 'pessoa';
+    return String(name)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // remove diacríticos
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '-') // substitui caracteres inválidos
+        .replace(/-+/g, '-') // unifica hifens consecutivos
+        .replace(/^-|-$/g, '') || 'pessoa';
+}
+
+/**
+ * Gera relatório CSV filtrado exclusivamente para uma pessoa (mês ou ano).
+ *
+ * @param {Object} params
+ * @param {Object} params.client - Objeto do cliente { id, name }
+ * @param {string} [params.periodType='month'] - 'month' ou 'year'
+ * @param {string} params.targetPeriod - Competência 'YYYY-MM' ou Ano 'YYYY'
+ * @param {Array<Object>} [params.loans=[]] - Compras cadastradas
+ * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
+ * @param {Array<Object>} [params.subscriptions=[]] - Assinaturas
+ * @param {Array<Object>} [params.cards=[]] - Cartões para resolução de nome
+ * @returns {string} Conteúdo CSV com BOM UTF-8
+ */
+export function generatePersonReportCsv({
+    client,
+    periodType = 'month',
+    targetPeriod,
+    loans = [],
+    expenses = [],
+    subscriptions = [],
+    cards = []
+}) {
+    if (!client || !client.id) return '\uFEFF';
+
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubs = asArray(subscriptions);
+    const cardMap = new Map(asArray(cards).map(c => [c?.id, c?.name]));
+
+    const periodStr = String(targetPeriod || '').trim();
+    const isYear = periodType === 'year';
+    const clientName = client.name || 'Pessoa';
+
+    const items = [];
+
+    // 1. Compras parceladas (normais da pessoa e cotas em compras compartilhadas)
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+        const cardName = cardMap.get(loan.cardId) || 'Cartão';
+
+        if (loan.isShared && loan.sharedDetails) {
+            let installments = [];
+            if (loan.sharedDetails.person1?.clientId === client.id) {
+                installments = asArray(loan.sharedDetails.person1.installments);
+            } else if (loan.sharedDetails.person2?.clientId === client.id) {
+                installments = asArray(loan.sharedDetails.person2.installments);
+            }
+
+            installments.forEach(inst => {
+                if (inst?.dueDate && inst.dueDate.startsWith(periodStr)) {
+                    items.push({
+                        type: 'Compra Compartilhada (Cota)',
+                        date: inst.dueDate,
+                        description: sanitizeCsvFormula(loan.description || 'Compra Compartilhada'),
+                        category: sanitizeCsvFormula(loan.category || 'Cartão'),
+                        clientName: sanitizeCsvFormula(clientName),
+                        cardName: sanitizeCsvFormula(cardName),
+                        installment: `${inst.number || 1}/${installments.length}`,
+                        value: Number(inst.value || 0),
+                        status: inst.status || 'Pendente'
+                    });
+                }
+            });
+        } else if (loan.clientId === client.id) {
+            const instList = asArray(loan.installments);
+            instList.forEach(inst => {
+                if (inst?.dueDate && inst.dueDate.startsWith(periodStr)) {
+                    items.push({
+                        type: 'Compra Parcelada',
+                        date: inst.dueDate,
+                        description: sanitizeCsvFormula(loan.description || 'Compra Parcelada'),
+                        category: sanitizeCsvFormula(loan.category || 'Cartão'),
+                        clientName: sanitizeCsvFormula(clientName),
+                        cardName: sanitizeCsvFormula(cardName),
+                        installment: `${inst.number || 1}/${loan.installmentsCount || instList.length || 1}`,
+                        value: Number(inst.value || 0),
+                        status: inst.status || 'Pendente'
+                    });
+                }
+            });
+        }
+    });
+
+    // 2. Despesas avulsas da pessoa
+    safeExpenses.forEach(exp => {
+        if (!exp || exp.clientId !== client.id) return;
+        const dateStr = typeof exp.date === 'string'
+            ? exp.date
+            : (exp.date?.toDate ? exp.date.toDate().toISOString().slice(0, 10) : '');
+
+        if (dateStr && dateStr.startsWith(periodStr)) {
+            items.push({
+                type: 'Despesa Avulsa',
+                date: dateStr,
+                description: sanitizeCsvFormula(exp.description || 'Despesa'),
+                category: sanitizeCsvFormula(exp.category || 'Geral'),
+                clientName: sanitizeCsvFormula(clientName),
+                cardName: sanitizeCsvFormula(cardMap.get(exp.cardId) || 'Dinheiro/Pix'),
+                installment: '1/1',
+                value: Number(exp.value || 0),
+                status: exp.status || 'Pendente'
+            });
+        }
+    });
+
+    // 3. Assinaturas ativas atribuídas à pessoa
+    safeSubs.forEach(sub => {
+        if (!sub || sub.clientId !== client.id || sub.isActive === false || sub.status === 'Inativa') return;
+        const subVal = Number(sub.amount !== undefined ? sub.amount : (sub.value || 0));
+        const cardName = cardMap.get(sub.cardId) || 'Cartão';
+        const dayStr = String(sub.dueDate || sub.dia || 1).padStart(2, '0');
+
+        if (isYear) {
+            for (let m = 1; m <= 12; m++) {
+                const mStr = String(m).padStart(2, '0');
+                items.push({
+                    type: 'Assinatura',
+                    date: `${periodStr}-${mStr}-${dayStr}`,
+                    description: sanitizeCsvFormula(sub.name || 'Assinatura'),
+                    category: 'Assinaturas',
+                    clientName: sanitizeCsvFormula(clientName),
+                    cardName: sanitizeCsvFormula(cardName),
+                    installment: 'Recorrente',
+                    value: subVal,
+                    status: 'Ativa'
+                });
+            }
+        } else {
+            items.push({
+                type: 'Assinatura',
+                date: `${periodStr}-${dayStr}`,
+                description: sanitizeCsvFormula(sub.name || 'Assinatura'),
+                category: 'Assinaturas',
+                clientName: sanitizeCsvFormula(clientName),
+                cardName: sanitizeCsvFormula(cardName),
+                installment: 'Recorrente',
+                value: subVal,
+                status: 'Ativa'
+            });
+        }
+    });
+
+    // Ordena por data cronológica
+    items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    return generateTransactionsCsv(items);
+}
+
+/**
+ * Dispara o download de CSV de uma pessoa com nome de arquivo padronizado.
+ *
+ * @param {Object} params
+ * @returns {string} Nome do arquivo baixado
+ */
+export function downloadPersonReportCsv(params) {
+    const { client, targetPeriod } = params;
+    const csvContent = generatePersonReportCsv(params);
+    const safeClientName = sanitizeFilename(client?.name);
+    const filename = `fincontrol-${safeClientName}-${targetPeriod}.csv`;
+    downloadCsvFile(csvContent, filename);
+    return filename;
+}
+
