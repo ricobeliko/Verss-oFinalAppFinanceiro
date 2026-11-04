@@ -1,5 +1,5 @@
 // src/design-system/lab/DesignSystemLab.jsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   FiSun, 
   FiMoon, 
@@ -11,7 +11,8 @@ import {
   FiSearch, 
   FiTrash2, 
   FiPlus,
-  FiExternalLink
+  FiExternalLink,
+  FiRefreshCw
 } from 'react-icons/fi';
 import Button from '../primitives/Button';
 import IconButton from '../primitives/IconButton';
@@ -19,6 +20,8 @@ import Surface from '../primitives/Surface';
 import TextField from '../primitives/TextField';
 import Badge from '../primitives/Badge';
 import Modal from '../primitives/Modal';
+import Skeleton, { SkeletonPage } from '../primitives/Skeleton';
+import useEnterStagger from '../../hooks/useEnterStagger';
 
 /**
  * FinControl Design System 2.0 — Local Visual Lab (Dev-Only)
@@ -26,12 +29,85 @@ import Modal from '../primitives/Modal';
  * Allows the owner to inspect, toggle themes, and interact with all DS2 foundations
  * in an isolated environment without affecting production pages.
  */
+function StaggerScopeContainer() {
+  const scopeRef = useRef(null);
+  useEnterStagger(scopeRef, { ready: true });
+
+  return (
+    <div
+      ref={scopeRef}
+      className="space-y-4 p-4 rounded-xl border border-[var(--fc-border-subtle)] bg-[var(--fc-surface-1)]"
+    >
+      <div data-enter="title" className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-bold text-[var(--fc-text-primary)]">
+            Painel Orquestrado (Entra Primeiro)
+          </h4>
+          <p className="text-xs text-[var(--fc-text-secondary)]">
+            Marcado com data-enter="title", animado com translateY e opacity via GSAP.
+          </p>
+        </div>
+        <Badge variant="accent">data-enter="title"</Badge>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            data-enter="item"
+            className="p-3.5 rounded-lg border border-[var(--fc-border-default)] bg-[var(--fc-surface-2)] space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--fc-text-muted)] font-mono">Card #{i}</span>
+              <Badge variant="neutral">item</Badge>
+            </div>
+            <p className="text-sm font-semibold text-[var(--fc-text-primary)]">Card Escalonado</p>
+            <p className="text-xs text-[var(--fc-text-secondary)]">
+              Entra em cascata sequencial (stagger 0.07s).
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StaggerDemo() {
+  const [mountKey, setMountKey] = useState(0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <p className="text-base font-semibold text-[var(--fc-text-primary)]">
+            Demonstração Interativa de Entrada Escalonada
+          </p>
+          <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+            Clique no botão ao lado para remontar a área e observar a entrada em cascata com título e cards.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setMountKey((k) => k + 1)}
+          className="flex items-center gap-2 self-start sm:self-auto"
+        >
+          <FiRefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>Repetir animação</span>
+        </Button>
+      </div>
+      <StaggerScopeContainer key={mountKey} />
+    </div>
+  );
+}
+
 export default function DesignSystemLab() {
   const [theme, setTheme] = useState('dark');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [textValue, setTextValue] = useState('Exemplo preenchido');
   const [currencyValue, setCurrencyValue] = useState('1250,50');
   const [errorInputValue, setErrorInputValue] = useState('inválido@');
+  const [showSkeletonPage, setShowSkeletonPage] = useState(false);
 
   return (
     <div
@@ -578,6 +654,82 @@ export default function DesignSystemLab() {
             >
               Abrir Modal DS2
             </Button>
+          </Surface>
+        </section>
+        {/* =======================================================================
+            SECTION H: SKELETON E ENTRADA ESCALONADA (MOTION & SKELETONS)
+            ======================================================================= */}
+        <section aria-labelledby="sec-skeletons" className="space-y-6">
+          <div className="border-b border-[var(--fc-border-subtle)] pb-2">
+            <h2 id="sec-skeletons" className="text-xl font-bold tracking-tight text-[var(--fc-text-primary)]">
+              H. Skeleton e Entrada Escalonada (Motion & Skeletons)
+            </h2>
+            <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+              Esqueletos de carregamento com shimmer suave em CSS puro e orquestração de entrada escalonada (useEnterStagger).
+            </p>
+          </div>
+
+          {/* Variantes de Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Bloco</span>
+              <Skeleton variant="block" className="h-28 w-full" />
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Texto (Linhas)</span>
+              <div className="space-y-2 pt-2">
+                <Skeleton variant="text" className="w-full" />
+                <Skeleton variant="text" className="w-4/5" />
+                <Skeleton variant="text" className="w-2/3" />
+              </div>
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Círculos</span>
+              <div className="flex items-center gap-3 pt-2">
+                <Skeleton variant="circle" className="w-12 h-12" />
+                <Skeleton variant="circle" className="w-10 h-10" />
+                <Skeleton variant="circle" className="w-8 h-8" />
+              </div>
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Card</span>
+              <Skeleton variant="card" />
+            </Surface>
+          </div>
+
+          {/* Demo Interativa de Entrada Escalonada */}
+          <Surface variant="elevated" className="space-y-4">
+            <StaggerDemo />
+          </Surface>
+
+          {/* Preview de SkeletonPage */}
+          <Surface variant="default" className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold text-[var(--fc-text-primary)]">
+                  SkeletonPage (Layout Estrutural de Tela)
+                </p>
+                <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+                  Substitui spinners centrais e renderiza a antecipação da tela com acessibilidade (role="status", aria-busy="true").
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowSkeletonPage((v) => !v)}
+              >
+                {showSkeletonPage ? 'Ocultar SkeletonPage' : 'Exibir SkeletonPage'}
+              </Button>
+            </div>
+
+            {showSkeletonPage && (
+              <div className="p-4 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-bg)]">
+                <SkeletonPage />
+              </div>
+            )}
           </Surface>
         </section>
       </main>

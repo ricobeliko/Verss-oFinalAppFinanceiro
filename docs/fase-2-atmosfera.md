@@ -101,8 +101,8 @@ Para assegurar conformidade inegociável com WCAG 2.1 AA/AAA mesmo com transpar�
 | **Texto Secundário** (`--fc-text-secondary`) | `#2F5560` | **6.81:1** | AAA | 4.5:1 | **Aprovado** |
 | **Texto Muted / Terciário** (`--fc-text-muted`) | `#4C6F78` | **4.64:1** | AA | 4.5:1 | **Aprovado** |
 | **Placeholder de Campo** (`--fc-field-placeholder`) | `#56777F` (sobre `#FFFFFF`) | **4.85:1** | AA | 4.5:1 | **Aprovado** |
-| **Acento Interativo** (`--fc-accent`) | `#0F828C` | **4.60:1** | AA | 3.0:1 | **Aprovado** |
-| **Perigo** (`--fc-danger`) | `#DC2626` | **4.72:1** | AA | 3.0:1 | **Aprovado** |
+| **Acento Interativo** (`--fc-accent`) | `#047C84` | **4.41:1** | AA | 3.0:1 | **Aprovado** |
+| **Perigo** (`--fc-danger`) | `#B91C1C` | **5.74:1** | AA | 4.5:1 | **Aprovado** |
 
 ---
 

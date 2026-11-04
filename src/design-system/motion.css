@@ -170,6 +170,40 @@
   }
 }
 
+/* =========================================================================
+   SKELETON SHIMMER MOTION
+   Pure CSS hardware-accelerated transform shimmer sweep
+   ========================================================================= */
+@keyframes fcShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.fc-skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.fc-skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--fc-accent-soft) 50%,
+    transparent 100%
+  );
+  animation: fcShimmer 1.4s infinite ease-in-out;
+  will-change: transform;
+  pointer-events: none;
+}
+
 /* Reduced Motion Safety */
 @media (prefers-reduced-motion: reduce) {
   .fc-transition-fast,
@@ -188,5 +222,10 @@
     animation: none !important;
     transition: none !important;
     transform: none !important;
+  }
+
+  .fc-skeleton-shimmer::after {
+    animation: none !important;
+    display: none !important;
   }
 }
