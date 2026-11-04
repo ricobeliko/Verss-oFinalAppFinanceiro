@@ -97,8 +97,8 @@ test.describe('Dashboard Screen Entrance & Visual Safety (Commit C)', () => {
       // Aguarda o elemento de título da aba aparecer
       await page.waitForSelector(tab.selector, { timeout: 10000 });
 
-      // Aguarda a janela da animação escalonada (~600ms) terminar
-      await page.waitForTimeout(700);
+      // Aguarda a janela da animação escalonada e contadores terminarem
+      await page.waitForTimeout(1200);
 
       // 1. Invariante: Nenhum elemento na página pode ter opacity inline 0
       const zeroElements = await page.evaluate(() => {

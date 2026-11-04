@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { formatCurrencyDisplay } from '../../utils/currency';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
 import UpgradePrompt from '../../components/UpgradePrompt';
 
 function ProSummary({ selectedMonth, totalExpenses, incomes }) {
@@ -85,7 +85,7 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
                         <div className="space-y-1">
                             <span className="text-xs font-bold uppercase tracking-wider text-[var(--fc-success)] block">Total Receitas (Mês)</span>
                             <p className="text-2xl sm:text-3xl font-black font-mono text-[var(--fc-text-primary)] tracking-tight">
-                                {formatCurrencyDisplay(monthlyIncome)}
+                                <AnimatedCurrency value={monthlyIncome} />
                             </p>
                         </div>
                         <div className="w-12 h-12 rounded-2xl bg-[var(--fc-success-soft)] text-[var(--fc-success)] border border-[var(--fc-success)]/20 flex items-center justify-center font-bold text-lg shadow-inner flex-shrink-0">
@@ -98,7 +98,7 @@ function ProSummary({ selectedMonth, totalExpenses, incomes }) {
                         <div className="space-y-1">
                             <span className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-secondary)] block">Balanço Final (Receitas - Fatura)</span>
                             <p className={`text-2xl sm:text-3xl font-black font-mono tracking-tight ${balanceColorClass}`}>
-                                {formatCurrencyDisplay(finalBalance)}
+                                <AnimatedCurrency value={finalBalance} />
                             </p>
                         </div>
                         <div className="w-12 h-12 rounded-2xl bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 flex items-center justify-center font-bold text-lg shadow-inner flex-shrink-0">

@@ -29,6 +29,7 @@ import CategoryBudgetsWidget from '../../components/CategoryBudgetsWidget';
 import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
 import NotificationSettingsModal from '../../components/NotificationSettingsModal';
 import ProSummary from './ProSummary';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
@@ -1052,7 +1053,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             </div>
                         </div>
                         <p className="text-3xl font-extrabold tracking-tight text-[var(--fc-text-primary)] mt-3">
-                            {formatCurrencyDisplay(summary.totalFatura)}
+                            <AnimatedCurrency value={summary.totalFatura} />
                         </p>
                         <div className="mt-3 flex items-center gap-2">
                             {monthlyComparison.previousInvoiceTotal > 0 ? (
@@ -1079,12 +1080,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
                                 <span className="text-[var(--fc-text-secondary)]">Pago:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalRecebido)}</span>
+                                <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalRecebido} /></span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
                                 <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalPendente)}</span>
+                                <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalPendente} /></span>
                             </div>
                         </div>
                     </Surface>
@@ -1118,7 +1119,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 <div className="space-y-2.5 text-xs text-[var(--fc-text-secondary)]">
                                     <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
                                         <span>Compromissos Recorrentes (Assinaturas)</span>
-                                        <span className="font-mono font-bold text-[var(--fc-accent)]">{formatCurrencyDisplay(intelligenceData.activeSubscriptionsTotal)}/mês</span>
+                                        <span className="font-mono font-bold text-[var(--fc-accent)]"><AnimatedCurrency value={intelligenceData.activeSubscriptionsTotal} />/mês</span>
                                     </div>
                                     <p className="text-[11px] text-[var(--fc-text-muted)] leading-relaxed px-1">
                                         💡 <strong className="text-[var(--fc-text-primary)] font-semibold">Dica:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.

@@ -3,6 +3,7 @@
 import React, { useMemo, useRef } from 'react';
 import useEnterStagger from '../../hooks/useEnterStagger';
 import { formatCurrencyDisplay } from '../../utils/currency';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
 import { SkeletonPage } from '../../design-system';
 import { useLoans } from '../../hooks/useLoans';
 import { useExpenses } from '../../hooks/useExpenses';
@@ -121,7 +122,7 @@ export default function CrisisMode({ selectedMonth }) {
                 <div className="bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] px-6 py-4 rounded-2xl text-right shadow-sm">
                     <span className="text-xs text-[var(--fc-text-secondary)] block uppercase tracking-wider">Total Comprometido</span>
                     <span className="text-2xl font-black font-mono text-[var(--fc-accent)]">
-                        {formatCurrencyDisplay(auditData.totalSum)}
+                        <AnimatedCurrency value={auditData.totalSum} />
                     </span>
                 </div>
             </div>
@@ -136,7 +137,7 @@ export default function CrisisMode({ selectedMonth }) {
                             <span className="text-xs font-bold tracking-widest uppercase bg-[var(--fc-accent)]/10 text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 px-3 py-1 rounded-full">
                                 RECORRÊNCIAS
                             </span>
-                            <span className="font-mono font-black text-lg text-[var(--fc-accent)]">{formatCurrencyDisplay(auditData.totalSubsVal)}</span>
+                            <span className="font-mono font-black text-lg text-[var(--fc-accent)]"><AnimatedCurrency value={auditData.totalSubsVal} /></span>
                         </div>
                         <h3 className="text-base font-black tracking-tight text-[var(--fc-text-primary)] mb-3">
                             💡 Onde Cortar: Assinaturas
@@ -171,7 +172,7 @@ export default function CrisisMode({ selectedMonth }) {
                             <span className="text-xs font-bold tracking-widest uppercase bg-[var(--fc-accent)]/10 text-[var(--fc-accent)] px-3 py-1 rounded-full border border-[var(--fc-accent)]/20">
                                 CARTÃO DE CRÉDITO
                             </span>
-                            <span className="font-mono font-black text-lg text-[var(--fc-accent)]">{formatCurrencyDisplay(auditData.totalInstallmentsVal)}</span>
+                            <span className="font-mono font-black text-lg text-[var(--fc-accent)]"><AnimatedCurrency value={auditData.totalInstallmentsVal} /></span>
                         </div>
                         <h3 className="text-base font-black tracking-tight text-[var(--fc-text-primary)] mb-3">
                             💳 Parcelas Caindo na Fatura
@@ -206,7 +207,7 @@ export default function CrisisMode({ selectedMonth }) {
                             <span className="text-xs font-bold tracking-widest uppercase bg-rose-500/10 text-rose-600 dark:text-rose-400 px-3 py-1 rounded-full border border-rose-500/20">
                                 GASTOS AVULSOS
                             </span>
-                            <span className="font-mono font-black text-lg text-rose-600 dark:text-rose-400">{formatCurrencyDisplay(auditData.totalExpensesVal)}</span>
+                            <span className="font-mono font-black text-lg text-rose-600 dark:text-rose-400"><AnimatedCurrency value={auditData.totalExpensesVal} /></span>
                         </div>
                         <h3 className="text-base font-black tracking-tight text-[var(--fc-text-primary)] mb-3">
                             🔍 Despesas do Período
