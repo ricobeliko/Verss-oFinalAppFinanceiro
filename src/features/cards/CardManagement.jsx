@@ -6,6 +6,7 @@ import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import CarbonCard from '../../components/CarbonCard';
+import AnimatedProgressBar from '../../components/AnimatedProgressBar';
 import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { calculateCardLimitIntelligence, calculateCardInvoiceDetails } from '../../services/financialService';
@@ -252,16 +253,16 @@ export default function CardManagement() {
                                                     {limitInfo.utilizationLabel} utilizado
                                                 </span>
                                             </div>
-                                            <div className="w-full bg-[var(--fc-surface-2)] rounded-full h-2.5 my-1.5 overflow-hidden border border-[var(--fc-border-default)]">
-                                                <div 
-                                                    className={`h-2.5 rounded-full transition-all duration-500 ${
-                                                        limitInfo.isHighUtilization
-                                                            ? 'bg-gradient-to-r from-amber-500 to-rose-500'
-                                                            : 'bg-[var(--fc-accent)]'
-                                                    }`} 
-                                                    style={{ width: `${limitInfo.utilizationPercentage > 100 ? 100 : limitInfo.utilizationPercentage}%` }}
-                                                ></div>
-                                            </div>
+                                            <AnimatedProgressBar
+                                                containerClassName="w-full bg-[var(--fc-surface-2)] rounded-full h-2.5 my-1.5 overflow-hidden border border-[var(--fc-border-default)]"
+                                                className={`h-2.5 rounded-full transition-all duration-500 ${
+                                                    limitInfo.isHighUtilization
+                                                        ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                                                        : 'bg-[var(--fc-accent)]'
+                                                }`}
+                                                percentage={limitInfo.utilizationPercentage > 100 ? 100 : limitInfo.utilizationPercentage}
+                                                aria-label={`Utilização do limite de ${card.name}`}
+                                            />
                                             <div className="text-xs text-[var(--fc-text-muted)] flex flex-wrap items-center gap-2">
                                                 <span>Comprometido no app: <strong className="text-[var(--fc-text-primary)] font-mono">{formatCurrencyDisplay(limitInfo.committedAmount)}</strong></span> 
                                                 <span>•</span> 

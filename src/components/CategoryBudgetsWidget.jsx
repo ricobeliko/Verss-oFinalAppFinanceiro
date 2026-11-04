@@ -1,6 +1,7 @@
 // src/components/CategoryBudgetsWidget.jsx
 import React from 'react';
 import { formatCurrencyDisplay } from '../utils/currency';
+import AnimatedProgressBar from './AnimatedProgressBar';
 import { calculateCategoryBudgetsProgress } from '../services/financialService';
 
 /**
@@ -71,12 +72,12 @@ export default function CategoryBudgetsWidget({
                                     </span>
                                 </div>
 
-                                <div className="w-full h-2 rounded-full bg-[var(--fc-surface-3)] overflow-hidden">
-                                    <div
-                                        className={`h-full transition-all duration-500 ${barColor}`}
-                                        style={{ width: `${Math.min(100, item.percentage)}%` }}
-                                    />
-                                </div>
+                                <AnimatedProgressBar
+                                    containerClassName="w-full h-2 rounded-full bg-[var(--fc-surface-3)] overflow-hidden"
+                                    className={`h-full transition-all duration-500 ${barColor}`}
+                                    percentage={Math.min(100, item.percentage)}
+                                    aria-label={`Orçamento de ${item.category}`}
+                                />
 
                                 <div className="flex justify-between items-center text-[10px] text-[var(--fc-text-muted)]">
                                     <span>{item.percentage}% consumido</span>

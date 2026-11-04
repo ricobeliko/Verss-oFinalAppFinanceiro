@@ -8,6 +8,8 @@ import {
 import { useAppContext } from '../context/AppContext';
 import UpgradePrompt from './UpgradePrompt';
 import { formatCurrencyDisplay } from '../utils/currency';
+import usePrefersReducedMotion from '../hooks/usePrefersReducedMotion';
+import { MOTION } from '../design-system/motion';
 
 const formatYAxis = (tick) => {
     if (tick >= 1000) return `R$ ${(tick / 1000).toLocaleString('pt-BR')}k`;
@@ -31,6 +33,14 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
     const [isLoading, setIsLoading] = useState(false);
 
     const hasProAccess = isPro || isTrialActive;
+    const prefersReducedMotion = usePrefersReducedMotion();
+
+    const animationConfig = useMemo(() => ({
+        isAnimationActive: !prefersReducedMotion,
+        animationBegin: MOTION.charts.delay,
+        animationDuration: MOTION.charts.duration,
+        animationEasing: MOTION.charts.easing,
+    }), [prefersReducedMotion]);
 
     const handleActivateTrial = async () => {
         if (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_USER__ || sessionStorage.getItem('fincontrol_e2e_user'))) {
@@ -133,7 +143,15 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                     <XAxis dataKey="name" tick={{ fill: textColor, fontSize: 12 }} axisLine={{ stroke: axisLineStroke }} />
                                     <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={formatYAxis} axisLine={{ stroke: axisLineStroke }} />
                                     <Tooltip content={<CustomTooltip />} cursor={{ fill: isLight ? 'rgba(4, 124, 132, 0.08)' : 'rgba(92, 204, 204, 0.08)' }} />
-                                    <Bar dataKey="Total Gasto" fill={barFill} radius={[8, 8, 0, 0]}>
+                                    <Bar
+                                        dataKey="Total Gasto"
+                                        fill={barFill}
+                                        radius={[8, 8, 0, 0]}
+                                        isAnimationActive={animationConfig.isAnimationActive}
+                                        animationBegin={animationConfig.animationBegin}
+                                        animationDuration={animationConfig.animationDuration}
+                                        animationEasing={animationConfig.animationEasing}
+                                    >
                                         <LabelList dataKey="Total Gasto" position="top" formatter={(value) => formatCurrencyDisplay(value)} fill={barFill} fontSize={11} fontWeight="bold" />
                                     </Bar>
                                 </BarChart>
@@ -149,7 +167,20 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                         {dataForPieChart.length > 0 ? (
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
-                                    <Pie data={dataForPieChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                    <Pie
+                                        data={dataForPieChart}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius={90}
+                                        labelLine={false}
+                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                        isAnimationActive={animationConfig.isAnimationActive}
+                                        animationBegin={animationConfig.animationBegin}
+                                        animationDuration={animationConfig.animationDuration}
+                                        animationEasing={animationConfig.animationEasing}
+                                    >
                                         {dataForPieChart.map((entry, index) => (
                                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke={cellStroke} strokeWidth={2} />
                                         ))}

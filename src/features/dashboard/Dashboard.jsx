@@ -30,6 +30,7 @@ import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
 import NotificationSettingsModal from '../../components/NotificationSettingsModal';
 import ProSummary from './ProSummary';
 import AnimatedCurrency from '../../components/AnimatedCurrency';
+import AnimatedProgressBar from '../../components/AnimatedProgressBar';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
@@ -1073,9 +1074,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Progresso de Pagamento</h3>
                             <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage}%</span>
                         </div>
-                        <div className="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]">
-                            <div className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300" style={{ width: `${paidPercentage}%` }}></div>
-                        </div>
+                        <AnimatedProgressBar
+                            containerClassName="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]"
+                            className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300"
+                            percentage={paidPercentage}
+                            delay={0.2}
+                            aria-label="Progresso de Pagamento da Fatura"
+                        />
                         <div className="flex justify-between text-xs font-medium pt-1">
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
