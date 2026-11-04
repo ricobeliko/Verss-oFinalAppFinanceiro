@@ -10,7 +10,6 @@ export const TAB_LOADERS = {
   cards: () => import('../cards/CardManagement'),
   transactions: () => import('../transactions/TransactionManagement'),
   subscriptions: () => import('../subscriptions/SubscriptionManagement'),
-  crisis: () => import('../crisis/CrisisMode'),
 };
 
 const modulePromises = new Map();

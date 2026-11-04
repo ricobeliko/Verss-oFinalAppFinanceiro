@@ -25,7 +25,6 @@ const PAGE_NAMES = {
   cards: 'Gerenciamento de Cartões',
   transactions: 'Adicionar Movimentações',
   subscriptions: 'Gerenciamento de Assinaturas',
-  crisis: 'Modo Crise e Raio-X Financeiro',
 };
 
 // Página principal do painel (carregada no primeiro paint)
@@ -37,7 +36,6 @@ const ClientManagement = lazy(() => loadTabModule('pessoas'));
 const CardManagement = lazy(() => loadTabModule('cards'));
 const UnifiedTransactionManagement = lazy(() => loadTabModule('transactions'));
 const SubscriptionManagement = lazy(() => loadTabModule('subscriptions'));
-const CrisisMode = lazy(() => loadTabModule('crisis'));
 
 export default function DashboardLayout() {
   const { currentUser, isPro, isTrialActive, logout, showToast } = useAppContext();
@@ -206,8 +204,6 @@ export default function DashboardLayout() {
               return <UnifiedTransactionManagement />;
             case 'subscriptions':
               return <SubscriptionManagement {...pageProps} />;
-            case 'crisis':
-              return <CrisisMode selectedMonth={selectedMonth} />;
             default:
               return <Dashboard {...pageProps} />;
           }

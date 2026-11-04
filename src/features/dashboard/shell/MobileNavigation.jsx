@@ -52,7 +52,6 @@ const DEFAULT_MOBILE_NAV_LINKS = [
   { id: 'cards', label: 'Cartões', icon: <CreditCardIcon /> },
   { id: 'transactions', label: 'Movimentações', icon: <ActivityIcon /> },
   { id: 'subscriptions', label: 'Assinaturas', icon: <RepeatIcon /> },
-  { id: 'crisis', label: 'Modo Crise', icon: <ZapIcon />, proOnly: true },
 ];
 
 const CloseIcon = () => (

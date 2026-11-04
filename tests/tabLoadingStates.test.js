@@ -53,7 +53,6 @@ vi.mock('../src/hooks/usePaidSubscriptions', () => ({
 import ClientManagement from '../src/features/clients/ClientManagement';
 import CardManagement from '../src/features/cards/CardManagement';
 import SubscriptionManagement from '../src/features/subscriptions/SubscriptionManagement';
-import CrisisMode from '../src/features/crisis/CrisisMode';
 
 describe('Tab Loading States & True Empty States (Commit B)', () => {
   beforeEach(() => {
@@ -125,25 +124,6 @@ describe('Tab Loading States & True Empty States (Commit B)', () => {
 
       const html = renderToString(React.createElement(SubscriptionManagement));
       expect(html).toContain('Nenhuma assinatura cadastrada');
-      expect(html).toContain('aria-busy="false"');
-    });
-  });
-
-  describe('4. Modo Crise (CrisisMode)', () => {
-    it('quando isLoading=true, deve renderizar SkeletonPage', () => {
-      mockLoansHook = { loans: [], loading: true, isLoading: true };
-
-      const html = renderToString(React.createElement(CrisisMode, { selectedMonth: '2026-11' }));
-      expect(html).toContain('role="status"');
-      expect(html).toContain('aria-busy="true"');
-      expect(html).toContain('Carregando…');
-    });
-
-    it('quando isLoading=false, deve renderizar a tela carregada', () => {
-      mockLoansHook = { loans: [], loading: false, isLoading: false };
-
-      const html = renderToString(React.createElement(CrisisMode, { selectedMonth: '2026-11' }));
-      expect(html).toContain('Modo Crise &amp; Raio-X Financeiro');
       expect(html).toContain('aria-busy="false"');
     });
   });

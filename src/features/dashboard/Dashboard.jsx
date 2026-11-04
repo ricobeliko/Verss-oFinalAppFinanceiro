@@ -6,11 +6,8 @@ import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, 
 import { useAppContext } from '../../context/AppContext';
 import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../services/firestoreSubscriptionRegistry';
 import { formatCurrencyDisplay } from '../../utils/currency';
-import { generateTransactionsCsv, generateAnnualReportCsv, downloadCsvFile } from '../../services/csvExportService';
 import {
     calculateMonthlyComparisonSummary,
-    generateDeterministicFinancialInsights,
-    generateFinancialAlerts,
     calculateInvoiceDueDate,
     toCents,
     fromCents,
@@ -21,14 +18,7 @@ import {
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
 import GenericModal from '../../components/GenericModal';
 import FutureCommitmentsCard from '../../components/FutureCommitmentsCard';
-import DeterministicInsightsWidget from '../../components/DeterministicInsightsWidget';
-import FinancialAlertsBanner from '../../components/FinancialAlertsBanner';
-import ExecutiveSummaryModal from '../../components/ExecutiveSummaryModal';
 import FinancialSandboxSimulatorModal from '../../components/FinancialSandboxSimulatorModal';
-import CategoryBudgetsWidget from '../../components/CategoryBudgetsWidget';
-import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
-import NotificationSettingsModal from '../../components/NotificationSettingsModal';
-import ProSummary from './ProSummary';
 import AnimatedCurrency from '../../components/AnimatedCurrency';
 import AnimatedProgressBar from '../../components/AnimatedProgressBar';
 import ProFeatureLock from '../../components/ProFeatureLock';
@@ -53,11 +43,8 @@ const SortIcon = ({ direction }) => (
     </svg>
 );
 
-const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
-const TargetIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
-
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, userProfile, getUserCollectionPathSegments, showToast, isPro, isTrialActive, handleUpgradeClick, activateFreeTrial } = useAppContext();
+    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast, isPro, isTrialActive, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
     const [dashboardData, setDashboardData] = useState({
@@ -73,46 +60,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
-    const [isExecutiveSummaryOpen, setIsExecutiveSummaryOpen] = useState(false);
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
-    const [isBudgetsModalOpen, setIsBudgetsModalOpen] = useState(false);
-    const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
     const scopeRef = useRef(null);
     useEnterStagger(scopeRef, { ready: !isLoading });
-
-
-    const handleSaveBudgets = async (newBudgets) => {
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, userId);
-            await updateDoc(userDocRef, {
-                budgets: newBudgets,
-                updatedAt: serverTimestamp()
-            });
-            showToast('Metas de orçamento salvas com sucesso!', 'success');
-        } catch (err) {
-            console.error("Erro ao salvar metas:", err);
-            showToast('Falha ao salvar metas de orçamento.', 'error');
-        }
-    };
-
-    const handleSaveNotificationSettings = async (newSettings) => {
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, userId);
-            await updateDoc(userDocRef, {
-                notificationSettings: newSettings,
-                updatedAt: serverTimestamp()
-            });
-            showToast('Preferências de alertas salvas com sucesso!', 'success');
-        } catch (err) {
-            console.error("Erro ao salvar alertas:", err);
-            showToast('Falha ao salvar preferências.', 'error');
-        }
-    };
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) {
@@ -380,65 +333,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         setSelectedMonth(`${curYear}-${curMonthStr}`);
     };
 
-    const handleExportMonthCsv = () => {
-        if (!hasProAccess) {
-            showToast('Exportação de extrato CSV é exclusiva do plano Pro.', 'warning');
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-
-        if (!displayableItems || displayableItems.length === 0) {
-            showToast('Nenhuma transação disponível para exportar no mês selecionado.', 'warning');
-            return;
-        }
-
-        const transactionsToExport = displayableItems.map(item => {
-            const clientObj = clients.find(c => c.id === item.clientId);
-            const cardObj = cards.find(c => c.id === item.cardId);
-            return {
-                type: item.type,
-                date: item.dueDate,
-                description: item.description,
-                category: item.category || (item.type === 'Assinatura' ? 'Assinaturas' : 'Outros'),
-                clientName: clientObj?.name || 'Titular',
-                cardName: cardObj?.name || 'Dinheiro/Pix',
-                installment: item.number ? `${item.number}/${item.totalInstallments || item.number}` : '-',
-                value: item.value || 0,
-                status: item.currentStatus || 'Pendente'
-            };
-        });
-
-        const csvContent = generateTransactionsCsv(transactionsToExport);
-        downloadCsvFile(csvContent, `fincontrol-extrato-${selectedMonth}.csv`);
-        showToast('Extrato CSV exportado com sucesso!', 'success');
-    };
-
-    const handleExportAnnualCsv = () => {
-        if (!hasProAccess) {
-            showToast('Relatório Anual consolidado é exclusivo do plano Pro.', 'warning');
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-
-        try {
-            const currentYear = selectedMonth.slice(0, 4);
-            const csv = generateAnnualReportCsv({
-                targetYear: currentYear,
-                loans,
-                expenses,
-                subscriptions,
-                incomes,
-                cards,
-                clients
-            });
-            downloadCsvFile(csv, `fincontrol-relatorio-anual-${currentYear}.csv`);
-            showToast(`Relatório Anual ${currentYear} CSV exportado com sucesso!`, 'success');
-        } catch (error) {
-            showToast('Erro ao exportar relatório anual CSV.', 'error');
-        }
-    };
-
-
     const {
         displayableItems,
         filteredLoansForChart,
@@ -600,52 +494,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         }
     }, [isLoading, loans, clients, cards, subscriptions, expenses, paidSubscriptions, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
     
-    // Análise de Inteligência (Auditoria Relâmpago & Metas de Quitação)
-    const intelligenceData = useMemo(() => {
-        let upcomingFinishes = [];
-        const safeLoans = Array.isArray(loans) ? loans : [];
-        const safeSubs = Array.isArray(subscriptions) ? subscriptions : [];
-
-        safeLoans.forEach(loan => {
-            if (!loan) return;
-            const isFullyPaid = loan.isShared 
-                ? (loan.sharedDetails?.person1?.statusPayment === 'Pago Total' && loan.sharedDetails?.person2?.statusPayment === 'Pago Total')
-                : (loan.statusPaymentClient === 'Pago Total');
-
-            if (!isFullyPaid) {
-                let allInsts = [];
-                if (loan.isShared) {
-                    if (Array.isArray(loan.sharedDetails?.person1?.installments)) allInsts.push(...loan.sharedDetails.person1.installments);
-                    if (Array.isArray(loan.sharedDetails?.person2?.installments)) allInsts.push(...loan.sharedDetails.person2.installments);
-                } else if (Array.isArray(loan.installments)) {
-                    allInsts.push(...loan.installments);
-                }
-
-                const pendingInsts = allInsts.filter(i => i && i.status !== 'Paga');
-                if (pendingInsts.length > 0) {
-                    pendingInsts.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-                    const lastInst = pendingInsts[pendingInsts.length - 1];
-                    if (lastInst) {
-                        upcomingFinishes.push({
-                            description: loan.description || 'Compra',
-                            remaining: pendingInsts.length,
-                            finalDate: lastInst.dueDate
-                        });
-                    }
-                }
-            }
-        });
-
-        const activeSubscriptionsTotal = safeSubs
-            .filter(s => s && s.isActive)
-            .reduce((acc, s) => acc + (s.amount !== undefined ? s.amount : (s.value || 0)), 0);
-
-        return {
-            activeSubscriptionsTotal,
-            upcomingFinishes: upcomingFinishes.slice(0, 3)
-        };
-    }, [loans, subscriptions]);
-
     const monthlyComparison = useMemo(() => {
         return calculateMonthlyComparisonSummary({
             selectedMonth,
@@ -655,77 +503,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             incomes
         });
     }, [selectedMonth, loans, expenses, subscriptions, incomes]);
-
-    const deterministicInsights = useMemo(() => {
-        return generateDeterministicFinancialInsights({
-            selectedMonth,
-            loans,
-            expenses,
-            subscriptions,
-            incomes,
-            clients,
-            maxInsights: 3
-        });
-    }, [selectedMonth, loans, expenses, subscriptions, incomes, clients]);
-
-    const financialAlerts = useMemo(() => {
-        return generateFinancialAlerts({
-            selectedMonth,
-            loans,
-            expenses,
-            subscriptions,
-            cards,
-            clients,
-            notificationSettings: userProfile?.notificationSettings || {},
-            maxAlerts: 3
-        });
-    }, [selectedMonth, loans, expenses, subscriptions, cards, clients, userProfile?.notificationSettings]);
-
-    // Infraestrutura de dispensas de alertas individuais reutilizando a mesma chave da Central de Notificações
-    const alertsStorageKey = useMemo(() => {
-        const uid = userId || 'anonymous';
-        return `fincontrol:dismissed-alerts:${uid}`;
-    }, [userId]);
-
-    const [dismissedAlertIds, setDismissedAlertIds] = useState(() => {
-        try {
-            const raw = localStorage.getItem(alertsStorageKey);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed.map(item => item.id) : [];
-        } catch {
-            return [];
-        }
-    });
-
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem(alertsStorageKey);
-            if (!raw) {
-                setDismissedAlertIds([]);
-            } else {
-                const parsed = JSON.parse(raw);
-                setDismissedAlertIds(Array.isArray(parsed) ? parsed.map(item => item.id) : []);
-            }
-        } catch {
-            setDismissedAlertIds([]);
-        }
-    }, [alertsStorageKey]);
-
-    const handleDismissAlert = (alertId) => {
-        const updated = [...dismissedAlertIds, alertId];
-        setDismissedAlertIds(updated);
-        try {
-            const payload = updated.map(id => ({ id, dismissedAt: new Date().toISOString() }));
-            localStorage.setItem(alertsStorageKey, JSON.stringify(payload));
-        } catch {
-            // Silencioso
-        }
-    };
-
-    const activeFinancialAlerts = useMemo(() => {
-        return financialAlerts.filter(alert => !dismissedAlertIds.includes(alert.id));
-    }, [financialAlerts, dismissedAlertIds]);
 
     // Projeção futura filtrada por pessoa (reutiliza selectedClientFilter sem alterar arrays originais)
     const filteredLoansForProjection = useMemo(() => {
@@ -933,22 +710,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             type="button"
                             onClick={() => {
                                 if (!hasProAccess) {
-                                    showToast('Resumo Executivo é exclusivo do plano Pro.', 'warning');
-                                    setIsUpgradeModalOpen(true);
-                                } else {
-                                    setIsExecutiveSummaryOpen(true);
-                                }
-                            }}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Abrir Resumo Executivo Semanal e Mensal"
-                        >
-                            <span>Resumo Executivo</span>
-                            {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (!hasProAccess) {
                                     showToast('Simulador Sandbox é exclusivo do plano Pro.', 'warning');
                                     setIsUpgradeModalOpen(true);
                                 } else {
@@ -960,31 +721,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         >
                             <span>Simulador</span>
                             {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setIsNotificationSettingsOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Configurar Preferências de Alertas"
-                        >
-                            <span>Alertas</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleExportMonthCsv}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Exportar lançamentos do mês em CSV"
-                        >
-                            <span>CSV Mês</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleExportAnnualCsv}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title={`Exportar Relatório Anual Consolidado (${selectedMonth.slice(0, 4)})`}
-                        >
-                            <span>Relatório Anual {selectedMonth.slice(0, 4)}</span>
                         </button>
                     </div>
                 </div>
@@ -1039,10 +775,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             </Surface>
 
-            {/* Banner de Alertas Financeiros Internos com Ação de Dispensar */}
-            <FinancialAlertsBanner alerts={activeFinancialAlerts} onDismiss={handleDismissAlert} />
-
-            {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
+            {/* Grid Principal: KPIs à esquerda e Gráficos à direita */}
             <div data-enter="item" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
                     {/* Card Fatura Total com Surface DS2 */}
@@ -1094,15 +827,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             </div>
                         </div>
                     </Surface>
-
-                    {/* ProSummary */}
-                    <div className="overflow-hidden">
-                        <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
-                    </div>
                 </div>
 
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)]">
+                <div className="lg:col-span-2">
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full">
                         <ProAnalyticsCharts
                             loans={filteredLoansForChart}
                             clients={clients}
@@ -1111,74 +839,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             theme={theme}
                         />
                     </div>
-
-                    {/* Novos Widgets de Inteligência (Auditoria Relâmpago & Metas de Quitação) */}
-                    {hasProAccess ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Widget 1: Auditoria Relâmpago (Mini Modo Crise) */}
-                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
-                                <div className="flex items-center gap-2.5 text-[var(--fc-warning)]">
-                                    <ShieldAlertIcon />
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Auditoria Relâmpago</h3>
-                                </div>
-                                <div className="space-y-2.5 text-xs text-[var(--fc-text-secondary)]">
-                                    <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
-                                        <span>Compromissos Recorrentes (Assinaturas)</span>
-                                        <span className="font-mono font-bold text-[var(--fc-accent)]"><AnimatedCurrency value={intelligenceData.activeSubscriptionsTotal} />/mês</span>
-                                    </div>
-                                    <p className="text-[11px] text-[var(--fc-text-muted)] leading-relaxed px-1">
-                                        💡 <strong className="text-[var(--fc-text-primary)] font-semibold">Dica:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Widget 2: Metas & Timeline de Quitação */}
-                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
-                                <div className="flex items-center gap-2.5 text-[var(--fc-accent)]">
-                                    <TargetIcon />
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Metas & Quitação de Dívidas</h3>
-                                </div>
-                                {intelligenceData.upcomingFinishes.length > 0 ? (
-                                    <div className="space-y-2.5">
-                                        {intelligenceData.upcomingFinishes.map((item, idx) => (
-                                            <div key={idx} className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
-                                                <div className="truncate pr-2">
-                                                    <span className="text-xs font-bold text-[var(--fc-text-primary)] block truncate">{item.description}</span>
-                                                    <span className="text-[10px] text-[var(--fc-text-muted)]">Faltam {item.remaining} parcelas</span>
-                                                </div>
-                                                <span className="text-[11px] font-semibold text-[var(--fc-success)] whitespace-nowrap bg-[var(--fc-success-soft)] px-2.5 py-1 rounded-lg border border-[var(--fc-success)]/20">
-                                                    Até {new Date(item.finalDate + 'T00:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6 text-xs text-[var(--fc-text-muted)]">
-                                        Nenhuma compra parcelada ativa para projetar quitação no momento.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <ProFeatureLock
-                            title="Auditoria Relâmpago & Metas de Quitação"
-                            description="Análise cirúrgica de recorrências e projeção de encerramento de parcelas no plano Pro."
-                            onAction={() => setIsUpgradeModalOpen(true)}
-                        />
-                    )}
                 </div>
             </div>
-
-            {/* Insights Financeiros Automáticos */}
-            {hasProAccess ? (
-                <DeterministicInsightsWidget insights={deterministicInsights} />
-            ) : (
-                <ProFeatureLock
-                    title="Insights Financeiros Determinísticos"
-                    description="Detecção inteligente de variações de fatura, anomalias e concentração de gastos."
-                    onAction={() => setIsUpgradeModalOpen(true)}
-                />
-            )}
 
             {/* Projeção de Faturas e Descompressão Futura (com suporte a filtro por pessoa) */}
             {hasProAccess ? (
@@ -1192,23 +854,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 <ProFeatureLock
                     title="Projeção de Faturas Futuras"
                     description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
-                    onAction={() => setIsUpgradeModalOpen(true)}
-                />
-            )}
-
-            {/* Metas de Orçamento por Categoria (Budgets) */}
-            {hasProAccess ? (
-                <CategoryBudgetsWidget
-                    budgets={userProfile?.budgets || {}}
-                    expenses={expenses}
-                    loans={loans}
-                    selectedMonth={selectedMonth}
-                    onOpenBudgetModal={() => setIsBudgetsModalOpen(true)}
-                />
-            ) : (
-                <ProFeatureLock
-                    title="Metas de Orçamento por Categoria"
-                    description="Defina limites por categoria para manter suas despesas sob controle."
                     onAction={() => setIsUpgradeModalOpen(true)}
                 />
             )}
@@ -1323,37 +968,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 isConfirmation={true} 
             />
 
-            <ExecutiveSummaryModal
-                isOpen={isExecutiveSummaryOpen}
-                onClose={() => setIsExecutiveSummaryOpen(false)}
-                selectedMonth={selectedMonth}
-                loans={loans}
-                expenses={expenses}
-                subscriptions={subscriptions}
-                incomes={incomes}
-                clients={clients}
-            />
-
             <FinancialSandboxSimulatorModal
                 isOpen={isSimulatorOpen}
                 onClose={() => setIsSimulatorOpen(false)}
                 loans={loans}
                 subscriptions={subscriptions}
                 selectedMonth={selectedMonth}
-            />
-
-            <CategoryBudgetsModal
-                isOpen={isBudgetsModalOpen}
-                onClose={() => setIsBudgetsModalOpen(false)}
-                currentBudgets={userProfile?.budgets || {}}
-                onSaveBudgets={handleSaveBudgets}
-            />
-
-            <NotificationSettingsModal
-                isOpen={isNotificationSettingsOpen}
-                onClose={() => setIsNotificationSettingsOpen(false)}
-                currentSettings={userProfile?.notificationSettings || {}}
-                onSaveSettings={handleSaveNotificationSettings}
             />
 
             {/* Modal de Upgrade Pro */}
