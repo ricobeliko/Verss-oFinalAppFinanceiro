@@ -236,4 +236,59 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
     await page.waitForTimeout(400); // total ~700ms
     await page.screenshot({ path: 'screenshots/fase5-theme-light-to-dark-700ms.png' });
   });
+
+  test('06. Ajuste Fino 2 Transição de Telas (~150ms, ~450ms, ~700ms, ~1100ms, ~1400ms Dark e Light)', async ({ page }) => {
+    test.setTimeout(45000);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    // --- DARK MODE: Resumo -> Cartões ---
+    await setupMockSession(page, { theme: 'dark' });
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const cardsBtn = page.getByRole('button', { name: 'Cartões' }).first();
+    await cardsBtn.click();
+
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'screenshots/transicao2-dark-150ms.png' });
+
+    await page.waitForTimeout(300); // 150 + 300 = 450ms
+    await page.screenshot({ path: 'screenshots/transicao2-dark-450ms.png' });
+
+    await page.waitForTimeout(250); // 450 + 250 = 700ms
+    await page.screenshot({ path: 'screenshots/transicao2-dark-700ms.png' });
+
+    await page.waitForTimeout(400); // 700 + 400 = 1100ms
+    await page.screenshot({ path: 'screenshots/transicao2-dark-1100ms.png' });
+
+    await page.waitForTimeout(300); // 1100 + 300 = 1400ms
+    await page.screenshot({ path: 'screenshots/transicao2-dark-1400ms.png' });
+
+    // Aguarda término completo antes do ciclo Light
+    await page.waitForTimeout(500);
+
+    // --- LIGHT MODE: Cartões -> Resumo ---
+    // Alterna para tema claro
+    await page.getByRole('button', { name: /Alternar tema/i }).first().click();
+    await page.waitForTimeout(800);
+
+    const resumoBtn = page.getByRole('button', { name: 'Resumo' }).first();
+    await resumoBtn.click();
+
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'screenshots/transicao2-light-150ms.png' });
+
+    await page.waitForTimeout(300); // 450ms
+    await page.screenshot({ path: 'screenshots/transicao2-light-450ms.png' });
+
+    await page.waitForTimeout(250); // 700ms
+    await page.screenshot({ path: 'screenshots/transicao2-light-700ms.png' });
+
+    await page.waitForTimeout(400); // 1100ms
+    await page.screenshot({ path: 'screenshots/transicao2-light-1100ms.png' });
+
+    await page.waitForTimeout(300); // 1400ms
+    await page.screenshot({ path: 'screenshots/transicao2-light-1400ms.png' });
+  });
 });

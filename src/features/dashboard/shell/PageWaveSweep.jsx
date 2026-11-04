@@ -6,8 +6,10 @@ import { MOTION } from '../../../design-system/motion';
 
 /**
  * Utilitário para aguardar a estabilização completa da tela montada sob o véu.
- * Executa dois requestAnimationFrame consecutivos para garantir que o commit do React,
- * o cálculo de estilo/layout inicial e o primeiro paint ocorram enquanto o véu cobre a tela.
+ * Utiliza requestIdleCallback para aguardar que o scheduler do React (performWorkUntilDeadline)
+ * processe todos os useEffects pendentes (ex: carregamento de dados em hooks e remoção de skeletons),
+ * seguido de requestAnimationFrame para garantir que a renderização pesada ocorra enquanto
+ * a tela está 100% oculta sob o véu.
  * Respeita o tempo mínimo configurado em motion.pageTransition.hold e impõe timeout de segurança.
  */
 function waitForScreenSettle(minHoldMs = 120, maxHoldMs = 600) {
@@ -29,15 +31,21 @@ function waitForScreenSettle(minHoldMs = 120, maxHoldMs = 600) {
 
     const maxTimer = setTimeout(finish, maxHoldMs);
 
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => {
+    // Permite que o scheduler do React drene a fila de trabalho antes de iniciar o reveal
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => {
         requestAnimationFrame(() => {
           clearTimeout(maxTimer);
           finish();
         });
-      });
+      }, { timeout: Math.min(maxHoldMs, 250) });
     } else {
-      setTimeout(finish, minHoldMs);
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          clearTimeout(maxTimer);
+          finish();
+        });
+      }, 80);
     }
   });
 }
@@ -261,17 +269,26 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
               if (typeof document !== 'undefined') {
                 document.documentElement.classList.remove('fc-transitioning');
               }
-              if (container) {
-                container.style.display = 'none';
-                container.style.opacity = '';
-              }
               tracks.forEach((t) => {
-                t.style.transform = '';
                 t.style.willChange = '';
               });
               isTransitioningRef.current = false;
               activeAnimationsRef.current = [];
               if (typeof onComplete === 'function') onComplete();
+
+              // Ocultação da camada grande postergada para não competir com o frame de chegada
+              if (container) {
+                container.style.opacity = '0';
+              }
+              setTimeout(() => {
+                if (container && !isTransitioningRef.current) {
+                  container.style.display = 'none';
+                  container.style.opacity = '';
+                }
+                tracks.forEach((t) => {
+                  t.style.transform = '';
+                });
+              }, 100);
             });
           } else {
             if (typeof document !== 'undefined') {
@@ -427,7 +444,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
         <svg
           viewBox="0 0 1440 900"
           preserveAspectRatio="none"
-          className="w-full h-full drop-shadow-[0_10px_30px_var(--fc-glow-cool)]"
+          className="w-full h-full"
         >
           <defs>
             <linearGradient id="fc-page-wave-body" x1="0" y1="0" x2="0" y2="1">
@@ -510,7 +527,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
             stroke="var(--fc-glow-cool)"
             strokeWidth="2.5"
             strokeLinecap="round"
-            className="drop-shadow-[0_0_12px_var(--fc-accent)]"
+            className="opacity-90"
           />
         </svg>
       </div>

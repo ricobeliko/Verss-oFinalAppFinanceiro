@@ -152,20 +152,30 @@ A experiência de navegação do FinControl é fluida, escalonada e orquestrada 
    - **Limites de Itens:** Para proteger os 60fps em dispositivos de baixo custo, limita no máximo a 8 itens no desktop e 5 no mobile.
    - **Container-level:** Longas tabelas e listas possuem o atributo `data-enter="item"` no elemento container (wrapper da tabela), jamais em cada linha individual.
 
-2. **`PageWaveSweep` (Shell) & Transição de Telas Otimizada:**
+2. **`PageWaveSweep` (Shell) & Arquitetura "Montar sob o Véu, Assentar, Só Então Animar":**
    - **Propósito:** Cortina líquida de ondas com 3 camadas SVG e backplate opaco que varre a tela de baixo para cima durante a troca de abas no dashboard (~1.2s total), eliminando travamentos de montagem/desmontagem e garantindo cobertura visual completa no pico.
-   - **Fases da Coreografia (`motion.pageTransition`):**
-     - **Cover-In (0.45s, `power2.inOut`):** A onda sobe de `y: 100%` até cobrir a tela inteira (`y: 0%`), elevando a opacidade até `peakOpacity: 0.92`. As 3 ondas SVG têm entrada escalonada (`waveStagger: 0.06s`). O conteúdo da aba anterior desvanece suavemente para opacidade 0.
-     - **Hold (0.12s):** A tela permanece com 92% de cobertura opaca enquanto o React desmonta a aba anterior e monta a nova aba via `flushSync(() => setActivePage(targetPage))` no callback `onPeak`. Durante esta fase, o scroll da área de conteúdo é resetado (`scrollTop = 0`).
-     - **Reveal (0.60s, `power2.out`):** A onda continua sua ascensão para cima (`y: -100%`) e desvanece a opacidade para 0, revelando a nova tela já montada e estabilizada. O stagger de entrada dos títulos (`useEnterStagger`) inicia com leve antecipação (~30% do reveal = 0.18s).
-   - **Pausa de Fundo & Otimização de GPU (`.fc-transitioning`):**
-     - Durante todo o ciclo da transição, a classe `.fc-transitioning` é aplicada na tag `<html>`.
-     - As animações CSS contínuas de fundo (`LivingBackground`) têm seu estado pausado (`animation-play-state: paused !important`) para liberar 100% da GPU para o compositor da onda.
-     - A aura do cursor é ocultada (`opacity: 0`) e seus listeners de movimento ignorados até o fim da transição.
-   - **Prefetch Idle & Hover:**
-     - Chunks lazy de todas as abas secundárias são pré-carregados em background via `requestIdleCallback` (com fallback de `setTimeout`) e em `onMouseEnter`/`onFocus` nos botões da barra de navegação, eliminando delays de rede e parsing durante a troca.
-   - **Interrupção Limpa:** Cliques rápidos em outras abas matam imediatamente a timeline anterior via `kill()`, removem `.fc-transitioning` e reiniciam o ciclo sem acúmulo de fila ou estilos inline residuais.
-   - **Acessibilidade & Mobile:** Sob `prefers-reduced-motion: reduce` ou largura de tela `< 768px`, a transição é executada de forma síncrona e instantânea, sem disparar a timeline GSAP.
+   - **Execução via WAAPI (Web Animations API) no Compositor de GPU:**
+     - A animação do véu opera primariamente via `element.animate` com aceleração nativa na thread do compositor (`transform: translate3d(...)` e `opacity`), mantendo fluidez mesmo sob carga na thread principal. Fallback automático para GSAP caso WAAPI não esteja disponível.
+   - **Carregamento de Módulos em Paralelo (`loadTabModule`):**
+     - O import dinâmico da aba alvo (`tabPrefetch.js`) é iniciado simultaneamente ao clique e executado em paralelo com a subida da onda (`coverIn`).
+     - O ponto de ápice da onda aguarda `Promise.all([animCover.finished, animTrack1.finished, modulePromise])`. A tela nunca atinge o pico nem inicia a revelação antes do módulo estar 100% carregado no navegador, prevenindo qualquer flash de fallback do `React.lazy` (Suspense).
+   - **Fase de Assentamento sob o Véu (`waitForScreenSettle`):**
+     - No ápice da onda, a nova página é comutada via `flushSync(() => setActivePage(targetPage))` e o scroll resetado (`scrollTop = 0`).
+     - Antes de iniciar o reveal, a transição entra em espera adaptativa (mínimo configurado em `motion.pageTransition.hold` = 120ms, máximo de 600ms):
+       - Utiliza `window.requestIdleCallback` para permitir que o scheduler do React (`performWorkUntilDeadline`) processe a renderização de componentes pesados (ex: Dashboard, Recharts, tabelas) e resolução de hooks.
+       - Encadear duplo `requestAnimationFrame` assegura que o commit do React, estilo/layout e o primeiro paint ocorram enquanto o véu opaco (92%) cobre a tela.
+   - **Disparo de Animações de Entrada (`fc:page-reveal-start`):**
+     - As animações internas da tela montada (`useEnterStagger`, `AnimatedCurrency`, `useAnimatedProgressBar`) detectam a presença da classe `fc-transitioning` e aguardam o evento customizado `fc:page-reveal-start` despachado no início do reveal pós-assentamento.
+     - Isso elimina a colisão de renderização simultânea na thread principal: a tela monta em repouso sob o véu e só ganha movimento quando o véu começa a descer.
+   - **Finalização Barata (Cheap End) & Cleanup Postergado:**
+     - A remoção de `fc-transitioning`, o reset de `will-change` e a liberação de tracking são despachados no frame seguinte via rAF após o término visual da onda.
+     - A ocultação de layout do container (`display: none` e reset de matrizes) é diferida para um timeout/idle de 100ms, impedindo que a limpeza de memória GPU e layout compitam com o último frame da animação.
+   - **Preservação de Ondas Contínuas do Fundo (`LivingBackground`):**
+     - As ondas contínuas de fundo rodam puramente no compositor de GPU via `transform: translate3d`. A classe `.fc-transitioning` NÃO pausa as ondas CSS (`animation-play-state: paused` foi removido) para evitar a invalidação síncrona de estilos e Long Tasks de recálculo no início e no fim da transição.
+   - **Tokens Dinâmicos do Tema:**
+     - Cores de background e destaque do véu utilizam tokens do Design System (`--fc-bg`, `--fc-surface-2`, `--fc-accent`, `--fc-glow-cool`), adaptando-se instantaneamente a Dark e Light modes sem flashes de cor.
+   - **Interrupção Limpa:** Cliques rápidos em outras abas cancelam imediatamente a animação em execução (`anim.cancel()` / `timeline.kill()`), removem `.fc-transitioning` e reiniciam o ciclo sem acúmulo de fila ou estilos inline residuais.
+   - **Acessibilidade & Mobile:** Sob `prefers-reduced-motion: reduce` ou largura de tela `< 768px`, a transição é executada de forma síncrona e instantânea, sem disparar animações.
 
 3. **`Skeleton` e `SkeletonPage`:**
    - **Propósito:** Feedback visual imediato durante o carregamento de dados em hooks do Firestore.

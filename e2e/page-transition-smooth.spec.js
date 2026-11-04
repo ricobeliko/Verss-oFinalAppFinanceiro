@@ -1,7 +1,7 @@
 // e2e/page-transition-smooth.spec.js
 import { test, expect } from '@playwright/test';
 
-test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit C & Ajuste Fino)', () => {
+test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit B & C Ajuste Fino 2)', () => {
   const setupMockSession = async (page) => {
     await page.addInitScript(() => {
       localStorage.setItem('theme', 'dark');
@@ -75,28 +75,29 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     const cardsBtn = page.getByRole('button', { name: 'Cartões' }).first();
     await cardsBtn.click();
 
-    // 1. Amostra inicial (~150ms): onda iniciando subida (opacidade > 0)
-    await page.waitForTimeout(150);
-    const op150 = await waveContainer.evaluate((el) => {
-      return parseFloat(window.getComputedStyle(el).opacity || '0');
-    });
-    expect(op150).toBeGreaterThan(0);
+    // 1. Amostra inicial e subida: a transição ativa e a opacidade sobe até o pico >= 0.85
+    await expect(async () => {
+      const isTransitioning = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
+      expect(isTransitioning).toBe(true);
+      const op = await waveContainer.evaluate((el) => {
+        return parseFloat(window.getComputedStyle(el).opacity || '0');
+      });
+      expect(op).toBeGreaterThan(0);
+    }).toPass({ timeout: 1000 });
 
-    // 2. Amostra no ápice (~450ms - ~600ms): opacidade atinge o pico >= 0.85 e fc-transitioning ativo
+    // 2. Amostra no ápice (~450ms - ~600ms): opacidade atinge o pico >= 0.85
     await expect(async () => {
       const op = await waveContainer.evaluate((el) => {
         return parseFloat(window.getComputedStyle(el).opacity || '0');
       });
-      const isTransitioning = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
-      expect(isTransitioning).toBe(true);
       expect(op).toBeGreaterThanOrEqual(0.85);
     }).toPass({ timeout: 1500 });
 
-    // 3. Final da transição (~1.5s - 2s): onda oculta e fc-transitioning removido
+    // 3. Final da transição: onda oculta e fc-transitioning removido
     await expect(async () => {
       const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
       expect(isTrans).toBe(false);
-    }).toPass({ timeout: 2500 });
+    }).toPass({ timeout: 3000 });
 
     // Conteúdo da aba Cartões está visível e sem estilos residuais de opacity: 0
     await expect(page.locator('h1:has-text("Gerenciamento de Cartões")')).toBeVisible();
@@ -106,7 +107,7 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
     expect(mainOpacity).toBeGreaterThan(0.9);
   });
 
-  test('Navegação sequencial por todas as 6 abas preserva integridade visual e limpa fc-transitioning', async ({ page }) => {
+  test('Navegação sequencial por todas as 6 abas preserva integridade visual, sem Suspense fallback e limpa fc-transitioning', async ({ page }) => {
     test.setTimeout(60000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await setupMockSession(page);
@@ -129,11 +130,11 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
       const tabBtn = page.getByRole('button', { name: tab.name }).first();
       await tabBtn.click();
 
-      // Aguarda término da transição (~1.5s - 2s)
+      // Aguarda término da transição
       await expect(async () => {
         const isTransitioning = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
         expect(isTransitioning).toBe(false);
-      }).toPass({ timeout: 3000 });
+      }).toPass({ timeout: 3500 });
 
       // Conteúdo visível
       const heading = page.locator('h1, h2').filter({ hasText: tab.titleMatch }).first();
@@ -145,6 +146,32 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
       });
       expect(mainOpacity).toBeGreaterThan(0.9);
     }
+  });
+
+  test('Interrupção Limpa: cliques rápidos consecutivos cancelam transição anterior sem travar o shell', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const html = page.locator('html');
+
+    // Clica em Cartões e logo em seguida clica em Pessoas (interrupção)
+    const cardsBtn = page.getByRole('button', { name: 'Cartões' }).first();
+    const pessoasBtn = page.getByRole('button', { name: 'Pessoas' }).first();
+
+    await cardsBtn.click();
+    await page.waitForTimeout(100);
+    await pessoasBtn.click();
+
+    // Deve resolver para Pessoas e limpar fc-transitioning
+    await expect(async () => {
+      const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
+      expect(isTrans).toBe(false);
+    }).toPass({ timeout: 3500 });
+
+    await expect(page.locator('h1:has-text("Gerenciamento de Pessoas")')).toBeVisible();
   });
 
   test('Reduced Motion: troca de aba é instantânea sem disparar classe fc-transitioning nem animação', async ({ page }) => {

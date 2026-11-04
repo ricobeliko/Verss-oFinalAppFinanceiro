@@ -246,14 +246,11 @@ html.fc-theme-switching * {
    TAB PAGE TRANSITION (fc-transitioning)
    ========================================================================= */
 
-/* Pausa as ondas CSS do LivingBackground durante a transição de telas */
-html.fc-transitioning .fc-wave-layer-1,
-html.fc-transitioning .fc-wave-layer-2,
-html.fc-transitioning .fc-wave-layer-3 {
-  animation-play-state: paused !important;
-}
+/* As ondas CSS do LivingBackground rodam exclusivamente no compositor de GPU;
+   não pausamos via CSS para evitar a invalidação síncrona de estilos e Long Tasks
+   no frame em que fc-transitioning é alternado. */
 
-/* Oculta aura do cursor durante a transição de abas */
+/* Oculta aura do cursor durante a transição de abas para poupar processamento */
 html.fc-transitioning [data-fc-aura] {
   opacity: 0 !important;
   will-change: auto !important;
