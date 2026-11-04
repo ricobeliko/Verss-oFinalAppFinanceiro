@@ -44,7 +44,7 @@ const CreditCardKpiIcon = () => (
 
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
-    <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-gold transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-fc-accent transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         {direction === 'ascending' ? <path strokeLinecap="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
     </svg>
 );

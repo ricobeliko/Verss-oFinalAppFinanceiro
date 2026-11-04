@@ -28,3 +28,8 @@ dist-ssr
 !.env.*.example
 test-results/
 playwright-report/
+
+# Generated CSS
+src/tailwind-output.css
+
+screenshots/

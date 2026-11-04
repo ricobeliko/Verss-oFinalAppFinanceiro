@@ -55,7 +55,7 @@ export default function ExecutiveSummaryModal({
                         onClick={() => setTab('weekly')}
                         className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer ${
                             tab === 'weekly'
-                                ? 'bg-[var(--fc-accent)] text-carbon-950 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-carbon-900 shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -66,7 +66,7 @@ export default function ExecutiveSummaryModal({
                         onClick={() => setTab('monthly')}
                         className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer ${
                             tab === 'monthly'
-                                ? 'bg-[var(--fc-accent)] text-carbon-950 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-carbon-900 shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >

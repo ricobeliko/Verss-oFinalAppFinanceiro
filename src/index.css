@@ -280,6 +280,35 @@
   background: var(--fc-text-muted);
 }
 
+
+/* ============================================================
+   FinControl Dashboard — Top Radial Glow (Bloco 2)
+   ============================================================ */
+
+.dashboard-content-glow {
+  position: relative;
+}
+
+.dashboard-content-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 320px;
+  background: radial-gradient(ellipse 80% 100% at 50% 0%, var(--fc-accent-soft) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+[data-theme="light"] .dashboard-content-glow::before {
+  background: radial-gradient(ellipse 80% 100% at 50% 0%, rgba(142, 94, 0, 0.04) 0%, transparent 70%);
+}
+
+.dashboard-content-glow > * {
+  position: relative;
+  z-index: 1;
+}
 /* ============================================================
    FinControl Landing â€” Theme Tokens & Motion (Fase 8.4 CS2)
    ============================================================ */

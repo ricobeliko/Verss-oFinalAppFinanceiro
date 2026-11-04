@@ -159,7 +159,7 @@ export default function DashboardLayout() {
           mobileMenuTriggerRef={mobileMenuTriggerRef}
         />
 
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 fc-page-enter">
+        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 fc-page-enter dashboard-content-glow">
           {renderActivePage()}
         </main>
       </div>
