@@ -101,11 +101,11 @@ test.describe('Dashboard Screen Entrance & Visual Safety (Commit C)', () => {
       await page.waitForTimeout(700);
 
       // 1. Invariante: Nenhum elemento na página pode ter opacity inline 0
-      const zeroOpacityCount = await page.evaluate(() => {
+      const zeroElements = await page.evaluate(() => {
         const els = document.querySelectorAll('main [style*="opacity: 0"], main [style*="opacity:0"]');
         return els.length;
       });
-      expect(zeroOpacityCount, `Aba ${tab.name} não deve ter elementos presos com opacity: 0`).toBe(0);
+      expect(zeroElements, `Aba ${tab.name} não deve ter elementos presos com opacity: 0`).toBe(0);
 
       // 2. Invariante: Elementos com data-enter devem ter estilos inline de transform limpos (clearProps)
       const hasResidualTransform = await page.evaluate(() => {

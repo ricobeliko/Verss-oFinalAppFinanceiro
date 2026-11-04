@@ -1,17 +1,30 @@
 // src/features/dashboard/DashboardLayout.jsx
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import gsap from 'gsap';
 import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
 import { getInitialTheme, applyTheme } from '../../utils/theme';
 import { SkeletonPage } from '../../design-system';
+import { MOTION } from '../../design-system/motion';
+import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
 
 // Shell Desacoplado DS2
 import AppSidebar from './shell/AppSidebar';
 import AppTopbar from './shell/AppTopbar';
 import MobileNavigation from './shell/MobileNavigation';
 import LivingBackground from './shell/LivingBackground';
+import PageWaveSweep from './shell/PageWaveSweep';
+
+const PAGE_NAMES = {
+  resumo: 'Resumo financeiro',
+  pessoas: 'Gerenciamento de Pessoas',
+  cards: 'Gerenciamento de Cartões',
+  transactions: 'Adicionar Movimentações',
+  subscriptions: 'Gerenciamento de Assinaturas',
+  crisis: 'Modo Crise e Raio-X Financeiro',
+};
 
 // Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
@@ -33,6 +46,62 @@ export default function DashboardLayout() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const mobileMenuTriggerRef = useRef(null);
+  const waveSweepRef = useRef(null);
+  const contentWrapperRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [pageAnnouncement, setPageAnnouncement] = useState('');
+
+  const navigateTo = (targetPage) => {
+    if (!targetPage || targetPage === activePage) {
+      return;
+    }
+
+    const isReduced = prefersReducedMotion;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+    if (isReduced || isMobile) {
+      waveSweepRef.current?.cancel();
+      setActivePage(targetPage);
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+      setPageAnnouncement(`Navegou para ${PAGE_NAMES[targetPage] || targetPage}`);
+      return;
+    }
+
+    const contentEl = contentWrapperRef.current;
+
+    // Dispara saída suave do conteúdo atual enquanto a onda sobe
+    if (contentEl) {
+      gsap.to(contentEl, {
+        opacity: 0,
+        y: MOTION?.pageExit?.y ?? -6,
+        duration: MOTION?.pageExit?.duration ?? 0.14,
+        ease: MOTION?.pageExit?.ease ?? 'power2.in',
+      });
+    }
+
+    waveSweepRef.current?.sweep({
+      onPeak: () => {
+        setActivePage(targetPage);
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = 0;
+        }
+        setPageAnnouncement(`Navegou para ${PAGE_NAMES[targetPage] || targetPage}`);
+
+        // Prepara container para a entrada escalonada da nova tela
+        if (contentEl) {
+          gsap.set(contentEl, { opacity: 1, y: 0, clearProps: 'transform,opacity' });
+        }
+      },
+      onComplete: () => {
+        if (contentEl) {
+          gsap.set(contentEl, { clearProps: 'transform,opacity' });
+        }
+      },
+    });
+  };
 
   // Tema Dark / Light sincronizado via utilitário canônico
   const [theme, setTheme] = useState(getInitialTheme);
@@ -111,7 +180,7 @@ export default function DashboardLayout() {
       {/* Sidebar Desktop (>= 1024px) */}
       <AppSidebar
         activePage={activePage}
-        onSelectPage={setActivePage}
+        onSelectPage={navigateTo}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         currentUser={currentUser}
@@ -129,7 +198,7 @@ export default function DashboardLayout() {
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
         activePage={activePage}
-        onSelectPage={setActivePage}
+        onSelectPage={navigateTo}
         currentUser={currentUser}
         isPro={isPro}
         isTrialActive={isTrialActive}
@@ -142,7 +211,10 @@ export default function DashboardLayout() {
       />
 
       {/* Canvas Principal: Topbar + Conteúdo */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative z-10">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative z-10"
+      >
         <AppTopbar
           onOpenSearch={() => setIsSearchOpen(true)}
           theme={theme}
@@ -152,8 +224,21 @@ export default function DashboardLayout() {
         />
 
         <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 relative z-10">
-          {renderActivePage()}
+          <PageWaveSweep ref={waveSweepRef} />
+          <div ref={contentWrapperRef} className="w-full">
+            {renderActivePage()}
+          </div>
         </main>
+      </div>
+
+      {/* Anúncio acessível de troca de tela para leitores de tela */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {pageAnnouncement}
       </div>
 
       {/* Modal de Busca Global */}
