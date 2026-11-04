@@ -243,7 +243,7 @@ export default function AppSidebar({
     <aside
       ref={asideRef}
       aria-label="Navegação principal"
-      className={`hidden lg:flex flex-col justify-between shrink-0 fc-glass-shell border-r border-[var(--fc-border-subtle)] h-screen sticky top-0 transition-[width] duration-200 z-30 ${
+      className={`hidden lg:flex flex-col justify-between shrink-0 fc-glass-sidebar border-r border-[var(--fc-border-subtle)] h-screen sticky top-0 transition-[width] duration-200 z-30 ${
         isCollapsed ? 'w-[72px]' : 'w-64'
       }`}
     >

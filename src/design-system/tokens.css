@@ -67,6 +67,10 @@
   --fc-wave-3: rgba(92, 204, 204, 0.05);
   --fc-wave-fill: rgba(12, 52, 60, 0.35);
   --fc-atmos-vignette: rgba(2, 14, 20, 0.55);
+
+  /* Sidebar Glass Translucency Tokens (Fase 7.2) */
+  --fc-sidebar-glass-alpha: 68%;
+  --fc-sidebar-glass-blur: 16px;
 }
 
 [data-theme="light"] {
@@ -134,6 +138,10 @@
   --fc-wave-3: rgba(60, 150, 175, 0.12);
   --fc-wave-fill: rgba(140, 204, 220, 0.25);
   --fc-atmos-vignette: rgba(230, 244, 247, 0);
+
+  /* Sidebar Glass Translucency Tokens (Fase 7.2) */
+  --fc-sidebar-glass-alpha: 80%;
+  --fc-sidebar-glass-blur: 16px;
 }
 
 :root {

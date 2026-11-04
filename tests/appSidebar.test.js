@@ -48,6 +48,7 @@ describe('AppSidebar — Barra de Navegação Lateral Restaurada (Fase 7.2)', ()
 
     expect(html).toContain('aria-label="Navegação principal"');
     expect(html).toContain('aria-label="Recolher menu lateral"');
+    expect(html).toContain('fc-glass-sidebar');
   });
 
   it('deve adaptar layout e labels quando colapsada', () => {
