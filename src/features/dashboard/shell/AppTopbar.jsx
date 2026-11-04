@@ -177,11 +177,14 @@ export default function AppTopbar({
               aria-label="Abrir menu de perfil do usuário"
               aria-expanded={isProfileOpen}
               aria-haspopup="true"
-              className="min-w-[44px] min-h-[44px] p-1.5 rounded-xl hover:bg-[var(--fc-surface-1)] transition-colors cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
+              className="min-h-[44px] p-1.5 rounded-xl hover:bg-[var(--fc-surface-1)] transition-colors cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
             >
               <div className="w-8 h-8 rounded-lg bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] font-bold text-xs flex items-center justify-center shrink-0 border border-[var(--fc-accent)]/20">
                 {userInitial}
               </div>
+              <span className="hidden sm:inline-flex">
+                {planBadge}
+              </span>
             </button>
 
             {/* Dropdown do Menu de Perfil */}

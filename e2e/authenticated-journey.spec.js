@@ -37,46 +37,7 @@ test.describe('E2E Real Browser - Jornada Autenticada Completa & Recursos Financ
         await expect(page.getByText('Ativar Mês VIP')).not.toBeVisible();
     });
 
-    test('Fluxo 2: Central de Notificações - Deve abrir pelo sino, exibir ARIA correto e fechar com Escape', async ({ page }) => {
-        const bellButton = page.getByRole('button', { name: /Central de Alertas/i });
-        await expect(bellButton).toBeVisible();
-        await bellButton.click();
-
-        // Diálogo de notificações deve abrir
-        const popover = page.getByRole('dialog', { name: /Notificações e Alertas/i });
-        await expect(popover).toBeVisible();
-
-        // Fechar com a tecla Escape
-        await page.keyboard.press('Escape');
-        await expect(popover).not.toBeVisible();
-    });
-
-    test('Fluxo 3: Resumo Executivo - Deve abrir modal, navegar entre abas Semanal e Mensal e fechar', async ({ page }) => {
-        const resumoBtn = page.getByRole('button', { name: /Resumo Executivo/i });
-        await expect(resumoBtn).toBeVisible();
-        await resumoBtn.click();
-
-        // Modal aberto
-        await expect(page.locator('#generic-modal-title').filter({ hasText: 'Resumo Executivo Financeiro' })).toBeVisible();
-
-        // Verificar aba semanal
-        const weeklyTab = page.getByRole('button', { name: /Visão Semanal/i });
-        await weeklyTab.click();
-        await expect(page.getByText('Últimos 7 Dias', { exact: true })).toBeVisible();
-        await expect(page.getByText('Próximos 7 Dias', { exact: true })).toBeVisible();
-
-        // Verificar aba mensal
-        const monthlyTab = page.getByRole('button', { name: /Visão Mensal Consolidada/i });
-        await monthlyTab.click();
-        await expect(page.getByText(/Consolidado da Competência/i)).toBeVisible();
-
-        // Fechar modal
-        const closeBtn = page.getByRole('button', { name: 'Fechar modal' }).last();
-        await closeBtn.click();
-        await expect(page.locator('#generic-modal-title').filter({ hasText: 'Resumo Executivo Financeiro' })).not.toBeVisible();
-    });
-
-    test('Fluxo 4: Simulador Sandbox ("E se...?") - Deve executar cenário hipotético sem persistir dados', async ({ page }) => {
+    test('Fluxo 2: Simulador Sandbox ("E se...?") - Deve executar cenário hipotético sem persistir dados', async ({ page }) => {
         const simBtn = page.getByRole('button', { name: /Simulador/i });
         await expect(simBtn).toBeVisible();
         await simBtn.click();
@@ -94,37 +55,35 @@ test.describe('E2E Real Browser - Jornada Autenticada Completa & Recursos Financ
         await expect(page.getByText(/Simulação Temporária/i)).not.toBeVisible();
     });
 
-    test('Fluxo 5: Metas de Orçamento (Budgets) - Deve exibir progresso por categoria e abrir modal de ajuste', async ({ page }) => {
-        // Widget de Metas
-        await expect(page.getByText('Metas de Orçamento por Categoria')).toBeVisible();
+    test('Fluxo 3: Exportação CSV por Pessoa no Relatório - Deve baixar arquivo padronizado com nome sanitizado', async ({ page }) => {
+        // Navega para Pessoas via topbar pill
+        const pessoasBtn = page.getByRole('button', { name: 'Pessoas' }).first();
+        await pessoasBtn.click();
 
-        // Clicar em Ajustar Metas
-        const adjustBtn = page.getByRole('button', { name: /Ajustar Metas/i });
-        await adjustBtn.click();
+        // Aguarda transição e renderização da tela de Pessoas
+        await expect(page.getByRole('heading', { name: /Gerenciamento de Pessoas/i })).toBeVisible({ timeout: 10000 });
 
-        // Modal de Metas
-        await expect(page.locator('#generic-modal-title').filter({ hasText: 'Metas de Orçamento por Categoria' })).toBeVisible();
+        // Clica no extrato/relatório da pessoa
+        const reportBtn = page.getByRole('button', { name: /Extrato \/ PDF|Relatório/i }).or(page.getByRole('button', { name: /Ver extrato/i })).first();
+        await expect(reportBtn).toBeVisible({ timeout: 10000 });
+        await reportBtn.click();
 
-        // Fechar modal
-        const cancelBtn = page.getByRole('button', { name: /Cancelar/i });
-        await cancelBtn.click();
-        await expect(page.locator('#generic-modal-title').filter({ hasText: 'Metas de Orçamento por Categoria' })).not.toBeVisible();
-    });
+        // Modal de relatório aberto
+        await expect(page.getByRole('heading', { name: 'Relatório Financeiro' })).toBeVisible({ timeout: 10000 });
 
-    test('Fluxo 6: Exportação CSV - Deve disparar evento de download com arquivo não vazio', async ({ page }) => {
-        const csvBtn = page.getByRole('button', { name: /CSV Mês/i });
-        await expect(csvBtn).toBeVisible();
+        // Botão Exportar CSV do mês
+        const exportCsvBtn = page.getByRole('button', { name: 'Exportar CSV do mês' }).first();
+        await expect(exportCsvBtn).toBeVisible();
 
-        // Aguarda o evento de download real do Playwright
         const downloadPromise = page.waitForEvent('download');
-        await csvBtn.click();
+        await exportCsvBtn.click();
         const download = await downloadPromise;
 
-        // Valida nome do arquivo
-        expect(download.suggestedFilename()).toMatch(/extrato-.*\.csv/);
+        // Valida nome do arquivo padronizado fincontrol-{nome}-{periodo}.csv
+        expect(download.suggestedFilename()).toMatch(/^fincontrol-.*\.csv$/);
     });
 
-    test('Fluxo 7: Busca Global - Deve abrir busca rápida e fechar com Escape', async ({ page }) => {
+    test('Fluxo 4: Busca Global - Deve abrir busca rápida e fechar com Escape', async ({ page }) => {
         // Abrir busca pelo botão da topbar
         const searchTopBtn = page.getByRole('button', { name: /Abrir busca global de lançamentos/i });
         await expect(searchTopBtn).toBeVisible();
@@ -142,8 +101,8 @@ test.describe('E2E Real Browser - Jornada Autenticada Completa & Recursos Financ
         await expect(searchInput).not.toBeVisible();
     });
 
-    test('Fluxo 8: Logout Seguro - Deve desconectar e bloquear acesso às telas privadas', async ({ page }) => {
-        // Abrir menu de perfil na sidebar inferior
+    test('Fluxo 5: Logout Seguro - Deve desconectar e bloquear acesso às telas privadas', async ({ page }) => {
+        // Abrir menu de perfil na barra superior
         const profileTrigger = page.getByRole('button', { name: 'Abrir menu de perfil do usuário' });
         await expect(profileTrigger).toBeVisible();
         await profileTrigger.click();

@@ -146,13 +146,9 @@ export default function TopNavPill({
                 buttonRefs.current[tab.id] = el;
               }}
               type="button"
-              role="tab"
               id={`nav-tab-${tab.id}`}
-              aria-selected={isActive}
-              aria-controls={`nav-panel-${tab.id}`}
               aria-current={isActive ? 'page' : undefined}
               aria-label={tab.label}
-              tabIndex={isActive ? 0 : -1}
               onClick={() => onSelectPage(tab.id)}
               onMouseEnter={() => onPrefetch(tab.id)}
               onFocus={() => onPrefetch(tab.id)}

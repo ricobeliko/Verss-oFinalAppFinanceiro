@@ -128,8 +128,16 @@ A experiência interna do FinControl emprega um **fundo vivo em camadas cinemát
 4. **Camada 4 — Ondas Periódicas no Rodapé:** 3 camadas SVG periódicas com curvas cúbicas suaves, stroke fino (`--fc-wave-1`, `--fc-wave-2`, `--fc-wave-3`) e preenchimento vertical sutil (`--fc-wave-fill`). Repetição periódica calculada para loop sem emenda (`translateX(-50%)`) com durações de 70s, 95s e 120s alternadas. Borda superior esmaecida via `mask-image`.
 5. **Camada 5 — Aura do Cursor:** Círculo radial de 360px com `--fc-glow-cool` que segue o ponteiro com amortecimento elástico (`gsap.quickTo` duração 0.6s, `power3.out`), desvanecendo para opacidade 0 ao sair da janela.
 
-### Shell & Cards em Vidro (Glass Surface)
-- **Topbar & Sidebar (`.fc-glass-shell`):** Fundo translúcido com token (`color-mix(in srgb, var(--fc-bg-subtle) 75%, transparent)`), `backdrop-filter: blur(12px)` e borda `var(--fc-border-subtle)`. Suporte a fallback sólido para navegadores sem backdrop-filter.
+### Shell em Vidro & Barra Superior em Pill (Glass Shell & Top Nav Pill)
+- **Layout de Coluna Única:** A sidebar lateral foi aposentada na Fase 7. O dashboard adota um layout de coluna única centralizado (`max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8`) com respiro superior amplo (`pt-24 sm:pt-28 pb-12 sm:pb-16`).
+- **Barra Superior Fixa (`AppTopbar` com `.fc-glass-shell`):** Fundo translúcido com token (`color-mix(in srgb, var(--fc-bg-subtle) 75%, transparent)`), `backdrop-filter: blur(12px)`, borda sutil e `z-40` fixo no topo.
+- **Navegação em Pill (`TopNavPill`):**
+  - Componente de navegação superior flutuante em formato pill com as 5 abas ativas do produto (`Resumo`, `Pessoas`, `Cartões`, `Transações`, `Assinaturas`).
+  - **Indicador Deslizante:** Pill iluminado com `transform: translate3d(Xpx, 0, 0)` calculado via `useIsomorphicLayoutEffect` e medido sobre as referências dos botões das abas.
+  - **Zero Layout Shifts:** Nenhuma propriedade geométrica de layout (`width`, `left`, `margin`) é animada com GSAP ou CSS; apenas transformações aceleradas na GPU.
+  - **Prefetch Proativo:** Aciona `prefetchTab(tabId)` ao passar o cursor (`onMouseEnter`), receber foco (`onFocus`) ou toque (`onTouchStart`), garantindo download do chunk antes do clique.
+  - **Acessibilidade de Teclado:** Suporte a setas direcionais (`ArrowLeft` / `ArrowRight`), `Home` e `End`, além de botões acessíveis e atributos `aria-current="page"`.
+  - **Touch Targets:** Altura mínima de 44px para conformidade rigorosa com WCAG 2.5.5 em dispositivos móveis.
 - **Cards do Dashboard (`.fc-glass-card`):** Leve translucidez com token (`color-mix(in srgb, var(--fc-surface-1) 85%, transparent)`) e borda `var(--fc-border-default)`, **sem blur** para prevenir sobrecarga de renderização na GPU.
 - **Modais e Popovers:** Permanecem 100% opacos para isolamento cognitivo e máximo contraste em ações críticas.
 

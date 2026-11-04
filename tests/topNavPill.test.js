@@ -34,7 +34,7 @@ describe('TopNavPill — Barra de Navegação Superior (Commit B)', () => {
     expect(html).not.toContain('Crise');
   });
 
-  it('deve marcar aria-current="page" e aria-selected="true" estritamente na aba ativa', () => {
+  it('deve marcar aria-current="page" estritamente na aba ativa', () => {
     const html = renderToString(
       React.createElement(TopNavPill, {
         activePage: 'cards',
@@ -43,11 +43,9 @@ describe('TopNavPill — Barra de Navegação Superior (Commit B)', () => {
       })
     );
 
-    expect(html).toMatch(/id="nav-tab-cards"[^>]*aria-selected="true"/);
     expect(html).toMatch(/id="nav-tab-cards"[^>]*aria-current="page"/);
 
-    // Aba inativa não deve ter aria-current nem aria-selected="true"
-    expect(html).toMatch(/id="nav-tab-resumo"[^>]*aria-selected="false"/);
+    // Aba inativa não deve ter aria-current
     expect(html).not.toMatch(/id="nav-tab-resumo"[^>]*aria-current="page"/);
   });
 

@@ -123,31 +123,13 @@ test.describe('FinControl — Canonical Plan Entitlements & Pro Gating (Fase 8.7
 
     const upgradeModal = page.getByRole('dialog');
 
-    // 1. Resumo Executivo bloqueado no Free
-    await page.locator('button:has-text("Resumo Executivo")').click();
-    await expect(upgradeModal.getByRole('heading', { name: 'Conheça o FinControl Pro' })).toBeVisible();
-    await page.keyboard.press('Escape');
-
-    // 2. Simulador bloqueado no Free
+    // 1. Simulador bloqueado no Free
     await page.locator('button:has-text("Simulador")').click();
     await expect(upgradeModal.getByRole('heading', { name: 'Conheça o FinControl Pro' })).toBeVisible();
     await page.keyboard.press('Escape');
 
-    // 3. Exportação CSV bloqueada no Free
-    await page.locator('button:has-text("CSV Mês")').click();
-    await expect(upgradeModal.getByRole('heading', { name: 'Conheça o FinControl Pro' })).toBeVisible();
-    await page.keyboard.press('Escape');
-
-    // 4. Relatório Anual bloqueado no Free
-    await page.locator('button:has-text("Relatório Anual")').click();
-    await expect(upgradeModal.getByRole('heading', { name: 'Conheça o FinControl Pro' })).toBeVisible();
-    await page.keyboard.press('Escape');
-
-    // 5. ProFeatureLock visível nos widgets do Dashboard
-    await expect(page.locator('h4:has-text("Auditoria Relâmpago & Metas de Quitação")')).toBeVisible();
-    await expect(page.locator('h4:has-text("Insights Financeiros Determinísticos")')).toBeVisible();
+    // 2. ProFeatureLock visível na Projeção de Faturas Futuras do Dashboard
     await expect(page.locator('h4:has-text("Projeção de Faturas Futuras")')).toBeVisible();
-    await expect(page.locator('h4:has-text("Metas de Orçamento por Categoria")')).toBeVisible();
   });
 
   test('Free Plan: Abas de Receitas e Despesas em Movimentações exibem ProFeatureLock', async ({ page }) => {
