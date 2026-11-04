@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import gsap from 'gsap';
 import PageWaveSweep from '../src/features/dashboard/shell/PageWaveSweep';
+import { MOTION } from '../src/design-system/motion';
 
 describe('PageWaveSweep & Dashboard Navigation (Commit D)', () => {
   let originalWindow;
@@ -101,7 +102,7 @@ describe('PageWaveSweep & Dashboard Navigation (Commit D)', () => {
       expect(timelineSpy).not.toHaveBeenCalled();
     });
 
-    it('em desktop sem reduced-motion, cria timeline GSAP com chamada a onPeak no pico', () => {
+    it('em desktop sem reduced-motion, cria timeline GSAP orquestrando coverIn, hold e reveal', () => {
       const mockTimeline = {
         to: vi.fn().mockReturnThis(),
         call: vi.fn((fn) => {
@@ -116,24 +117,43 @@ describe('PageWaveSweep & Dashboard Navigation (Commit D)', () => {
       const onPeak = vi.fn();
       const onComplete = vi.fn();
 
-      // Simula a lógica imperativa do PageWaveSweep
-      const mockWaveEl = { style: {} };
-      gsap.set(mockWaveEl, { y: '100%', opacity: 1 });
+      const { coverIn, hold, reveal, peakOpacity, easeIn, easeOut } = MOTION.pageTransition;
+      expect(coverIn).toBe(0.45);
+      expect(hold).toBe(0.12);
+      expect(reveal).toBe(0.6);
+      expect(peakOpacity).toBe(0.92);
+
+      const mockContainer = { style: {} };
+      const mockTrack = { style: {} };
+
+      gsap.set(mockContainer, { display: 'block', opacity: 0 });
+      gsap.set(mockTrack, { y: '100%' });
 
       const tl = gsap.timeline({
         onComplete: () => {
-          gsap.set(mockWaveEl, { clearProps: 'transform,opacity' });
+          gsap.set(mockContainer, { display: 'none', clearProps: 'transform,opacity' });
+          gsap.set(mockTrack, { clearProps: 'transform,opacity' });
           onComplete();
         },
       });
 
-      tl.to(mockWaveEl, { y: '0%', duration: 0.27, ease: 'power2.inOut' });
-      tl.call(() => { onPeak(); });
-      tl.to(mockWaveEl, { y: '-100%', duration: 0.33, ease: 'power2.out' });
+      // 1. CoverIn: opacidade sobe para peakOpacity e onda sobe para y: 0%
+      tl.to(mockContainer, { opacity: peakOpacity, duration: coverIn });
+      tl.to(mockTrack, { y: '0%', duration: coverIn, ease: easeIn });
+
+      // 2. Hold: troca síncrona dentro da cobertura máxima
+      tl.call(() => { onPeak(); }, null, coverIn);
+
+      // 3. Reveal: onda sai pelo topo e opacidade retorna a 0
+      const revealStart = coverIn + hold;
+      tl.to(mockTrack, { y: '-100%', duration: reveal, ease: easeOut }, revealStart);
+      tl.to(mockContainer, { opacity: 0, duration: reveal }, revealStart);
 
       expect(gsap.timeline).toHaveBeenCalled();
-      expect(mockTimeline.to).toHaveBeenCalledWith(mockWaveEl, expect.objectContaining({ y: '0%' }));
-      expect(mockTimeline.to).toHaveBeenCalledWith(mockWaveEl, expect.objectContaining({ y: '-100%' }));
+      expect(mockTimeline.to).toHaveBeenCalledWith(mockContainer, expect.objectContaining({ opacity: peakOpacity, duration: 0.45 }));
+      expect(mockTimeline.to).toHaveBeenCalledWith(mockTrack, expect.objectContaining({ y: '0%', duration: 0.45 }));
+      expect(mockTimeline.to).toHaveBeenCalledWith(mockTrack, expect.objectContaining({ y: '-100%', duration: 0.6 }), revealStart);
+      expect(mockTimeline.to).toHaveBeenCalledWith(mockContainer, expect.objectContaining({ opacity: 0, duration: 0.6 }), revealStart);
       expect(onPeak).toHaveBeenCalledTimes(1);
     });
 

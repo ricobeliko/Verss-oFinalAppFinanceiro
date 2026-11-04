@@ -23,7 +23,7 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
  * @param {boolean} [options.ready=true] - Flag que indica que o carregamento terminou e o conteúdo está pronto.
  * @param {number} [options.maxItems] - Limite de itens a animar em cascata.
  */
-export default function useEnterStagger(scopeRef, { ready = true, maxItems } = {}) {
+export default function useEnterStagger(scopeRef, { ready = true, maxItems, delay } = {}) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const hasAnimatedRef = useRef(false);
 
@@ -46,6 +46,10 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems } = {
       : (typeof window !== 'undefined' && window.innerWidth < 768
           ? MOTION.limits.mobile
           : MOTION.limits.desktop);
+
+    const resolvedDelay = typeof delay === 'number'
+      ? delay
+      : ((MOTION?.pageTransition?.reveal ?? 0.6) * 0.3);
 
     let ctx = null;
 
@@ -79,7 +83,7 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems } = {
           },
         });
 
-        // 1. Título entra primeiro
+        // 1. Título entra primeiro quando a onda começa a sair (~30% do reveal)
         if (titleEl) {
           tl.to(titleEl, {
             opacity: 1,
@@ -87,12 +91,12 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems } = {
             duration: MOTION.title.duration,
             ease: MOTION.title.ease,
             clearProps: 'transform,opacity',
-          }, 0);
+          }, resolvedDelay);
         }
 
         // 2. Itens entram em cascata com sobreposição em relação ao título
         if (itemsToAnimate.length > 0) {
-          const startTime = titleEl ? MOTION.item.overlap : 0;
+          const startTime = titleEl ? (resolvedDelay + MOTION.item.overlap) : resolvedDelay;
           tl.to(itemsToAnimate, {
             opacity: 1,
             y: 0,

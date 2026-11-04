@@ -1,6 +1,7 @@
 // src/features/dashboard/DashboardLayout.jsx
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import gsap from 'gsap';
 import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
@@ -72,20 +73,23 @@ export default function DashboardLayout() {
     }
 
     const contentEl = contentWrapperRef.current;
+    const coverDuration = MOTION?.pageTransition?.coverIn ?? 0.45;
 
     // Dispara saída suave do conteúdo atual enquanto a onda sobe
     if (contentEl) {
       gsap.to(contentEl, {
         opacity: 0,
         y: MOTION?.pageExit?.y ?? -6,
-        duration: MOTION?.pageExit?.duration ?? 0.14,
-        ease: MOTION?.pageExit?.ease ?? 'power2.in',
+        duration: coverDuration,
+        ease: 'power2.in',
       });
     }
 
     waveSweepRef.current?.sweep({
       onPeak: () => {
-        setActivePage(targetPage);
+        flushSync(() => {
+          setActivePage(targetPage);
+        });
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop = 0;
         }
