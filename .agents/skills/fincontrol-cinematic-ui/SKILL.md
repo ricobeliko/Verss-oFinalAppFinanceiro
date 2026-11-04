@@ -137,3 +137,42 @@ A experiência interna do FinControl emprega um **fundo vivo em camadas cinemát
 - **`prefers-reduced-motion: reduce`:** O hook `usePrefersReducedMotion` desativa imediatamente o GSAP, os listeners de ponteiro e o tracking da aura. No CSS, as animações de onda são canceladas (`animation: none !important`).
 - **Touch / Mobile (`pointer: coarse` ou tela < 768px):** Aura e parallax desativados para economia de bateria e processamento; ondas permanecem estáticas.
 - **Acessibilidade:** O container possui `aria-hidden="true"`, `pointer-events-none` e zero elementos focáveis ou anunciáveis por leitores de tela.
+
+
+---
+
+## 8. Motion de Página (Page Transitions, Stagger & Skeletons)
+
+A experiência de navegação do FinControl é fluida, escalonada e orquestrada para garantir transições suaves entre telas, sem piscar de listas vazias e sem deixar elementos invisíveis.
+
+### Arquitetura de Componentes & Hooks
+1. **`useEnterStagger(scopeRef, { ready, maxItems })`:**
+   - **Propósito:** Entrada escalonada de elementos na tela após o término do carregamento (`ready: !isLoading`).
+   - **Hierarquia:** Anima primeiro `data-enter="title"` (y: 14px, 0.5s) e, com overlap de 0.25s, anima em cascata os blocos `data-enter="item"` (y: 18px, 0.55s, stagger: 0.07s).
+   - **Limites de Itens:** Para proteger os 60fps em dispositivos de baixo custo, limita no máximo a 8 itens no desktop e 5 no mobile.
+   - **Container-level:** Longas tabelas e listas possuem o atributo `data-enter="item"` no elemento container (wrapper da tabela), jamais em cada linha individual.
+
+2. **`PageWaveSweep` (Shell):**
+   - **Propósito:** Cortina líquida translúcida de onda que varre a tela de baixo para cima (`y: 100% -> 0% -> -100%`) em ~0.6s durante a troca de abas no dashboard.
+   - **Pico (`onPeak`):** No momento em que a onda atinge o meio da tela cobrindo o conteúdo (`y = 0%`), dispara a troca de `activePage`, zera o scroll da área de conteúdo (`scrollTop = 0`) e anuncia a nova tela via leitor de tela.
+   - **Interrupção:** Cliques rápidos em outras abas matam imediatamente a timeline anterior via `kill()` e reiniciam o ciclo sem acúmulo de fila.
+   - **Acessibilidade & Mobile:** Sob `prefers-reduced-motion: reduce` ou largura de tela `< 768px`, a transição é executada de forma síncrona e instantânea, sem disparar a timeline GSAP.
+
+3. **`Skeleton` e `SkeletonPage`:**
+   - **Propósito:** Feedback visual imediato durante o carregamento de dados em hooks do Firestore.
+   - **Variantes:** `block`, `text`, `circle`, `card` e a composição de tela cheia `SkeletonPage`.
+   - **Acessibilidade:** `SkeletonPage` possui `role="status"`, `aria-busy="true"` e texto acessível oculto ("Carregando dados da tela..."), com zero elementos interativos focáveis.
+   - **Efeito Shimmer:** Animação CSS suave de 1.4s através do token `@keyframes fcShimmer`, desativada sob `prefers-reduced-motion`.
+
+### Tempos Canônicos & Eases (`src/design-system/motion.js`)
+- `title`: `y: 14px`, `duration: 0.5s`, `ease: 'power3.out'`
+- `item`: `y: 18px`, `duration: 0.55s`, `ease: 'power3.out'`, `stagger: 0.07s`, `overlap: 0.25s`
+- `pageExit`: `y: -6px`, `duration: 0.14s`, `ease: 'power2.in'`
+- `waveSweep`: `duration: 0.6s`, `maxOpacity: 0.35`, `maxTotalDuration: 0.65s`
+- `shimmer`: `duration: 1.4s`
+
+### Padrão Inviolável de Segurança Visual (Visual Safety)
+- **Zero Opacity Residual:** É estritamente proibido que qualquer elemento termine uma animação ou seja desmontado com `opacity: 0` inline ou `transform` resídual.
+- **`clearProps` Obrigatório:** Toda timeline GSAP (de entrada ou de saída) e blocos `try/catch` devem invocar `gsap.set(el, { clearProps: 'transform,opacity' })` ao final.
+- **Zero Permanent `will-change`:** Propriedades de otimização de renderização (`will-change: transform`) são desativadas ou removidas no repouso para evitar consumo desnecessário de memória de textura na GPU.
+- **Anúncio de Tela (A11y):** Região `aria-live="polite"` (`aria-atomic="true"` e `.sr-only`) presente no shell do dashboard que anuncia "Navegou para [Nome da Aba]" a cada troca concluída.
