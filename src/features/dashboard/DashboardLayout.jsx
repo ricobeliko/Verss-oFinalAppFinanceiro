@@ -30,14 +30,14 @@ const PAGE_NAMES = {
 
 // Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
-import { TAB_LOADERS, prefetchTab, prefetchAllTabs } from './tabPrefetch';
+import { loadTabModule, prefetchTab, prefetchAllTabs } from './tabPrefetch';
 
-// Páginas secundárias carregadas sob demanda (tab-level code splitting)
-const ClientManagement = lazy(TAB_LOADERS.pessoas);
-const CardManagement = lazy(TAB_LOADERS.cards);
-const UnifiedTransactionManagement = lazy(TAB_LOADERS.transactions);
-const SubscriptionManagement = lazy(TAB_LOADERS.subscriptions);
-const CrisisMode = lazy(TAB_LOADERS.crisis);
+// Páginas secundárias carregadas sob demanda (tab-level code splitting com promessa memoizada)
+const ClientManagement = lazy(() => loadTabModule('pessoas'));
+const CardManagement = lazy(() => loadTabModule('cards'));
+const UnifiedTransactionManagement = lazy(() => loadTabModule('transactions'));
+const SubscriptionManagement = lazy(() => loadTabModule('subscriptions'));
+const CrisisMode = lazy(() => loadTabModule('crisis'));
 
 export default function DashboardLayout() {
   const { currentUser, isPro, isTrialActive, logout, showToast } = useAppContext();
@@ -86,7 +86,11 @@ export default function DashboardLayout() {
       });
     }
 
+    // Carrega o chunk da aba em paralelo ao cover-in para que esteja 100% pronto no ápice
+    const modulePromise = loadTabModule(targetPage);
+
     waveSweepRef.current?.sweep({
+      waitFor: modulePromise,
       onPeak: () => {
         flushSync(() => {
           setActivePage(targetPage);
@@ -96,7 +100,7 @@ export default function DashboardLayout() {
         }
         setPageAnnouncement(`Navegou para ${PAGE_NAMES[targetPage] || targetPage}`);
 
-        // Prepara container para a entrada escalonada da nova tela
+        // Prepara container para a revelação da nova tela
         if (contentEl) {
           gsap.set(contentEl, { opacity: 1, y: 0, clearProps: 'transform,opacity' });
         }

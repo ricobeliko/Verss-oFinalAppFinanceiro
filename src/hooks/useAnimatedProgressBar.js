@@ -12,6 +12,7 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
  * Princípios:
  * - O React calcula e define a propriedade CSS `width` final.
  * - Este hook NÃO altera `width` a 60fps; anima `scaleX(0 -> 1)` no GPU com `transform-origin: left`.
+ * - Se montado sob transição de abas (fc-transitioning), aguarda 'fc:page-reveal-start'.
  * - Ao término da animação, aplica `clearProps: 'transform'` para devolver o elemento ao DOM limpo.
  * - Respeita `prefers-reduced-motion: reduce` (permanece estático em scaleX 1).
  * - Executa GSAP dentro de `gsap.context()` com `revert()` no unmount.
@@ -41,33 +42,68 @@ export default function useAnimatedProgressBar(barRef, {
     if (hasAnimatedRef.current) {
       return;
     }
-    hasAnimatedRef.current = true;
 
     const el = barRef.current;
     let ctx = null;
+    let onRevealStart = null;
+    let fallbackTimer = null;
 
-    try {
-      ctx = gsap.context(() => {
-        gsap.fromTo(
-          el,
-          { scaleX: 0, transformOrigin: 'left center' },
-          {
-            scaleX: 1,
-            duration,
-            ease,
-            delay,
-            clearProps: 'transform',
-          }
-        );
-      });
-    } catch {
-      // Segurança visual: se falhar o GSAP, remove qualquer transform residual
-      if (el) {
-        el.style.transform = '';
+    const startBarAnimation = () => {
+      if (hasAnimatedRef.current || !barRef?.current) return;
+      hasAnimatedRef.current = true;
+      try {
+        ctx = gsap.context(() => {
+          gsap.fromTo(
+            el,
+            { scaleX: 0, transformOrigin: 'left center' },
+            {
+              scaleX: 1,
+              duration,
+              ease,
+              delay,
+              clearProps: 'transform',
+            }
+          );
+        });
+      } catch {
+        // Segurança visual: se falhar o GSAP, remove qualquer transform residual
+        if (el) {
+          el.style.transform = '';
+        }
       }
+    };
+
+    const isTransitioning = typeof document !== 'undefined' &&
+      document.documentElement.classList.contains('fc-transitioning');
+
+    if (isTransitioning) {
+      // Oculta escala durante a subida e assentamento sob o véu
+      el.style.transform = 'scaleX(0)';
+      el.style.transformOrigin = 'left center';
+
+      onRevealStart = () => {
+        if (typeof window !== 'undefined' && onRevealStart) {
+          window.removeEventListener('fc:page-reveal-start', onRevealStart);
+        }
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        startBarAnimation();
+      };
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('fc:page-reveal-start', onRevealStart, { once: true });
+        fallbackTimer = setTimeout(onRevealStart, 1000);
+      }
+    } else {
+      startBarAnimation();
     }
 
     return () => {
+      if (typeof window !== 'undefined' && onRevealStart) {
+        window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      }
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
       if (ctx) ctx.revert();
       if (el) {
         el.style.transform = '';

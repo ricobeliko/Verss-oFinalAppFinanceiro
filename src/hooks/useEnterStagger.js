@@ -9,8 +9,10 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
 /**
  * Hook para orquestrar animação escalonada (stagger) de entrada de telas do FinControl.
  * 
- * Regras:
+ * Regras do Pipeline "Montar sob o véu, assentar, só então animar":
  * - Roda UMA ÚNICA VEZ por montagem e somente quando `ready` for true.
+ * - Se uma transição de tela estiver em andamento (html.fc-transitioning), aguarda o evento
+ *   'fc:page-reveal-start' (disparado após o assentamento da tela no ápice) antes de animar.
  * - Anima elementos marcados com data-enter="title" (primeiro) e data-enter="item" (em sequência).
  * - Limita os itens animados a `maxItems` (padrão: 8 no desktop, 5 no mobile) para garantir 60fps.
  * - Com `prefers-reduced-motion: reduce`, o conteúdo permanece imediatamente visível sem animação.
@@ -38,87 +40,127 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems, dela
       return;
     }
 
-    hasAnimatedRef.current = true;
     const scopeEl = scopeRef.current;
-
-    const resolvedMax = typeof maxItems === 'number'
-      ? maxItems
-      : (typeof window !== 'undefined' && window.innerWidth < 768
-          ? MOTION.limits.mobile
-          : MOTION.limits.desktop);
-
-    const resolvedDelay = typeof delay === 'number'
-      ? delay
-      : ((MOTION?.pageTransition?.reveal ?? 0.6) * 0.3);
-
     let ctx = null;
 
-    try {
+    const runStagger = () => {
+      if (hasAnimatedRef.current || !scopeRef?.current) return;
+      hasAnimatedRef.current = true;
+
+      const resolvedMax = typeof maxItems === 'number'
+        ? maxItems
+        : (typeof window !== 'undefined' && window.innerWidth < 768
+            ? MOTION.limits.mobile
+            : MOTION.limits.desktop);
+
+      // Delay leve para descolar da abertura da onda
+      const internalDelay = typeof delay === 'number' ? delay : 0.04;
+
+      try {
+        const titleEl = scopeEl.querySelector('[data-enter="title"]');
+        const allItems = scopeEl.querySelectorAll('[data-enter="item"]');
+        const itemsToAnimate = Array.from(allItems).slice(0, resolvedMax);
+
+        if (!titleEl && itemsToAnimate.length === 0) {
+          return;
+        }
+
+        ctx = gsap.context(() => {
+          // Estado inicial escondido antes do primeiro paint
+          if (titleEl) {
+            gsap.set(titleEl, { opacity: 0, y: MOTION.title.y });
+          }
+          if (itemsToAnimate.length > 0) {
+            gsap.set(itemsToAnimate, { opacity: 0, y: MOTION.item.y });
+          }
+
+          const tl = gsap.timeline({
+            onComplete: () => {
+              // Limpeza estrita de propriedades inline ao finalizar
+              if (titleEl) {
+                gsap.set(titleEl, { clearProps: 'transform,opacity' });
+              }
+              if (itemsToAnimate.length > 0) {
+                gsap.set(itemsToAnimate, { clearProps: 'transform,opacity' });
+              }
+            },
+          });
+
+          // 1. Título entra primeiro
+          if (titleEl) {
+            tl.to(titleEl, {
+              opacity: 1,
+              y: 0,
+              duration: MOTION.title.duration,
+              ease: MOTION.title.ease,
+              clearProps: 'transform,opacity',
+            }, internalDelay);
+          }
+
+          // 2. Itens entram em cascata com sobreposição em relação ao título
+          if (itemsToAnimate.length > 0) {
+            const startTime = titleEl ? (internalDelay + MOTION.item.overlap) : internalDelay;
+            tl.to(itemsToAnimate, {
+              opacity: 1,
+              y: 0,
+              duration: MOTION.item.duration,
+              ease: MOTION.item.ease,
+              stagger: MOTION.item.stagger,
+              clearProps: 'transform,opacity',
+            }, startTime);
+          }
+        }, scopeEl);
+      } catch (err) {
+        // Segurança visual: se ocorrer qualquer falha no GSAP, limpa estilos imediatamente
+        if (scopeEl) {
+          const matchingEls = scopeEl.querySelectorAll('[data-enter="title"], [data-enter="item"]');
+          matchingEls.forEach((el) => {
+            el.style.opacity = '';
+            el.style.transform = '';
+          });
+        }
+      }
+    };
+
+    // Se estiver montando sob a cortina da onda (fc-transitioning ativa),
+    // esconde inicialmente e aguarda o sinal de início do reveal após o assentamento
+    const isTransitioning = typeof document !== 'undefined' &&
+      document.documentElement.classList.contains('fc-transitioning');
+
+    let fallbackTimer = null;
+    let onRevealStart = null;
+
+    if (isTransitioning) {
+      // Oculta preventivamente sob o véu para não piscar
       const titleEl = scopeEl.querySelector('[data-enter="title"]');
       const allItems = scopeEl.querySelectorAll('[data-enter="item"]');
-      const itemsToAnimate = Array.from(allItems).slice(0, resolvedMax);
+      if (titleEl) titleEl.style.opacity = '0';
+      allItems.forEach((el) => { el.style.opacity = '0'; });
 
-      if (!titleEl && itemsToAnimate.length === 0) {
-        return;
+      onRevealStart = () => {
+        if (typeof window !== 'undefined' && onRevealStart) {
+          window.removeEventListener('fc:page-reveal-start', onRevealStart);
+        }
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        runStagger();
+      };
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('fc:page-reveal-start', onRevealStart, { once: true });
+        // Timeout de resiliência: se o evento não disparar em 1s, inicia de qualquer forma
+        fallbackTimer = setTimeout(onRevealStart, 1000);
       }
-
-      ctx = gsap.context(() => {
-        // Estado inicial escondido antes do primeiro paint
-        if (titleEl) {
-          gsap.set(titleEl, { opacity: 0, y: MOTION.title.y });
-        }
-        if (itemsToAnimate.length > 0) {
-          gsap.set(itemsToAnimate, { opacity: 0, y: MOTION.item.y });
-        }
-
-        const tl = gsap.timeline({
-          onComplete: () => {
-            // Limpeza estrita de propriedades inline ao finalizar
-            if (titleEl) {
-              gsap.set(titleEl, { clearProps: 'transform,opacity' });
-            }
-            if (itemsToAnimate.length > 0) {
-              gsap.set(itemsToAnimate, { clearProps: 'transform,opacity' });
-            }
-          },
-        });
-
-        // 1. Título entra primeiro quando a onda começa a sair (~30% do reveal)
-        if (titleEl) {
-          tl.to(titleEl, {
-            opacity: 1,
-            y: 0,
-            duration: MOTION.title.duration,
-            ease: MOTION.title.ease,
-            clearProps: 'transform,opacity',
-          }, resolvedDelay);
-        }
-
-        // 2. Itens entram em cascata com sobreposição em relação ao título
-        if (itemsToAnimate.length > 0) {
-          const startTime = titleEl ? (resolvedDelay + MOTION.item.overlap) : resolvedDelay;
-          tl.to(itemsToAnimate, {
-            opacity: 1,
-            y: 0,
-            duration: MOTION.item.duration,
-            ease: MOTION.item.ease,
-            stagger: MOTION.item.stagger,
-            clearProps: 'transform,opacity',
-          }, startTime);
-        }
-      }, scopeEl);
-    } catch (err) {
-      // Segurança visual: se ocorrer qualquer falha no GSAP, limpa estilos imediatamente
-      if (scopeEl) {
-        const matchingEls = scopeEl.querySelectorAll('[data-enter="title"], [data-enter="item"]');
-        matchingEls.forEach((el) => {
-          el.style.opacity = '';
-          el.style.transform = '';
-        });
-      }
+    } else {
+      runStagger();
     }
 
     return () => {
+      if (typeof window !== 'undefined' && onRevealStart) {
+        window.removeEventListener('fc:page-reveal-start', onRevealStart);
+      }
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
       if (ctx) {
         ctx.revert();
       }
@@ -131,5 +173,5 @@ export default function useEnterStagger(scopeRef, { ready = true, maxItems, dela
         });
       }
     };
-  }, [ready, prefersReducedMotion, maxItems, scopeRef]);
+  }, [ready, prefersReducedMotion, maxItems, delay, scopeRef]);
 }

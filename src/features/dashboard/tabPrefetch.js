@@ -13,20 +13,37 @@ export const TAB_LOADERS = {
   crisis: () => import('../crisis/CrisisMode'),
 };
 
-const prefetchedTabs = new Set();
+const modulePromises = new Map();
+
+/**
+ * Carrega ou recupera a promise do módulo da aba, garantindo
+ * que apenas uma chamada de import() seja executada por aba
+ * e que a resolução seja reutilizada de forma síncrona/memoizada.
+ * 
+ * @param {string} tabKey
+ * @returns {Promise<any>}
+ */
+export function loadTabModule(tabKey) {
+  if (!tabKey || !TAB_LOADERS[tabKey]) {
+    return Promise.resolve();
+  }
+  if (!modulePromises.has(tabKey)) {
+    const promise = TAB_LOADERS[tabKey]().catch((err) => {
+      modulePromises.delete(tabKey); // Permite retry em caso de erro transitório de rede
+      throw err;
+    });
+    modulePromises.set(tabKey, promise);
+  }
+  return modulePromises.get(tabKey);
+}
 
 /**
  * Dispara o download antecipado do chunk de uma aba.
  * @param {string} tabKey
  */
 export function prefetchTab(tabKey) {
-  if (tabKey && TAB_LOADERS[tabKey] && !prefetchedTabs.has(tabKey)) {
-    prefetchedTabs.add(tabKey);
-    try {
-      TAB_LOADERS[tabKey]();
-    } catch (_err) {
-      // Falha silenciosa de prefetch não afeta o fluxo normal
-    }
+  if (tabKey && TAB_LOADERS[tabKey]) {
+    loadTabModule(tabKey).catch(() => {});
   }
 }
 
