@@ -201,4 +201,39 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
     await page.waitForTimeout(600);
     await page.screenshot({ path: 'screenshots/fase4-design-system-lab-section-i.png', fullPage: true });
   });
+
+  test('05. Fase 5 Troca de Tema: Revelação Circular Dark -> Light e Light -> Dark (~100ms, ~300ms, ~700ms)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setupMockSession(page, { theme: 'dark' });
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
+
+    const themeToggleBtn = page.getByRole('button', { name: /Alternar tema/i }).first();
+
+    // --- DARK -> LIGHT ---
+    await themeToggleBtn.click();
+    await page.waitForTimeout(100);
+    await page.screenshot({ path: 'screenshots/fase5-theme-dark-to-light-100ms.png' });
+
+    await page.waitForTimeout(200); // total ~300ms
+    await page.screenshot({ path: 'screenshots/fase5-theme-dark-to-light-300ms.png' });
+
+    await page.waitForTimeout(400); // total ~700ms
+    await page.screenshot({ path: 'screenshots/fase5-theme-dark-to-light-700ms.png' });
+
+    // Aguarda término da transição e estabilização
+    await page.waitForTimeout(500);
+
+    // --- LIGHT -> DARK ---
+    await themeToggleBtn.click();
+    await page.waitForTimeout(100);
+    await page.screenshot({ path: 'screenshots/fase5-theme-light-to-dark-100ms.png' });
+
+    await page.waitForTimeout(200); // total ~300ms
+    await page.screenshot({ path: 'screenshots/fase5-theme-light-to-dark-300ms.png' });
+
+    await page.waitForTimeout(400); // total ~700ms
+    await page.screenshot({ path: 'screenshots/fase5-theme-light-to-dark-700ms.png' });
+  });
 });

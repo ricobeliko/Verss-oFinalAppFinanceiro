@@ -215,3 +215,40 @@ Esta seção define as regras e arquitetura para exibição dinâmica de dados f
   - `AnimatedProgressBar` permanece com `scaleX: 1` estático sem acionar GSAP.
   - `ProAnalyticsCharts` define `isAnimationActive={false}`, renderizando as barras e fatias completas de imediato.
 
+---
+
+## 10. Troca de Tema (Circular Reveal & Fallback)
+
+Esta seção define o comportamento de transição visual ao alternar entre os temas Escuro (**Abyss Teal**) e Claro (**Crisp Teal**), garantindo um efeito cinematográfico de revelação radial sem quebras de layout, sem flashes intermediários e com fallback estrito.
+
+### Experiência do Usuário (Efeito de Revelação Circular)
+Ao acionar qualquer alternador de tema na aplicação (topbar, sidebar, drawer ou lab do design system), o novo tema não pisca na tela inteira; ele se expande em uma onda circular perfeita partindo do centro geométrico do botão acionado (`(x, y)` obtido via `getBoundingClientRect()`), revelando a nova identidade visual em ~0.6s.
+
+### Arquitetura de Implementação (`src/utils/themeTransition.js`)
+1. **Utilitário Centralizado:** Todas as alternâncias de tema passam por `toggleThemeWithTransition({ nextTheme, originElement, applyTheme, setTheme })`.
+2. **View Transition API Nativa:**
+   - O estado do React é sincronizado de forma atômica no snapshot do navegador através de `flushSync(() => setTheme(nextTheme))`.
+   - As classes e meta tags de documento são sincronizadas imediatamente através de `applyTheme(nextTheme)`.
+3. **Animação Composited de Clip-Path:**
+   - A expansão é animada no pseudo-elemento `::view-transition-new(root)` via `document.documentElement.animate()`:
+     - `clipPath: ['circle(0px at X Y)', 'circle(R at X Y)']`
+     - Raio final: `R = Math.hypot(maxDistanceX, maxDistanceY)` cobrindo 100% da viewport até o canto mais distante.
+     - Duração: 600ms com curva cinematográfica `cubic-bezier(0.16, 1, 0.3, 1)`.
+4. **Desativação de Transições CSS Intermediárias (`.fc-theme-switching`):**
+   - Durante a transição, a classe `fc-theme-switching` é aplicada em `<html>`, aplicando `transition: none !important; animation: none !important;` para que as transições habituais de cores CSS não borrem nem atrasem o snapshot.
+
+### Matriz de Fallbacks & Tolerância a Falhas
+A função `shouldBypassViewTransition()` desvia para a troca imediata clássica sob qualquer uma das seguintes condições:
+1. **Ambiente SSR / Testes:** `window` ou `document` indefinidos.
+2. **Suporte de Navegador:** `document.startViewTransition` ausente (ex.: navegadores antigos).
+3. **Acessibilidade:** `prefers-reduced-motion: reduce` ativo ou flag de teste `window.__FINCONTROL_TEST_REDUCED_MOTION__ === true`.
+4. **Mobile / Telas Estreitas:** `window.innerWidth < 768px`.
+5. **Touch Devices:** `(pointer: coarse)` ativo.
+6. **Cliques Rápidos / Concorrência:** Se um clique subsequente for registrado enquanto uma transição estiver ativa, `activeTransition.skipTransition()` é acionado e a troca é resolvida imediatamente, sem acumular filas ou travar o DOM.
+
+### Visual Safety & Preservação de Estados
+- **Sem Flash Branco:** O tema anterior é mantido como snapshot estático em `::view-transition-old(root)` enquanto a nova camada se abre por cima em `::view-transition-new(root)` com `z-index: 9999`.
+- **Sem Re-entrada de Animações:** A troca de tema não re-executa a cascata de entrada (`useEnterStagger`), nem a recontagem de números em `AnimatedCurrency`, nem a animação de traçado dos gráficos Recharts.
+- **Zero Drift:** Os dados monetários permanecem inalterados e renderizados com centavos e formatação canônica inalterada.
+
+
