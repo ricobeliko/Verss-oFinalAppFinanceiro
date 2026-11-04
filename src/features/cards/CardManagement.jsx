@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
@@ -23,6 +24,7 @@ const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16"
 
 export default function CardManagement() {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
+    const scopeRef = useRef(null);
     
     const { cards, loading: loadingCards } = useCards();
     const { loans: allLoans, loading: loadingLoans } = useLoans();
@@ -30,6 +32,7 @@ export default function CardManagement() {
     const { expenses: allExpenses, loading: loadingExpenses } = useExpenses();
     const { paidSubscriptions, loading: loadingPaidSubs } = usePaidSubscriptions();
     const isLoading = loadingCards || loadingLoans || loadingSubs || loadingExpenses || loadingPaidSubs;
+    useEnterStagger(scopeRef, { ready: !isLoading });
     const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState(null);
@@ -194,9 +197,9 @@ export default function CardManagement() {
     }
 
     return (
-        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header DS2 */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Cartões</h1>
                     <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione, edite e acompanhe o limite e as faturas dos seus cartões.</p>
@@ -216,7 +219,7 @@ export default function CardManagement() {
             </div>
 
             {/* Tabela de Cartões */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>

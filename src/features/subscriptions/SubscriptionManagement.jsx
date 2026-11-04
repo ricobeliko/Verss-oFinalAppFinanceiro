@@ -1,6 +1,7 @@
 // src/features/subscriptions/SubscriptionManagement.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
@@ -21,12 +22,13 @@ const CardIcon = () => <svg className="w-4 h-4 mr-2 text-fc-accent flex-shrink-0
 
 export default function SubscriptionManagement() {
     const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
-
+    const scopeRef = useRef(null);
 
     const { subscriptions, loading: loadingSubs } = useSubscriptions();
     const { cards, loading: loadingCards } = useCards();
     const { clients, loading: loadingClients } = useClients();
     const isLoading = loadingSubs || loadingCards || loadingClients;
+    useEnterStagger(scopeRef, { ready: !isLoading });
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState(null);
@@ -172,9 +174,9 @@ export default function SubscriptionManagement() {
     }
 
     return (
-        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header Harmonizado */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Assinaturas</h1>
                     <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Controle suas assinaturas e serviços recorrentes com facilidade.</p>
@@ -190,7 +192,7 @@ export default function SubscriptionManagement() {
             </div>
 
             {/* Grid de Cards de Assinaturas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div data-enter="item" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {subscriptions.length > 0 ? subscriptions.map((sub) => {
                     const currentStatus = sub.status || (sub.isActive ? 'Ativa' : 'Inativa');
                     const amount = sub.amount !== undefined ? sub.amount : sub.value;

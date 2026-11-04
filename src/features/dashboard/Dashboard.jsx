@@ -1,6 +1,7 @@
 // src/features/dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../services/firestoreSubscriptionRegistry';
@@ -77,6 +78,8 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
+    const scopeRef = useRef(null);
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
 
     const handleSaveBudgets = async (newBudgets) => {
@@ -896,7 +899,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     }
     
     return (
-        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {isSyncStale && (
                 <div className="p-4 rounded-2xl bg-[var(--fc-warning-soft)] border border-[var(--fc-warning)]/30 flex items-center gap-3 text-[var(--fc-warning)] text-sm animate-fade-in shadow-sm" role="alert">
                     <svg className="w-5 h-5 flex-shrink-0 text-[var(--fc-warning)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -906,7 +909,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             )}
             {/* Header com Filtros em Surface DS2 */}
-            <Surface variant="elevated" padding="lg" className="space-y-6">
+            <Surface variant="elevated" padding="lg" className="space-y-6" data-enter="title">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">
@@ -1038,7 +1041,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             <FinancialAlertsBanner alerts={activeFinancialAlerts} onDismiss={handleDismissAlert} />
 
             {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div data-enter="item" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
                     {/* Card Fatura Total com Surface DS2 */}
                     <Surface variant="elevated" padding="md" className="transition-all hover:border-[var(--fc-accent)]/30">
@@ -1205,7 +1208,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             )}
 
             {/* Tabela de Itens da Fatura */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
                 <div className="p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 
                     <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>

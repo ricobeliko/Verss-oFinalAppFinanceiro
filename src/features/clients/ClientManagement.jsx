@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
@@ -22,11 +23,13 @@ const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height
 // --- Componente Principal ---
 export default function ClientManagement() {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
+    const scopeRef = useRef(null);
     const { clients, loading: loadingClients } = useClients();
     const { loans: allLoans, loading: loadingLoans } = useLoans();
     const { expenses: allExpenses, loading: loadingExpenses } = useExpenses();
     const { subscriptions: allSubscriptions, loading: loadingSubs } = useSubscriptions();
     const isLoading = loadingClients || loadingLoans || loadingExpenses || loadingSubs;
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
     const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
@@ -176,9 +179,9 @@ export default function ClientManagement() {
     }
 
     return (
-        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header DS2 */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Pessoas</h1>
                     <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione e gerencie as pessoas associadas aos seus lançamentos e faturas compartilhadas.</p>
@@ -209,7 +212,7 @@ export default function ClientManagement() {
             </div>
 
             {/* Central Consolidada de Repasses de Terceiros */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-2xl space-y-4">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-2.5">
                     <span className="text-xl" aria-hidden="true">👥</span>
                     <h2 className="text-base font-bold text-[var(--fc-text-primary)] tracking-tight">
@@ -238,7 +241,7 @@ export default function ClientManagement() {
             </div>
 
             {/* Tabela de Pessoas com Detalhamento de Repasses */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>

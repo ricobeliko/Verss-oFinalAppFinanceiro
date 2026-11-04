@@ -1,6 +1,7 @@
 // src/features/crisis/CrisisMode.jsx
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { SkeletonPage } from '../../design-system';
 import { useLoans } from '../../hooks/useLoans';
@@ -9,12 +10,14 @@ import { useSubscriptions } from '../../hooks/useSubscriptions';
 import { useCards } from '../../hooks/useCards';
 
 export default function CrisisMode({ selectedMonth }) {
+    const scopeRef = useRef(null);
     const { loans, loading: loadingLoans } = useLoans();
     const { expenses, loading: loadingExpenses } = useExpenses();
     const { subscriptions, loading: loadingSubs } = useSubscriptions();
     const { cards, loading: loadingCards } = useCards();
 
     const isLoading = loadingLoans || loadingExpenses || loadingSubs || loadingCards;
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
     // Auditoria Cirúrgica e Esmiuçada
     const auditData = useMemo(() => {
@@ -101,9 +104,9 @@ export default function CrisisMode({ selectedMonth }) {
     }
 
     return (
-        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header de Auditoria */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--fc-accent)]/10 text-[var(--fc-accent)] border border-[var(--fc-accent)]/20 text-xs font-bold mb-3">
                         ⚡ AUDITORIA CIRÚRGICA DE CONTAS
@@ -124,7 +127,7 @@ export default function CrisisMode({ selectedMonth }) {
             </div>
 
             {/* Grid Principal Esmiuçado (3 Cards de Detalhamento) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div data-enter="item" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* 1. Raio-X de Assinaturas */}
                 <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl p-6 shadow-xl flex flex-col justify-between">
