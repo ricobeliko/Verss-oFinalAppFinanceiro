@@ -152,10 +152,19 @@ A experiência de navegação do FinControl é fluida, escalonada e orquestrada 
    - **Limites de Itens:** Para proteger os 60fps em dispositivos de baixo custo, limita no máximo a 8 itens no desktop e 5 no mobile.
    - **Container-level:** Longas tabelas e listas possuem o atributo `data-enter="item"` no elemento container (wrapper da tabela), jamais em cada linha individual.
 
-2. **`PageWaveSweep` (Shell):**
-   - **Propósito:** Cortina líquida translúcida de onda que varre a tela de baixo para cima (`y: 100% -> 0% -> -100%`) em ~0.6s durante a troca de abas no dashboard.
-   - **Pico (`onPeak`):** No momento em que a onda atinge o meio da tela cobrindo o conteúdo (`y = 0%`), dispara a troca de `activePage`, zera o scroll da área de conteúdo (`scrollTop = 0`) e anuncia a nova tela via leitor de tela.
-   - **Interrupção:** Cliques rápidos em outras abas matam imediatamente a timeline anterior via `kill()` e reiniciam o ciclo sem acúmulo de fila.
+2. **`PageWaveSweep` (Shell) & Transição de Telas Otimizada:**
+   - **Propósito:** Cortina líquida de ondas com 3 camadas SVG e backplate opaco que varre a tela de baixo para cima durante a troca de abas no dashboard (~1.2s total), eliminando travamentos de montagem/desmontagem e garantindo cobertura visual completa no pico.
+   - **Fases da Coreografia (`motion.pageTransition`):**
+     - **Cover-In (0.45s, `power2.inOut`):** A onda sobe de `y: 100%` até cobrir a tela inteira (`y: 0%`), elevando a opacidade até `peakOpacity: 0.92`. As 3 ondas SVG têm entrada escalonada (`waveStagger: 0.06s`). O conteúdo da aba anterior desvanece suavemente para opacidade 0.
+     - **Hold (0.12s):** A tela permanece com 92% de cobertura opaca enquanto o React desmonta a aba anterior e monta a nova aba via `flushSync(() => setActivePage(targetPage))` no callback `onPeak`. Durante esta fase, o scroll da área de conteúdo é resetado (`scrollTop = 0`).
+     - **Reveal (0.60s, `power2.out`):** A onda continua sua ascensão para cima (`y: -100%`) e desvanece a opacidade para 0, revelando a nova tela já montada e estabilizada. O stagger de entrada dos títulos (`useEnterStagger`) inicia com leve antecipação (~30% do reveal = 0.18s).
+   - **Pausa de Fundo & Otimização de GPU (`.fc-transitioning`):**
+     - Durante todo o ciclo da transição, a classe `.fc-transitioning` é aplicada na tag `<html>`.
+     - As animações CSS contínuas de fundo (`LivingBackground`) têm seu estado pausado (`animation-play-state: paused !important`) para liberar 100% da GPU para o compositor da onda.
+     - A aura do cursor é ocultada (`opacity: 0`) e seus listeners de movimento ignorados até o fim da transição.
+   - **Prefetch Idle & Hover:**
+     - Chunks lazy de todas as abas secundárias são pré-carregados em background via `requestIdleCallback` (com fallback de `setTimeout`) e em `onMouseEnter`/`onFocus` nos botões da barra de navegação, eliminando delays de rede e parsing durante a troca.
+   - **Interrupção Limpa:** Cliques rápidos em outras abas matam imediatamente a timeline anterior via `kill()`, removem `.fc-transitioning` e reiniciam o ciclo sem acúmulo de fila ou estilos inline residuais.
    - **Acessibilidade & Mobile:** Sob `prefers-reduced-motion: reduce` ou largura de tela `< 768px`, a transição é executada de forma síncrona e instantânea, sem disparar a timeline GSAP.
 
 3. **`Skeleton` e `SkeletonPage`:**
@@ -168,7 +177,13 @@ A experiência de navegação do FinControl é fluida, escalonada e orquestrada 
 - `title`: `y: 14px`, `duration: 0.5s`, `ease: 'power3.out'`
 - `item`: `y: 18px`, `duration: 0.55s`, `ease: 'power3.out'`, `stagger: 0.07s`, `overlap: 0.25s`
 - `pageExit`: `y: -6px`, `duration: 0.14s`, `ease: 'power2.in'`
-- `waveSweep`: `duration: 0.6s`, `maxOpacity: 0.35`, `maxTotalDuration: 0.65s`
+- `pageTransition`:
+  - `coverIn`: `0.45s`, `ease: 'power2.inOut'`
+  - `hold`: `0.12s`
+  - `reveal`: `0.60s`, `ease: 'power2.out'`
+  - `peakOpacity`: `0.92`
+  - `waveStagger`: `0.06s`
+  - `totalDuration`: `~1.17s`
 - `shimmer`: `duration: 1.4s`
 
 ### Padrão Inviolável de Segurança Visual (Visual Safety)
