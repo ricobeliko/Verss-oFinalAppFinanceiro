@@ -18,7 +18,7 @@ import { MOTION } from '../../../design-system/motion';
  * - Visual Safety: clearProps executado ao final ou em erro; nenhum elemento preso com opacity: 0.
  * - Interrupção limpa: novos cliques matam imediatamente a animação em andamento e limpam o DOM.
  */
-const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
+const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
   const waveContainerRef = useRef(null);
   const track1Ref = useRef(null);
   const track2Ref = useRef(null);
@@ -31,6 +31,9 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
     const container = waveContainerRef.current;
     const tracks = [track1Ref.current, track2Ref.current, track3Ref.current].filter(Boolean);
     return () => {
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('fc-transitioning');
+      }
       if (timelineRef.current) {
         timelineRef.current.kill();
         timelineRef.current = null;
@@ -39,7 +42,7 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
         gsap.set(container, { display: 'none', clearProps: 'transform,opacity' });
       }
       if (tracks.length > 0) {
-        gsap.set(tracks, { clearProps: 'transform,opacity' });
+        gsap.set(tracks, { clearProps: 'transform,opacity,will-change' });
       }
     };
   }, []);
@@ -51,6 +54,9 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
 
       // Caminho rápido para acessibilidade e mobile
       if (isReduced || isMobile) {
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.remove('fc-transitioning');
+        }
         if (timelineRef.current) {
           timelineRef.current.kill();
           timelineRef.current = null;
@@ -79,6 +85,9 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
         timelineRef.current.kill();
         timelineRef.current = null;
       }
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('fc-transitioning');
+      }
 
       try {
         const {
@@ -93,14 +102,21 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
 
         const tracks = [track1, track2, track3].filter(Boolean);
 
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.add('fc-transitioning');
+        }
+
         // Estado inicial
         gsap.set(container, { display: 'block', opacity: 0 });
-        gsap.set(tracks, { y: '100%' });
+        gsap.set(tracks, { y: '100%', willChange: 'transform' });
 
         const tl = gsap.timeline({
           onComplete: () => {
+            if (typeof document !== 'undefined') {
+              document.documentElement.classList.remove('fc-transitioning');
+            }
             gsap.set(container, { display: 'none', clearProps: 'transform,opacity' });
-            gsap.set(tracks, { clearProps: 'transform,opacity' });
+            gsap.set(tracks, { clearProps: 'transform,opacity,will-change' });
             timelineRef.current = null;
             if (typeof onComplete === 'function') onComplete();
           },
@@ -181,14 +197,24 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
 
       } catch (err) {
         console.error('[PageWaveSweep] Erro ao disparar animação sweep:', err);
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.remove('fc-transitioning');
+        }
         if (container) {
           gsap.set(container, { display: 'none', clearProps: 'transform,opacity' });
+        }
+        const tracks = [track1, track2, track3].filter(Boolean);
+        if (tracks.length > 0) {
+          gsap.set(tracks, { clearProps: 'transform,opacity,will-change' });
         }
         if (typeof onPeak === 'function') onPeak();
         if (typeof onComplete === 'function') onComplete();
       }
     },
     cancel() {
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('fc-transitioning');
+      }
       if (timelineRef.current) {
         timelineRef.current.kill();
         timelineRef.current = null;
@@ -198,7 +224,7 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
       }
       const tracks = [track1Ref.current, track2Ref.current, track3Ref.current].filter(Boolean);
       if (tracks.length > 0) {
-        gsap.set(tracks, { clearProps: 'transform,opacity' });
+        gsap.set(tracks, { clearProps: 'transform,opacity,will-change' });
       }
     },
   }));
@@ -206,6 +232,7 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
   return (
     <div
       ref={waveContainerRef}
+      data-fc-wave-sweep="true"
       className="absolute inset-0 z-20 pointer-events-none overflow-hidden"
       aria-hidden="true"
       style={{ display: 'none' }}
@@ -307,6 +334,6 @@ const PageWaveSweep = forwardRef(function PageWaveSweep(props, ref) {
       </div>
     </div>
   );
-});
+}));
 
 export default PageWaveSweep;

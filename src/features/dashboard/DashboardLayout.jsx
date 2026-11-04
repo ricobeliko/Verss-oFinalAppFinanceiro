@@ -30,13 +30,14 @@ const PAGE_NAMES = {
 
 // Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
+import { TAB_LOADERS, prefetchTab, prefetchAllTabs } from './tabPrefetch';
 
 // Páginas secundárias carregadas sob demanda (tab-level code splitting)
-const ClientManagement = lazy(() => import('../clients/ClientManagement'));
-const CardManagement = lazy(() => import('../cards/CardManagement'));
-const UnifiedTransactionManagement = lazy(() => import('../transactions/TransactionManagement'));
-const SubscriptionManagement = lazy(() => import('../subscriptions/SubscriptionManagement'));
-const CrisisMode = lazy(() => import('../crisis/CrisisMode'));
+const ClientManagement = lazy(TAB_LOADERS.pessoas);
+const CardManagement = lazy(TAB_LOADERS.cards);
+const UnifiedTransactionManagement = lazy(TAB_LOADERS.transactions);
+const SubscriptionManagement = lazy(TAB_LOADERS.subscriptions);
+const CrisisMode = lazy(TAB_LOADERS.crisis);
 
 export default function DashboardLayout() {
   const { currentUser, isPro, isTrialActive, logout, showToast } = useAppContext();
@@ -143,6 +144,32 @@ export default function DashboardLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Prefetch de abas secundárias em background idle após o primeiro paint
+  useEffect(() => {
+    let idleId;
+    let timeoutId;
+    const doPrefetch = () => {
+      prefetchAllTabs();
+    };
+
+    if (typeof window !== 'undefined') {
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(doPrefetch, { timeout: 3000 });
+      } else {
+        timeoutId = window.setTimeout(doPrefetch, 1500);
+      }
+    }
+
+    return () => {
+      if (idleId && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
   const handleLockedFeatureClick = () => {
     showToast('Disponível no plano Pro.', 'info');
   };
@@ -193,6 +220,7 @@ export default function DashboardLayout() {
       <AppSidebar
         activePage={activePage}
         onSelectPage={navigateTo}
+        onPrefetch={prefetchTab}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         currentUser={currentUser}
@@ -211,6 +239,7 @@ export default function DashboardLayout() {
         onClose={() => setIsMobileMenuOpen(false)}
         activePage={activePage}
         onSelectPage={navigateTo}
+        onPrefetch={prefetchTab}
         currentUser={currentUser}
         isPro={isPro}
         isTrialActive={isTrialActive}

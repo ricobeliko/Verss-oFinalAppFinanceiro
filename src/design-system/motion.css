@@ -220,11 +220,11 @@
    THEME SWITCH CIRCULAR REVEAL (View Transition API)
    ========================================================================= */
 
-/* Desliga transitions e animations durante a captura e snapshot do tema */
+/* Desliga transitions e pausa animations durante a captura e snapshot do tema sem resetar tempo */
 html.fc-theme-switching,
 html.fc-theme-switching * {
   transition: none !important;
-  animation: none !important;
+  animation-play-state: paused !important;
 }
 
 /* Pseudo-elementos da View Transition API para revelação circular */
@@ -240,4 +240,21 @@ html.fc-theme-switching * {
 
 ::view-transition-new(root) {
   z-index: 9999;
+}
+
+/* =========================================================================
+   TAB PAGE TRANSITION (fc-transitioning)
+   ========================================================================= */
+
+/* Pausa as ondas CSS do LivingBackground durante a transição de telas */
+html.fc-transitioning .fc-wave-layer-1,
+html.fc-transitioning .fc-wave-layer-2,
+html.fc-transitioning .fc-wave-layer-3 {
+  animation-play-state: paused !important;
+}
+
+/* Oculta aura do cursor durante a transição de abas */
+html.fc-transitioning [data-fc-aura] {
+  opacity: 0 !important;
+  will-change: auto !important;
 }

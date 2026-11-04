@@ -132,6 +132,7 @@ export default function AppSidebar({
   onOpenDeleteModal,
   onLogout,
   onLockedFeatureClick,
+  onPrefetch = () => {},
   navLinks = DEFAULT_NAV_LINKS,
 }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -217,6 +218,8 @@ export default function AppSidebar({
                 }}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={link.label}
+                onMouseEnter={() => onPrefetch(link.id)}
+                onFocus={() => onPrefetch(link.id)}
                 title={isCollapsed ? `${link.label}${isLocked ? ' (Disponível no plano Pro)' : ''}` : undefined}
                 className={`w-full group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                   isActive

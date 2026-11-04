@@ -45,6 +45,9 @@ export default function LivingBackground() {
       const setGlowY = gsap.quickTo(warmGlowRef.current, 'y', { duration: 0.8, ease: 'power3.out' });
 
       const handlePointerMove = (e) => {
+        if (typeof document !== 'undefined' && document.documentElement.classList.contains('fc-transitioning')) {
+          return;
+        }
         setAuraX(e.clientX);
         setAuraY(e.clientY);
         setAuraOpacity(1);
@@ -191,6 +194,7 @@ export default function LivingBackground() {
       {/* Camada 5: Aura do cursor (360px) com tracking elástico */}
       <div
         ref={auraRef}
+        data-fc-aura="true"
         className="pointer-events-none fixed top-0 left-0 w-[360px] h-[360px] -ml-[180px] -mt-[180px] rounded-full"
         style={{
           background: 'radial-gradient(circle, var(--fc-glow-cool) 0%, transparent 68%)',
