@@ -5,6 +5,7 @@ import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from '
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { isValidFinancialValue } from '../../services/financialService';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
@@ -22,9 +23,10 @@ export default function SubscriptionManagement() {
     const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
 
 
-    const { subscriptions } = useSubscriptions();
-    const { cards } = useCards();
-    const { clients } = useClients();
+    const { subscriptions, loading: loadingSubs } = useSubscriptions();
+    const { cards, loading: loadingCards } = useCards();
+    const { clients, loading: loadingClients } = useClients();
+    const isLoading = loadingSubs || loadingCards || loadingClients;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState(null);
@@ -165,8 +167,12 @@ export default function SubscriptionManagement() {
         }
     };
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header Harmonizado */}
             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>

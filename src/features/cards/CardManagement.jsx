@@ -5,6 +5,7 @@ import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import CarbonCard from '../../components/CarbonCard';
+import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { calculateCardLimitIntelligence, calculateCardInvoiceDetails } from '../../services/financialService';
 import { canAddCard } from '../../config/planEntitlements';
@@ -23,11 +24,12 @@ const CheckCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16"
 export default function CardManagement() {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
     
-    const { cards } = useCards();
-    const { loans: allLoans } = useLoans();
-    const { subscriptions: allSubscriptions } = useSubscriptions();
-    const { expenses: allExpenses } = useExpenses();
-    const { paidSubscriptions } = usePaidSubscriptions();
+    const { cards, loading: loadingCards } = useCards();
+    const { loans: allLoans, loading: loadingLoans } = useLoans();
+    const { subscriptions: allSubscriptions, loading: loadingSubs } = useSubscriptions();
+    const { expenses: allExpenses, loading: loadingExpenses } = useExpenses();
+    const { paidSubscriptions, loading: loadingPaidSubs } = usePaidSubscriptions();
+    const isLoading = loadingCards || loadingLoans || loadingSubs || loadingExpenses || loadingPaidSubs;
     const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState(null);
@@ -187,8 +189,12 @@ export default function CardManagement() {
         }
     };
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header DS2 */}
             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>

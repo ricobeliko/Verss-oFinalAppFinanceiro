@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
-import Spinner from '../../components/Spinner';
 import { getInitialTheme, applyTheme } from '../../utils/theme';
+import { SkeletonPage } from '../../design-system';
 
 // Shell Desacoplado DS2
 import AppSidebar from './shell/AppSidebar';
@@ -77,13 +77,7 @@ export default function DashboardLayout() {
 
   const renderActivePage = () => {
     return (
-      <Suspense
-        fallback={
-          <div className="flex justify-center items-center py-24 min-h-[300px]">
-            <Spinner />
-          </div>
-        }
-      >
+      <Suspense fallback={<SkeletonPage />}>
         {(() => {
           switch (activePage) {
             case 'resumo':

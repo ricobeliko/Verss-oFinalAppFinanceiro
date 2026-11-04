@@ -9,6 +9,7 @@ import { useLoans } from '../../hooks/useLoans';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import GenericModal from '../../components/GenericModal';
 import UpgradePrompt from '../../components/UpgradePrompt';
+import { SkeletonPage } from '../../design-system';
 
 const PdfImportModal = lazy(() => import('../../components/PdfImportModal'));
 
@@ -20,15 +21,20 @@ function UnifiedTransactionManagement() {
     const { isPro, isTrialActive, db, userId, getUserCollectionPathSegments, showToast, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
-    const { cards } = useCards();
-    const { clients } = useClients();
-    const { loans: existingLoans } = useLoans();
+    const { cards, loading: loadingCards } = useCards();
+    const { clients, loading: loadingClients } = useClients();
+    const { loans: existingLoans, loading: loadingLoans } = useLoans();
+    const isLoading = loadingCards || loadingClients || loadingLoans;
 
     const IncomeFormComponent = useMemo(() => <IncomeManagement />, []);
     const ExpenseFormComponent = useMemo(() => <ExpenseManagement />, []);
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Modal de Importação de Fatura PDF (Carregamento Sob Demanda) */}
             {isPdfModalOpen && (
                 <Suspense fallback={null}>

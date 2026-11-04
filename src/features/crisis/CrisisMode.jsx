@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { formatCurrencyDisplay } from '../../utils/currency';
-import Spinner from '../../components/Spinner';
+import { SkeletonPage } from '../../design-system';
 import { useLoans } from '../../hooks/useLoans';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
@@ -97,15 +97,11 @@ export default function CrisisMode({ selectedMonth }) {
     }, [loans, expenses, subscriptions, cards, selectedMonth]);
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-96 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-xl">
-                <Spinner />
-            </div>
-        );
+        return <SkeletonPage />;
     }
 
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header de Auditoria */}
             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>

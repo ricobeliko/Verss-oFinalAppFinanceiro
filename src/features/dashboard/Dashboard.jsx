@@ -31,6 +31,7 @@ import ProSummary from './ProSummary';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import { SkeletonPage } from '../../design-system';
 import Surface from '../../design-system/primitives/Surface';
 import Badge from '../../design-system/primitives/Badge';
 
@@ -891,15 +892,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const paidPercentage = summary.totalFatura > 0 ? (summary.totalRecebido / summary.totalFatura) * 100 : 0;
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)]">
-                <Spinner />
-            </div>
-        );
+        return <SkeletonPage />;
     }
     
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {isSyncStale && (
                 <div className="p-4 rounded-2xl bg-[var(--fc-warning-soft)] border border-[var(--fc-warning)]/30 flex items-center gap-3 text-[var(--fc-warning)] text-sm animate-fade-in shadow-sm" role="alert">
                     <svg className="w-5 h-5 flex-shrink-0 text-[var(--fc-warning)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">

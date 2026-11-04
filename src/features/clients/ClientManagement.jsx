@@ -5,6 +5,7 @@ import GenericModal from '../../components/GenericModal';
 import FinancialReportModal from './FinancialReportModal';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { calculateConsolidatedClientReceivables } from '../../services/financialService';
 import { canAddPerson } from '../../config/planEntitlements';
@@ -21,10 +22,11 @@ const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height
 // --- Componente Principal ---
 export default function ClientManagement() {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
-    const { clients } = useClients();
-    const { loans: allLoans } = useLoans();
-    const { expenses: allExpenses } = useExpenses();
-    const { subscriptions: allSubscriptions } = useSubscriptions();
+    const { clients, loading: loadingClients } = useClients();
+    const { loans: allLoans, loading: loadingLoans } = useLoans();
+    const { expenses: allExpenses, loading: loadingExpenses } = useExpenses();
+    const { subscriptions: allSubscriptions, loading: loadingSubs } = useSubscriptions();
+    const isLoading = loadingClients || loadingLoans || loadingExpenses || loadingSubs;
 
     const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
@@ -169,8 +171,12 @@ export default function ClientManagement() {
         setIsReportModalOpen(true);
     };
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header DS2 */}
             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
                 <div>

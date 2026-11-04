@@ -18,8 +18,8 @@ export function useLoans() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.loans) {
-            setLoans(window.__FINCONTROL_E2E_MOCK_DATA__.loans);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setLoans(window.__FINCONTROL_E2E_MOCK_DATA__.loans || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -62,5 +62,5 @@ export function useLoans() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { loans, loading, error, isStale };
+    return { loans, loading, isLoading: loading, error, isStale };
 }
