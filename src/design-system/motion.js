@@ -40,4 +40,22 @@ export const MOTION = {
   shimmer: {
     duration: 1.4,
   },
+  // Counter animation (Commit A)
+  counter: {
+    duration: 0.8,
+    updateDuration: 0.5,
+    ease: 'power2.out',
+    initialDelay: 0.3,
+  },
+  // Progress bar animation (Commit C)
+  progressBar: {
+    duration: 0.8,
+    ease: 'power3.out',
+  },
+  // Chart animations (Commit C)
+  charts: {
+    duration: 900,
+    easing: 'ease-out',
+    delay: 300,
+  },
 };

@@ -21,6 +21,7 @@ import TextField from '../primitives/TextField';
 import Badge from '../primitives/Badge';
 import Modal from '../primitives/Modal';
 import Skeleton, { SkeletonPage } from '../primitives/Skeleton';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
 import useEnterStagger from '../../hooks/useEnterStagger';
 
 /**
@@ -108,6 +109,7 @@ export default function DesignSystemLab() {
   const [currencyValue, setCurrencyValue] = useState('1250,50');
   const [errorInputValue, setErrorInputValue] = useState('inválido@');
   const [showSkeletonPage, setShowSkeletonPage] = useState(false);
+  const [counterKey, setCounterKey] = useState(0);
 
   return (
     <div
@@ -730,6 +732,85 @@ export default function DesignSystemLab() {
                 <SkeletonPage />
               </div>
             )}
+          </Surface>
+        </section>
+
+        {/* =========================================================================
+            SECTION I: ANIMATED CURRENCY (CONTADORES VIVOS ZERO-DRIFT)
+            ========================================================================= */}
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[var(--fc-accent)] font-bold">
+                Seção I
+              </span>
+              <h2 className="text-xl font-bold text-[var(--fc-text-primary)]">
+                AnimatedCurrency (Contadores Vivos Zero-Drift)
+              </h2>
+              <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+                Contagem animada fluida em centavos inteiros sem drift matemático, com fallback estático para reduced-motion.
+              </p>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCounterKey((k) => k + 1)}
+            >
+              <FiRefreshCw className="mr-1.5" /> Repetir Contagem
+            </Button>
+          </div>
+
+          <Surface variant="default" className="space-y-6">
+            <div key={counterKey} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Caso 1: Zero */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Valor Zero (0)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={0} />
+                </p>
+              </div>
+
+              {/* Caso 2: Ponto Flutuante (0.1 + 0.2) */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Ponto Flutuante (0.1 + 0.2)</span>
+                <p className="text-2xl font-bold text-[var(--fc-accent)]">
+                  <AnimatedCurrency value={0.1 + 0.2} />
+                </p>
+              </div>
+
+              {/* Caso 3: Valor Comum */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Valor Decimal (1.234.567,89)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={1234567.89} />
+                </p>
+              </div>
+
+              {/* Caso 4: Negativo */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Negativo (-450,50)</span>
+                <p className="text-2xl font-bold text-[var(--fc-danger)]">
+                  <AnimatedCurrency value={-450.5} />
+                </p>
+              </div>
+
+              {/* Caso 5: Muito Grande */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Muito Grande (999.999.999,99)</span>
+                <p className="text-2xl font-bold text-[var(--fc-success)]">
+                  <AnimatedCurrency value={999999999.99} />
+                </p>
+              </div>
+
+              {/* Caso 6: Centavos Fracionários (0.005) */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Arredondamento Seguro (0.005)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={0.005} />
+                </p>
+              </div>
+            </div>
           </Surface>
         </section>
       </main>

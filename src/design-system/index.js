@@ -11,3 +11,4 @@ export { default as TextField } from './primitives/TextField';
 export { default as Badge } from './primitives/Badge';
 export { default as Modal } from './primitives/Modal';
 export { default as Skeleton, SkeletonPage } from './primitives/Skeleton';
+export { default as AnimatedCurrency } from '../components/AnimatedCurrency';
