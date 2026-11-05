@@ -1,77 +1,11 @@
 // src/features/landing/components/FinancialControlSection.jsx
 import React, { useState } from 'react';
 import { FiCalendar, FiClock } from 'react-icons/fi';
+import { sampleData } from '../lib/sampleData';
 
 export default function FinancialControlSection() {
   const [activeTab, setActiveTab] = useState('invoices');
-
-  const cardsData = [
-    {
-      brand: 'Cartão Principal (Black)',
-      type: 'Mastercard Black',
-      status: 'Aberta',
-      statusColor: 'text-[var(--fc-accent)] bg-[var(--fc-accent-soft)] border-[var(--fc-accent)]/30',
-      total: 'R$ 3.840,25',
-      dueDate: '05/Mai',
-      closeDate: '28/Abr',
-      limitUsed: '64%',
-    },
-    {
-      brand: 'Cartão Investimentos (Infinite)',
-      type: 'Visa Infinite',
-      status: 'Fechada',
-      statusColor: 'text-[var(--fc-success)] bg-[var(--fc-success-soft)] border-[var(--fc-success)]/30',
-      total: 'R$ 1.290,00',
-      dueDate: '10/Mai',
-      closeDate: '01/Mai',
-      limitUsed: '25%',
-    },
-    {
-      brand: 'Cartão Dia a Dia (Platinum)',
-      type: 'Visa Platinum',
-      status: 'Futura',
-      statusColor: 'text-[var(--fc-info)] bg-[var(--fc-info-soft)] border-[var(--fc-info)]/30',
-      total: 'R$ 820,40',
-      dueDate: '15/Jun',
-      closeDate: '08/Jun',
-      limitUsed: '16%',
-    },
-  ];
-
-  const installmentsData = [
-    {
-      title: 'Smartphone de Trabalho',
-      installments: '07 de 12',
-      installment: 'R$ 625,00',
-      remaining: 'R$ 3.125,00',
-      finishDate: 'Outubro / 2026',
-      progress: 58,
-    },
-    {
-      title: 'Revisão Automotiva 40.000km',
-      installments: '03 de 06',
-      installment: 'R$ 315,00',
-      remaining: 'R$ 945,00',
-      finishDate: 'Agosto / 2026',
-      progress: 50,
-    },
-    {
-      title: 'Curso de Especialização',
-      installments: '10 de 10',
-      installment: 'R$ 450,00',
-      remaining: 'R$ 0,00',
-      finishDate: 'Última parcela quitada!',
-      progress: 100,
-      completed: true,
-    },
-  ];
-
-  const subscriptionsData = [
-    { name: 'Plataforma de Streaming', frequency: 'Recorrente', amount: 'R$ 19,90', card: 'Cartão Black' },
-    { name: 'Ferramentas de Produtividade', frequency: 'Recorrente', amount: 'R$ 55,00', card: 'Cartão Infinite' },
-    { name: 'Assinatura de Academia', frequency: 'Recorrente', amount: 'R$ 139,90', card: 'Cartão Black' },
-    { name: 'Infraestrutura em Nuvem', frequency: 'Variável', amount: 'R$ 42,10', card: 'Cartão Platinum' },
-  ];
+  const { cards: cardsData, installments: installmentsData, subscriptions: subscriptionsData } = sampleData;
 
   return (
     <section className="py-24 bg-[var(--fc-bg)] relative overflow-hidden">
@@ -153,7 +87,7 @@ export default function FinancialControlSection() {
 
                 <div className="text-lg font-bold text-[var(--fc-text-primary)] mb-1">{c.brand}</div>
                 <div className="text-2xl font-extrabold text-[var(--fc-text-primary)] mb-5 tracking-tight">
-                  {c.total}
+                  {c.totalDisplay}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-4 border-t border-[var(--fc-border-subtle)] text-[var(--fc-text-secondary)]">

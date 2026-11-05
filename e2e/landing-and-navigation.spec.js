@@ -64,7 +64,7 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
 
     // 3. Living Ledger como protagonista visual
     await expect(page.locator('text=Cartão Principal').first()).toBeVisible();
-    await expect(page.locator('text=4.280,50').first()).toBeVisible();
+    await expect(page.locator('text=3.840,25').first()).toBeVisible();
     await expect(page.locator('text=Notebook de Trabalho').first()).toBeVisible();
     await expect(page.locator('text=Lucas deve R$ 575,00').first()).toBeVisible();
 

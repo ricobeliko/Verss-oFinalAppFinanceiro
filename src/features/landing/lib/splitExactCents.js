@@ -184,10 +184,12 @@ export function formatCentsDisplay(cents) {
   if (cents === null || cents === undefined || isNaN(cents)) {
     return 'R$ 0,00';
   }
-  return (cents / 100).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
+  return (cents / 100)
+    .toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    })
+    .replace(/\u00A0/g, ' ');
 }
 
 /**

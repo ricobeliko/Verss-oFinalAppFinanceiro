@@ -1,17 +1,11 @@
 // src/features/landing/components/InvoiceTimelineSection.jsx
 import React, { useState } from 'react';
 import { FiClock, FiCheckCircle } from 'react-icons/fi';
+import { sampleData } from '../lib/sampleData';
 
 export default function InvoiceTimelineSection() {
   const [isCentPaid, setIsCentPaid] = useState(false);
-
-  const months = [
-    { month: 'Maio', year: '2026', total: 'R$ 3.840,25', installments: 8, status: 'Atual' },
-    { month: 'Junho', year: '2026', total: 'R$ 2.410,20', installments: 6, status: 'Previsto' },
-    { month: 'Julho', year: '2026', total: 'R$ 1.890,50', installments: 5, status: 'Previsto' },
-    { month: 'Agosto', year: '2026', total: 'R$ 1.250,00', installments: 3, status: 'Previsto' },
-    { month: 'Setembro', year: '2026', total: 'R$ 625,00', installments: 1, status: 'Final' },
-  ];
+  const { timeline: months, residualCentRule } = sampleData;
 
   return (
     <section id="invoices-timeline" className="py-24 bg-[var(--fc-bg)] relative">
@@ -94,11 +88,11 @@ export default function InvoiceTimelineSection() {
 
           <div className="bg-[var(--fc-surface-2)] rounded-xl p-4 border border-[var(--fc-border-subtle)] mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="text-xs text-[var(--fc-text-secondary)]">Fatura Exemplo: R$ 100,00</div>
+              <div className="text-xs text-[var(--fc-text-secondary)]">Fatura Exemplo: {residualCentRule.invoiceTotalDisplay}</div>
               <div className="text-sm font-semibold text-[var(--fc-text-primary)] mt-0.5">
-                Valor Pago: {isCentPaid ? 'R$ 100,00' : 'R$ 99,99'} • Saldo Devedor:{' '}
+                Valor Pago: {isCentPaid ? residualCentRule.fullPaidDisplay : residualCentRule.partialPaidDisplay} • Saldo Devedor:{' '}
                 <span className={isCentPaid ? 'text-[var(--fc-success)] font-mono' : 'text-[var(--fc-danger)] font-mono'}>
-                  {isCentPaid ? 'R$ 0,00' : 'R$ 0,01'}
+                  {isCentPaid ? residualCentRule.fullRemainingDisplay : residualCentRule.partialRemainingDisplay}
                 </span>
               </div>
             </div>
@@ -119,7 +113,7 @@ export default function InvoiceTimelineSection() {
                 onClick={() => setIsCentPaid(!isCentPaid)}
                 className="px-3 py-1.5 rounded-lg bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-3)] text-xs text-[var(--fc-accent)] font-medium transition-colors border border-[var(--fc-border-default)] cursor-pointer"
               >
-                {isCentPaid ? 'Simular saldo de R$ 0,01' : 'Pagar R$ 0,01 restante'}
+                {isCentPaid ? `Simular saldo de ${residualCentRule.partialRemainingDisplay}` : `Pagar ${residualCentRule.partialRemainingDisplay} restante`}
               </button>
             </div>
           </div>
