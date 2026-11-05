@@ -238,8 +238,8 @@ test.describe('Fase 8.7 — App Shell + Dashboard + Motion System v1 (Stage A PO
     await expect(sidebar.getByText('Teste Pro ativo')).toBeVisible();
 
     // Recursos Pro desbloqueados (ProSummary exibe valores sem blur ou prompt de upgrade)
-    await expect(page.getByText('Total Receitas (Mês)')).toBeVisible();
-    await expect(page.getByText('Balanço Final (Receitas - Fatura)')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Projeção dos Próximos Meses/i })).toBeVisible();
+    await expect(page.getByText('Visualize a descompressão das suas faturas')).not.toBeVisible();
     await expect(page.getByRole('button', { name: /Testar Pro por 30 dias/i })).not.toBeVisible();
   });
 

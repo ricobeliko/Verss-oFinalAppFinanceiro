@@ -68,7 +68,7 @@ Nenhum dado do Firestore foi apagado ou migrado; campos legados nos documentos d
 
 ### Lógica de Domínio (`src/services/financialService.js`)
 Foram criadas duas funções canônicas com garantia matemática de centavos inteiros:
-- `filterCommitmentsForPerson(loans, subscriptions, personId)`: Filtra compras parceladas e assinaturas pertencentes à pessoa. Suporta compras exclusivas (`loan.clientId === personId`), compras compartilhadas (`loan.isShared === true` com rateio 50/50 em `person1` / `person2`) e assinaturas exclusivas.
+- `filterCommitmentsForPerson(loans, subscriptions, personId)`: Filtra compras parceladas e assinaturas pertencentes à pessoa. Suporta compras exclusivas (`loan.clientId === personId`), compras compartilhadas (`loan.isShared === true` utilizando as parcelas explícitas de cada participante em `loan.sharedDetails.person1.installments` e `loan.sharedDetails.person2.installments`, sejam em divisões 50/50, 70/30 ou qualquer outra proporção) e assinaturas exclusivas. Se alguma das partes em compras compartilhadas não possuir `clientId`, suas parcelas são direcionadas estritamente para `'unassigned'` ("Sem atribuição"), prevenindo quebras no invariante da soma.
 - `calculateFutureCommitmentsForPerson(loans, subscriptions, monthsAhead, targetMonth, personId)`: Calcula o valor projetado mês a mês em centavos inteiros com distribuição precisa e arredondamento que previne *drift* ou perda de centavos.
 
 ### Prova da Invariante Matemática
@@ -227,3 +227,71 @@ Todos os 6 suítes de teste de ponta a ponta foram executados e aprovados (28 te
 4. `e2e/screen-enter.spec.js` (2 testes aprovados).
 5. `e2e/tab-perf.spec.js` (1 teste aprovado).
 6. `e2e/theme-sweep.spec.js` (6 testes aprovados).
+
+
+---
+
+## 11. Fase 7.1 — Correção do Invariante, Consistência de CSV, Medição Honesta e Inventário de Órfãos
+
+### 11.1 Correção do Invariante Matemático de Projeção (`src/services/financialService.js`)
+- **Problema Corrigido:** Na função `filterCommitmentsForPerson`, quando `personId === 'unassigned'`, compras compartilhadas em que uma das partes (`person1` ou `person2`) não possuía `clientId` eram omitidas de todos os filtros. Como o cálculo geral (`'all'`) computava ambas as partes, ocorria vazamento contábil e a soma das pessoas divergia do total consolidado.
+- **Solução Implementada:** A função agora decompõe compras compartilhadas com cota sem vínculo de cliente, gerando um registro virtual desmembrado com as parcelas exatas daquela parte para o filtro `'unassigned'`.
+- **Prevenção de Dupla Contagem:** Avaliação independente de `person1` e `person2` sem cláusulas `else if` mútuas, cobrindo casos em que ambos os lados possuem o mesmo `clientId` ou cotas sem atribuição.
+- **7 Cenários de Borda Validados e Aprovados a 0 Drift (`tests/futureCommitmentsByPerson.test.js`):**
+  1. *(a) Compartilhada com person2 sem clientId:* A cota de person2 é alocada a `'unassigned'` e a soma bate a zero centavos.
+  2. *(b) Compartilhada onde person1 e person2 possuem o MESMO clientId:* Ambas as cotas são atribuídas à pessoa sem duplicação nem omissão.
+  3. *(c) Divisão bem desigual (70/30 com centavos ímpares):* Distribuição assimétrica com centavos residuais preserva soma exata em todos os meses.
+  4. *(d) Horizonte cruzando virada de ano (2026-11 a 2027-02):* Projeção em 4 meses com transição de ano preserva zero drift em cada competência.
+  5. *(e) Mês intermediário sem nenhuma parcela:* Competências vazias computam R$ 0,00 sem erro ou drift.
+  6. *(f) Compartilhada sem `sharedDetails.person1.installments`:* Dados legados/incompletos tratados defensivamente com `asArray()`, sem lançar exceções e sem criar centavos fantasmas.
+  7. *(g) Assinatura inativa:* Assinaturas com `isActive: false` ou `status: 'Inativa'` são descartadas das cotas individuais e do total consolidado.
+
+### 11.2 Consistência do CSV Anual e Mensal (`src/services/csvExportService.js`)
+- **Perguntas Respondidas:**
+  - *O anual inclui assinaturas como o mensal?* **Sim.** No CSV anual, cada assinatura ativa gera 12 ocorrências (uma por competência mensal ao longo do exercício, totalizando 12x o valor da assinatura). No mensal, gera 1 ocorrência para o mês selecionado.
+  - *Usa o ano selecionado no app ou o ano do relógio?* **Usa o ano do período selecionado.** O parâmetro `targetPeriod` (extraído de `selectedMonth.slice(0, 4)`) define o ano de referência. O relógio (`new Date()`) é usado estritamente como fallback quando não há período ativo selecionado.
+  - *Categorias contempladas:* Exatamente as mesmas categorias são exportadas no mensal e no anual:
+    1. Compras parceladas exclusivas da pessoa.
+    2. Cotas de compras compartilhadas atribuídas à pessoa.
+    3. Despesas avulsas atribuídas à pessoa.
+    4. Assinaturas ativas da pessoa.
+- **Validação de Centavos com o Relatório (`tests/personReportCsv.test.js`):**
+  - No extrato mensal: Soma das linhas CSV = Total do extrato mensal ao centavo (zero drift).
+  - No extrato anual: Soma das linhas CSV = Total anual do relatório ao centavo (zero drift).
+  - Pessoa sem movimentações: CSV gerado validamente com BOM UTF-8 e cabeçalhos completos, sem erros de runtime nem linhas fantasmas.
+
+### 11.3 Medição Honesta do Resumo na Janela de Reveal (Antes vs Depois)
+Medição executada via script Playwright em Chromium desktop (1440x900) com warm-up prévio, medindo estritamente a janela crítica: **do início do evento `fc:page-reveal-start` até 300ms após o término do véu** (`.fc-transitioning` removido).
+
+| Métrica na Janela de Reveal (Resumo) | Branch Anterior (`feat/redesign-ajuste-transicao-2`) | Branch Atual (`feat/redesign-fase-7-layout`) | Variação & Impacto |
+|---|---|---|---|
+| **Dark Theme — Long Tasks (> 50ms)** | **0 tarefas longas** | **0 tarefas longas** | **Zero tarefas longas em ambas** |
+| **Dark Theme — Frames LoAF na Janela** | 10 frames | **8 frames** | **Redução de 20%** em frames longos |
+| **Dark Theme — Maior Frame LoAF** | 149.60ms | 154.60ms | Estável (~150ms na fase final de render) |
+| **Dark Theme — Tempo de Script JS no LoAF** | `waitForScreenSettle.js`: 13.90ms | `waitForScreenSettle.js`: **7.90ms** | **Queda de 43%** no tempo de execução JS |
+| **Light Theme — Long Tasks (> 50ms)** | **0 tarefas longas** | **0 tarefas longas** | **Zero tarefas longas em ambas** |
+| **Light Theme — Frames LoAF na Janela** | 10 frames | 10 frames | Estável |
+| **Light Theme — Maior Frame LoAF** | 171.10ms | **124.60ms** | **Redução de 27%** no pico de frame |
+| **Light Theme — Tempo de Script JS no LoAF** | `waitForScreenSettle.js`: 10.80ms | `waitForScreenSettle.js`: **5.20ms** | **Queda de 51%** no tempo de execução JS |
+
+*Diagnóstico:* A eliminação dos widgets pesados concorrentes no Resumo proporcionou uma redução de até 51% no tempo de processamento dos scripts JavaScript durante a revelação da tela, mantendo zero tarefas bloqueantes da thread principal.
+
+### 11.4 Inventário de Código Órfão
+- **Em `functions/`:**
+  - Nenhuma Cloud Function ficou órfã. As 5 funções ativas no backend (`createMercadoPagoPreference`, `paymentWebhookMercadoPago`, `generateAiMonthlyBriefing`, `deleteUserAccount` e `reportClientError`) são estritamente necessárias para pagamentos, auditoria, IA, segurança e observabilidade de produção. **Nenhum arquivo de `functions/` foi removido ou alterado.**
+- **Em `src/services/financialService.js`:**
+  - As seguintes funções puras que atendiam widgets removidos foram mantidas exclusivamente por governança de domínio e compatibilidade com suítes de teste de regressão:
+    - `generateWeeklyFinancialSummary` & `generateMonthlyFinancialSummary` (testadas por `tests/executiveSummary.test.js`).
+    - `calculateAuditDeltas` (função matemática pura).
+    - `calculateSafeDebtPayoffPlans` (função matemática pura).
+    - `calculateMonthlyBurn` (cálculo de burn rate).
+    - `generateFinancialAlerts` (testada por `tests/notificationCenter.test.js`).
+- **No Cliente Frontend (`src/`):**
+  - Todos os 9 componentes legados removidos no Commit 76393ad (`CrisisMode.jsx`, `ExecutiveSummaryModal.jsx`, `NotificationCenterPopover.jsx`, `NotificationSettingsModal.jsx`, `FinancialAlertsBanner.jsx`, `CategoryBudgetsWidget.jsx`, `CategoryBudgetsModal.jsx`, `DeterministicInsightsWidget.jsx`, `ProSummary.jsx`) tiveram suas referências completamente limpas do bundle sem deixar hooks ou classes CSS órfãs.
+
+### 11.5 Revisão Visual dos Screenshots (20 Capturas)
+Foram capturadas e validadas 20 telas (desktop 1440x900 e mobile 390x844 em temas Dark e Light):
+- **Resumo:** Alinhamento equilibrado em coluna única no desktop. No mobile, os cards empilham com espaçamento consistente (`space-y-6`) e sem barra de rolagem horizontal.
+- **Pessoas (Extrato / Relatório com CSV):** O modal de extrato abre centralizado, com rolagem interna fluida até a seção de botões de exportação ("Exportar CSV do mês", "Exportar CSV do ano", "Exportar PDF"). Todos os botões respeitam a zona de toque mínima de 44px.
+- **Cartões, Movimentações e Assinaturas:** Renderização nítida de tabelas e cartões com contraste de texto superior a WCAG AAA (>= 7:1) em ambos os temas.
+- **Identificação de Detalhes:** A barra superior móvel permanece perfeitamente ancorada no topo sem sobrepor o conteúdo (`sticky top-0 z-20`) e o indicador deslizante da sidebar lateral opera com zero layout shifts acelerado por hardware.

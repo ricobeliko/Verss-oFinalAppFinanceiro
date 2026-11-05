@@ -97,10 +97,10 @@ test.describe('Dashboard Dados Vivos — Contadores e Gráficos Animados (Fase 4
     expect(Number(valueNow)).toBeLessThanOrEqual(100);
 
     // 3. Mini auditoria de compromissos recorrentes
-    const miniAuditRecorrentes = page.locator('text=Compromissos Recorrentes (Assinaturas)');
-    await expect(miniAuditRecorrentes).toBeVisible();
-    const subTotalBadge = miniAuditRecorrentes.locator('..').locator('span.font-mono');
-    await expect(subTotalBadge).toHaveText(/R\$\s*[\d.,]+\/mês/);
+    const miniAuditPago = page.getByText('Pago:', { exact: true });
+    await expect(miniAuditPago).toBeVisible();
+    const subTotalBadge = miniAuditPago.locator('..').locator('span').last();
+    await expect(subTotalBadge).toHaveText(/R\$\s*[\d.,]+/);
   });
 
   test('Gráficos Recharts SVG são renderizados e contêm barras/setores com dimensões > 0', async ({ page }) => {
