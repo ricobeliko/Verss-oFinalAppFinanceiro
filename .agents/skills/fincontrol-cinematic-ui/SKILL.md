@@ -374,3 +374,22 @@ Esta seção documenta a arquitetura dos cartões de métricas do topo do Resumo
   2. **Medição do ResponsiveContainer:** Aguarda a presença de nós `<svg>` filhos em todos os containers `.recharts-responsive-container`.
   3. **Estabilização de Estilos e Layout:** Executa dois quadros consecutivos de animação (`double rAF`).
 - O evento `fc:page-reveal-start` só é despachado após a total estabilização da árvore DOM. Consequentemente, contadores numéricos (`AnimatedCurrency`), barras de progresso e animações de entrada iniciam suavemente na descida da cortina, sem disputa de thread com o layout do Recharts e com zero Long Tasks (> 50ms).
+
+---
+
+## 12. Identidade Visual da Marca & Favicon em Ondas (Fase Ícone)
+
+### 1. Diretriz de Favicon Estático
+- **O favicon da aba do navegador é 100% estático:** Favicons animados são má prática de UX e causam consumo parasitário de CPU no processo do navegador.
+- Arquivos servidos com cache longo (`public, max-age=31536000, immutable`) e bust de cache via query string versionada `?v=1` (`favicon.svg?v=1`, `favicon-32.png?v=1`, etc.).
+- Variante iOS (`apple-touch-icon.png`) em **full-bleed** (quadrado sem cantos arredondados, pois o sistema operacional aplica a máscara arredondada nativamente).
+- Variante adaptativa PWA Android (`icon-maskable-512.png`) com ondas rigorosamente centralizadas na **zona segura de 80%**.
+
+### 2. Marca Viva no App (`FinControlMark`)
+- O movimento das ondas pertence **exclusivamente à marca dentro do app**:
+  - **Login / AuthScreen:** Marca grande em destaque (`size={56}`) com animação contínua suave das três ondas (`animated={true}`).
+  - **Sidebar / Shell:** Marca compacta (`size={36}`) estática por padrão, ativando movimento suave apenas sob hover (`hoverAnimated={true}`).
+- **Motion na GPU (Zero rAF):** A animação utiliza pura translação periódica horizontal (`transform: translate3d(-352px, 0, 0)` até `0`) com períodos defasados (8.5s, 10.5s e 12.5s) e recorte via SVG `<clipPath>`.
+- **Acessibilidade & Reduced Motion:**
+  - `role="img"` com `aria-label="FinControl"` quando isolado; `aria-hidden="true"` quando acompanhado do nome em texto.
+  - Sob `prefers-reduced-motion: reduce`, o CSS anula todas as animações (`animation: none !important; transform: none !important;`), mantendo a marca perfeitamente estática e idêntica ao favicon.

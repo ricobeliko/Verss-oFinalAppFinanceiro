@@ -369,5 +369,125 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
 
     await setupSession('light', { width: 390, height: 844 });
     await page.screenshot({ path: 'screenshots/mobile-light-6m.png', fullPage: true });
+   });
+  test('08. Fase Ícone — Contact sheet dos ícones (16/32/48/180/512) e marca no login e sidebar', async ({ page }) => {
+    test.setTimeout(60000);
+
+    // 1. Contact sheet comparativo de todos os ícones estáticos em superfícies escura e clara
+    await page.setViewportSize({ width: 1200, height: 800 });
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const toB64 = (filename) => {
+      const b = fs.readFileSync(path.resolve('public', filename));
+      return `data:image/png;base64,${b.toString('base64')}`;
+    };
+    const b16 = toB64('favicon-16.png');
+    const b32 = toB64('favicon-32.png');
+    const b48 = toB64('favicon-48.png');
+    const b180 = toB64('apple-touch-icon.png');
+    const b192 = toB64('icon-192.png');
+    const b512 = toB64('icon-512.png');
+    const bMaskable = toB64('icon-maskable-512.png');
+
+    const contactSheetHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Contact Sheet — Ícones FinControl</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #020B0F; color: #EAF7F7; padding: 40px; }
+    h1 { font-size: 24px; margin-bottom: 24px; color: #5CCCCC; }
+    .surface { padding: 30px; border-radius: 16px; margin-bottom: 30px; }
+    .surface.dark { background: #04171F; border: 1px solid rgba(140, 220, 225, 0.15); }
+    .surface.light { background: #E6F4F7; color: #0B2530; border: 1px solid rgba(8, 60, 72, 0.15); }
+    .grid { display: flex; align-items: flex-end; gap: 32px; flex-wrap: wrap; }
+    .item { text-align: center; }
+    .item span { display: block; margin-top: 10px; font-size: 12px; opacity: 0.8; }
+    img { display: inline-block; vertical-align: bottom; image-rendering: auto; }
+    .pixelated { image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h1>FinControl — Contact Sheet de Favicons e Ícones de Aplicação</h1>
+
+  <div class="surface dark">
+    <h3>Superfície Escura (#04171F - Abyss Teal)</h3>
+    <div class="grid">
+      <div class="item"><img src="${b16}" width="16" height="16"><span>16x16</span></div>
+      <div class="item"><img src="${b32}" width="32" height="32"><span>32x32</span></div>
+      <div class="item"><img src="${b48}" width="48" height="48"><span>48x48</span></div>
+      <div class="item"><img src="${b180}" width="90" height="90"><span>180x180 (Apple)</span></div>
+      <div class="item"><img src="${b192}" width="96" height="96"><span>192x192 (PWA)</span></div>
+      <div class="item"><img src="${b512}" width="128" height="128"><span>512x512 (PWA)</span></div>
+      <div class="item"><img src="${bMaskable}" width="128" height="128"><span>Maskable 512</span></div>
+    </div>
+  </div>
+
+  <div class="surface light">
+    <h3>Superfície Clara (#E6F4F7 - Crisp Teal)</h3>
+    <div class="grid">
+      <div class="item"><img src="${b16}" width="16" height="16"><span>16x16</span></div>
+      <div class="item"><img src="${b32}" width="32" height="32"><span>32x32</span></div>
+      <div class="item"><img src="${b48}" width="48" height="48"><span>48x48</span></div>
+      <div class="item"><img src="${b180}" width="90" height="90"><span>180x180 (Apple)</span></div>
+      <div class="item"><img src="${b192}" width="96" height="96"><span>192x192 (PWA)</span></div>
+      <div class="item"><img src="${b512}" width="128" height="128"><span>512x512 (PWA)</span></div>
+      <div class="item"><img src="${bMaskable}" width="128" height="128"><span>Maskable 512</span></div>
+    </div>
+  </div>
+</body>
+</html>`;
+    await page.setContent(contactSheetHtml);
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: 'screenshots/contact-sheet-icons.png', fullPage: true });
+
+    // 2. Tela de login em Dark e Light Mode
+    await page.goto('/login');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.classList.add('dark');
+    });
+    await page.screenshot({ path: 'screenshots/brand-login-dark.png', fullPage: true });
+
+    await page.evaluate(() => {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.classList.remove('dark');
+    });
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: 'screenshots/brand-login-light.png', fullPage: true });
+
+    // 3. Marca na Sidebar (Dark e Light)
+    const demoData = getDemoData('2026-11');
+    const setupDashboard = async (theme) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.addInitScript(({ th, d }) => {
+        localStorage.setItem('theme', th);
+        const user = { uid: 'u-brand', email: 'user@fincontrol.app', plan: 'pro' };
+        window.__FINCONTROL_E2E_USER__ = user;
+        window.__FINCONTROL_E2E_MOCK_DATA__ = d;
+        sessionStorage.setItem('fincontrol_e2e_user', JSON.stringify(user));
+        sessionStorage.setItem('fincontrol_e2e_plan', 'pro');
+        sessionStorage.setItem('fincontrol_e2e_data', JSON.stringify(d));
+      }, { th: theme, d: demoData });
+      await page.goto('/dashboard');
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1000);
+      await page.evaluate((th) => {
+        document.documentElement.setAttribute('data-theme', th);
+        if (th === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, theme);
+      await page.waitForTimeout(300);
+    };
+
+    await setupDashboard('dark');
+    const sidebarDark = page.locator('aside');
+    await sidebarDark.screenshot({ path: 'screenshots/brand-sidebar-dark.png' });
+
+    await setupDashboard('light');
+    const sidebarLight = page.locator('aside');
+    await sidebarLight.screenshot({ path: 'screenshots/brand-sidebar-light.png' });
   });
 });
