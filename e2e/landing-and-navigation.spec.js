@@ -257,4 +257,68 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
       expect(animName).toBe('none');
     }
   });
+
+  test('Simulador de Divisão Exata: corrige bug do 11000, valida digitação, estado vazio e divisão de 5 pessoas', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    const sharedSection = page.locator('#shared-purchases');
+    await expect(sharedSection).toBeVisible();
+    await sharedSection.scrollIntoViewIfNeeded();
+
+    const input = sharedSection.locator('input[type="text"]');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue('1.000,00');
+
+    // Estado inicial: 3 pessoas, total 1.000,00 -> 333,34 / 333,33 / 333,33
+    await expect(sharedSection.locator('text=R$ 333,34')).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 333,33').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+
+    // 1. Testa reprodução do bug antigo: apagar tudo e digitar 1000 não pode virar 11000
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await input.pressSequentially('1000', { delay: 50 });
+    await page.locator('body').click(); // dispara onBlur
+
+    // Verifica que formatou para 1.000,00 e não 11.000,00
+    await expect(input).toHaveValue('1.000,00');
+
+    // Clica no botão de 2 pessoas
+    const btn2 = sharedSection.getByRole('button', { name: '2 pessoas' });
+    await btn2.click();
+    await expect(btn2).toHaveAttribute('aria-pressed', 'true');
+    // 2 pessoas com 1.000,00 -> cada uma R$ 500,00
+    await expect(sharedSection.locator('text=R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+
+    // 2. Testa estado vazio: apagar tudo
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.locator('body').click(); // dispara onBlur
+
+    // Cards exibem "Informe um valor" e auditoria exibe "—"
+    await expect(sharedSection.locator('text=Informe um valor').first()).toBeVisible();
+    await expect(sharedSection.locator('text=—').first()).toBeVisible();
+
+    // 3. Testa valor com centavos e 5 pessoas: 1.234,56
+    await input.click();
+    await input.pressSequentially('1234,56', { delay: 50 });
+    await page.locator('body').click(); // dispara onBlur
+    await expect(input).toHaveValue('1.234,56');
+
+    const btn5 = sharedSection.getByRole('button', { name: '5 pessoas' });
+    await btn5.click();
+    await expect(btn5).toHaveAttribute('aria-pressed', 'true');
+
+    // 1234,56 / 5 = 246,91 com resto de 1 centavo: primeiro recebe 246,92 e demais 246,91
+    await expect(sharedSection.locator('text=R$ 246,92')).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 246,91').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.234,56').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+  });
 });

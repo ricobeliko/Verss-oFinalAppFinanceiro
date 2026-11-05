@@ -1,29 +1,36 @@
 // src/features/landing/components/SharedPurchaseSection.jsx
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { FiUsers, FiCheck, FiShield } from 'react-icons/fi';
+import {
+  parseCurrencyToCents,
+  splitExactCents,
+  formatCentsDisplay,
+  formatCentsForInput,
+  MAX_INPUT_LENGTH,
+} from '../lib/splitExactCents';
 
 export default function SharedPurchaseSection() {
-  const [totalAmount, setTotalAmount] = useState(1000);
+  const [inputValue, setInputValue] = useState('1.000,00');
   const [peopleCount, setPeopleCount] = useState(3);
 
-  // FinControl exact integer cent split logic
-  const calculateExactSplit = (total, count) => {
-    const totalCents = Math.round(total * 100);
-    const baseCents = Math.floor(totalCents / count);
-    const remainder = totalCents % count;
+  const inputId = useId();
+  const helpId = useId();
 
-    const shares = [];
-    for (let i = 0; i < count; i++) {
-      // First 'remainder' people get base + 1 cent
-      const cents = i < remainder ? baseCents + 1 : baseCents;
-      shares.push((cents / 100).toFixed(2));
+  const totalCents = parseCurrencyToCents(inputValue);
+  const splitResult = totalCents !== null ? splitExactCents(totalCents, peopleCount) : null;
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    if (val.length <= MAX_INPUT_LENGTH) {
+      setInputValue(val);
     }
-    return shares;
   };
 
-  const shares = calculateExactSplit(totalAmount, peopleCount);
-  const sumOfShares = shares.reduce((acc, curr) => acc + parseFloat(curr), 0).toFixed(2);
-  const drift = (parseFloat(sumOfShares) - totalAmount).toFixed(2);
+  const handleBlur = () => {
+    if (totalCents !== null) {
+      setInputValue(formatCentsForInput(totalCents));
+    }
+  };
 
   const mockNames = ['Você', 'Lucas', 'Mariana', 'Beatriz', 'Felipe'];
 
@@ -104,33 +111,51 @@ export default function SharedPurchaseSection() {
             {/* Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
+                <label
+                  htmlFor={inputId}
+                  className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2"
+                >
                   Valor Total da Compra (R$)
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--fc-text-muted)]">
+                <div className="relative flex items-center bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl focus-within:border-[var(--fc-accent)] focus-within:ring-1 focus-within:ring-[var(--fc-accent)] transition-colors">
+                  <span className="pl-3 pr-1 text-xs font-medium text-[var(--fc-text-muted)] select-none">
                     R$
                   </span>
                   <input
-                    type="number"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(Math.max(1, Number(e.target.value)))}
-                    className="w-full bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl py-2 pl-9 pr-3 text-sm text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] focus:outline-none"
+                    id={inputId}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={inputValue}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="1.000,00"
+                    aria-describedby={helpId}
+                    className="w-full bg-transparent border-0 py-2.5 pr-3 text-sm text-[var(--fc-text-primary)] focus:outline-none tabular-nums"
                   />
                 </div>
+                <span id={helpId} className="sr-only">
+                  Digite o valor total em reais para calcular a divisão exata em centavos
+                </span>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
                   Pessoas na Divisão ({peopleCount})
                 </label>
-                <div className="flex items-center gap-2">
+                <div
+                  role="group"
+                  aria-label="Pessoas na divisão"
+                  className="flex items-center gap-2"
+                >
                   {[2, 3, 4, 5].map((cnt) => (
                     <button
                       key={cnt}
                       type="button"
                       onClick={() => setPeopleCount(cnt)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      aria-pressed={peopleCount === cnt}
+                      aria-label={`${cnt} pessoas`}
+                      className={`min-h-[44px] min-w-[44px] flex-1 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                         peopleCount === cnt
                           ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
                           : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
@@ -148,40 +173,65 @@ export default function SharedPurchaseSection() {
               <div className="text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider mb-2">
                 Resultado por Pessoa:
               </div>
-              {shares.map((share, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)]"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-[var(--fc-accent-soft)] text-xs font-bold text-[var(--fc-accent)] flex items-center justify-center">
-                      {idx + 1}
+              <div aria-live="polite" className="space-y-2.5">
+                {splitResult ? (
+                  splitResult.sharesCents.map((shareCents, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)]"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-6 h-6 rounded-full bg-[var(--fc-accent-soft)] text-xs font-bold text-[var(--fc-accent)] flex items-center justify-center">
+                          {idx + 1}
+                        </div>
+                        <span className="text-xs font-medium text-[var(--fc-text-primary)]">
+                          {mockNames[idx] || `Pessoa ${idx + 1}`}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-[var(--fc-text-primary)] font-mono tabular-nums">
+                          {formatCentsDisplay(shareCents)}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-xs font-medium text-[var(--fc-text-primary)]">
-                      {mockNames[idx] || `Pessoa ${idx + 1}`}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-[var(--fc-text-primary)] font-mono">
-                      R$ {share.replace('.', ',')}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                  ))
+                ) : (
+                  Array.from({ length: peopleCount }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] opacity-70"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-6 h-6 rounded-full bg-[var(--fc-surface-1)] text-xs font-bold text-[var(--fc-text-muted)] flex items-center justify-center">
+                          {idx + 1}
+                        </div>
+                        <span className="text-xs font-medium text-[var(--fc-text-muted)]">
+                          {mockNames[idx] || `Pessoa ${idx + 1}`}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-medium text-[var(--fc-text-muted)] italic">
+                          Informe um valor
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             {/* Math Audit Box */}
             <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Soma das Parcelas</span>
-                <span className="text-sm font-bold text-[var(--fc-success)] font-mono">
-                  R$ {sumOfShares.replace('.', ',')}
+                <span className="text-sm font-bold text-[var(--fc-success)] font-mono tabular-nums">
+                  {splitResult ? formatCentsDisplay(splitResult.sumCents) : '—'}
                 </span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Diferença Residual</span>
-                <span className="text-sm font-bold text-[var(--fc-accent)] font-mono">
-                  R$ {drift.replace('.', ',')}
+                <span className="text-sm font-bold text-[var(--fc-accent)] font-mono tabular-nums">
+                  {splitResult ? formatCentsDisplay(splitResult.driftCents) : '—'}
                 </span>
               </div>
             </div>
