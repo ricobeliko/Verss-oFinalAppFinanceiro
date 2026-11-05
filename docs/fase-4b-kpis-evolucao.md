@@ -1,4 +1,4 @@
-# FinControl — Fase 4B: KPIs Vivos e Evolução Mensal
+# FinControl — Fase 4B & 4B.1: KPIs Vivos, Evolução Mensal e Coerência Fatura x Série
 
 **Branch:** `feat/redesign-fase-4b-kpis-evolucao`  
 **Base:** `feat/redesign-fase-7-layout` (`ace7668`)  
@@ -7,19 +7,36 @@
 
 ---
 
-## 1. Resumo Executivo da Fase 4B
+## 1. Resumo Executivo da Entrega
 
-A **Fase 4B** do Redesign do FinControl eleva a experiência do dashboard principal (*Resumo*), tornando-o vivo, dinâmico e hipnotizante sem abrir mão de nenhuma das diretrizes inegociáveis de **Zero Drift Financeiro**, **Product Proof Factual** e **Isolamento de Produção** estabelecidas na Constituição do FinControl (`AGENTS.md`).
+A **Fase 4B e 4B.1** do Redesign do FinControl eleva a experiência do dashboard principal (*Resumo*), tornando-o vivo, dinâmico e hipnotizante, mantendo total rigor com as diretrizes inegociáveis de **Zero Drift Financeiro**, **Product Proof Factual** e **Estabilidade de Produção** estabelecidas na Constituição do FinControl (`AGENTS.md`).
 
-### Principais Entregas:
-1. **Commit 0 (`1e410db`):** Fix de dia válido de mês no exportador CSV (`clampDayOfMonth` para 28/29 de fevereiro e meses de 30 dias) e proteção de integridade em `filterCommitmentsForPerson` para compras compartilhadas com participantes apontando para clientes excluídos/órfãos via `knownClientIds`, garantindo que caiam em "Sem atribuição" e preservem o invariante de soma 100% das vezes.
-2. **Commit A (`6b5a0ec`):** Função matemática centralizada `calculateMonthlySeries` em `src/services/financialService.js`, calculando séries cronológicas mensais (passadas e projetadas) em centavos inteiros com variação percentual/absoluta MoM, proteção contra divisão por zero, e prova matemática de invariantes.
-3. **Commit B (`061b65d`):** Criação dos componentes de design system:
-   - `Sparkline.jsx`: mini-gráfico SVG leve com gradiente de área e animação de traçado CSS fluida com fallback acessível.
-   - `SegmentedControl.jsx`: alternador em pill acessível (WAI-ARIA `radiogroup`/`radio`), com suporte a teclado (Setas, Home, End), indicador deslizante via GPU e touch target >= 44px.
-   - `KpiCard.jsx`: card unificado com `AnimatedCurrency`, tons semânticos, badge MoM, sparkline integrada e efeito *spotlight glow* que acompanha o cursor via `requestAnimationFrame` sem loop ocioso.
-4. **Commit C (`5191668`):** Integração no `Dashboard.jsx`: substituição dos cards estáticos de Fatura Total e Progresso de Pagamento por `KpiCard`s e adição do componente em destaque `MonthlyEvolutionChart.jsx` com Recharts AreaChart, alternador de métricas (Total, Parcelas, Assinaturas), período (6m/12m), filtro por pessoa, nota factual de assinaturas ativas e tabela `sr-only` para leitores de tela.
-5. **Commit D:** Suite de testes Playwright E2E (`e2e/kpis-and-evolution.spec.js`), script de demonstração no console do navegador, medições reais de transição sob o véu líquido, documentação completa e atualização da skill `fincontrol-cinematic-ui`.
+### Histórico de Commits:
+
+#### Fase 4B:
+1. **Commit 0 (`1e410db`):** Fix de dia válido de mês no exportador CSV (`clampDayOfMonth` para anos bissextos e meses de 30 dias) e proteção de integridade em `filterCommitmentsForPerson` para compras compartilhadas com participantes órfãos via `knownClientIds`.
+2. **Commit A (`6b5a0ec`):** Função matemática centralizada `calculateMonthlySeries` em `src/services/financialService.js`, calculando séries cronológicas mensais passadas e futuras em centavos inteiros com variação MoM e prova de invariantes.
+3. **Commit B (`061b65d`):** Componentes de design system: `Sparkline.jsx` (traçado SVG CSS com fallback), `SegmentedControl.jsx` (radiogroup WAI-ARIA, teclado e sliding pill GPU) e `KpiCard.jsx` (AnimatedCurrency, spotlight cursor glow via rAF pontual).
+4. **Commit C (`5191668`):** Integração no `Dashboard.jsx`: substituição de cards estáticos por `KpiCard`s e adição do gráfico de destaque `MonthlyEvolutionChart.jsx` (Recharts AreaChart, métricas, períodos 6m/12m, filtro por pessoa e tabela `sr-only`).
+5. **Commit D (`1cfcd21`):** Testes unitários iniciais, E2E preliminar e documentação base.
+
+#### Fase 4B.1 (Refinamento e Endurecimento):
+6. **Commit 1 (`a3f5ff8`):** `fix(resumo): série e KPI na mesma base, com despesas e filtros`
+   - Unificação de cálculos através de uma fonte única e pura da verdade: `calculateInvoiceBreakdownForMonth` em `src/services/financialService.js`.
+   - Inclusão da métrica **"Despesas avulsas"** no gráfico e na série.
+   - Suporte completo ao filtro de cartão e à regra de rollover da data de vencimento da fatura com base no dia de fechamento (`closingDay`).
+   - Coerência matemática absoluta entre o card de KPI da fatura e o ponto do mês no gráfico de evolução.
+7. **Commit 2 (`84c23d3`):** `fix(ui): variação indefinida sem percentual inventado`
+   - Eliminação de percentuais fictícios (`+100%`) e setas enganosas quando o mês anterior tem total zero.
+   - Definição canônica: `percentage: null`, `label: '—'`, `direction: 'neutral'` e texto descritivo com variação absoluta factual `+ R$ X vs. mês anterior` (ou `'Sem variação'` se ambos forem zero).
+8. **Commit 3 (`26ed5d9`):** `test: dados de demonstração no formato real e E2E que confere valores`
+   - Conjunto de dados sintéticos em formato canônico real (`e2e/fixtures/demoData.js`), cobrindo 8 meses, 3 pessoas, 2 cartões, compras compartilhadas e despesas avulsas.
+   - Suíte Playwright E2E em `e2e/kpis-and-evolution.spec.js` validando valores exatos ao centavo (`R$ 2.060,20` consolidado, `R$ 1.010,40` Mariana, `R$ 444,90` Carlos, `R$ 219,90` unassigned), alternância de métricas/períodos e execução real do snippet no console.
+9. **Commit 4 (`232623c`):** `perf(resumo): gráficos montam sob o véu`
+   - Otimização cinematográfica de transição com montagem sob o véu: `waitForScreenSettle.js` aguarda o desaparecimento de skeletons, a renderização dos nós `<svg>` de todos os `.recharts-responsive-container` e executa um duplo rAF antes de disparar `fc:page-reveal-start`.
+   - Elimina disputas de thread principal durante a descida da onda translúcida.
+10. **Commit 5:** `docs: fase 4B.1 coerência KPI x série, demo e transição`
+    - Atualização de screenshots em alta resolução, skill `fincontrol-cinematic-ui` e documentação técnica completa.
 
 ---
 
@@ -27,11 +44,11 @@ A **Fase 4B** do Redesign do FinControl eleva a experiência do dashboard princi
 
 Todos os valores exibidos nos novos cards são derivados puramente de dados já carregados pelos hooks em memória, sem gerar novas leituras no Cloud Firestore:
 
-| KPI | Origem dos Dados | Cálculo / Serviço | Apresentação |
+| KPI | Origem dos Dados | Cálculo / Serviço Central | Apresentação |
 |---|---|---|---|
-| **Fatura Total do Mês** | `summary.totalFatura` | `calculateMonthlyComparisonSummary` & `calculateMonthlySeries` | `KpiCard` com tom `accent`, `AnimatedCurrency`, Badge de variação MoM (`delta`), Sparkline histórica de 6 meses e Spotlight Glow. |
+| **Fatura Total do Mês** | `loans`, `subscriptions`, `expenses`, filtros ativos | `calculateInvoiceBreakdownForMonth` & `calculateMonthlyComparisonSummary` | `KpiCard` com tom `accent`, `AnimatedCurrency`, Badge de variação MoM (`delta`), Sparkline histórica de 6 meses e Spotlight Glow. |
 | **Progresso de Pagamento** | `summary.totalRecebido`, `summary.totalPendente` | `summary.paidPercentage` (calculado em centavos inteiros) | `KpiCard` com tom `success`, `AnimatedCurrency` no valor quitado, `AnimatedProgressBar` sem reflow via `scaleX`, detalhamento de valores pagos/pendentes e Sparkline de parcelas. |
-| **Evolução Mensal de Compromissos** | `loans`, `subscriptions`, `selectedMonth` | `calculateMonthlySeries` | `MonthlyEvolutionChart` (Recharts AreaChart) com separação histórico vs. projeção futura, linha de referência no mês ativo, notas contextuais e tabela acessível. |
+| **Evolução Mensal de Compromissos** | `loans`, `subscriptions`, `expenses`, `selectedMonth` | `calculateMonthlySeries` (reutiliza `calculateInvoiceBreakdownForMonth`) | `MonthlyEvolutionChart` (Recharts AreaChart) com 4 métricas (*Total*, *Parcelas*, *Assinaturas*, *Despesas avulsas*), períodos 6m/12m, filtro por pessoa, `ReferenceLine` no mês ativo e tabela `sr-only`. |
 
 ---
 
@@ -39,209 +56,262 @@ Todos os valores exibidos nos novos cards são derivados puramente de dados já 
 
 ### 3.1. Zero Drift e Centavos Inteiros
 - Todas as operações monetárias ocorrem estritamente com inteiros em centavos (`toCents`, `fromCents`, `Math.round(value * 100)`).
-- Nenhum valor flutuante é acumulado.
+- Nenhum valor de ponto flutuante é acumulado.
 
-### 3.2. Invariante 1 — Ponto do Mês Corrente == KPI de Fatura Total
-O ponto da série mensal correspondente ao mês selecionado é matematicamente idêntico ao valor retornado por `calculateFutureCommitmentsForPerson`:
-$$\text{point}(\text{selectedMonth}).\text{totalCommitted} \equiv \text{faturaTotalDoMes}$$
-- **Verificação Automatizada:** Testado em `tests/monthlySeries.test.js` (cenário 8) e em `e2e/kpis-and-evolution.spec.js`.
+### 3.2. Invariante 1 — Coerência Absoluta: Ponto do Mês Corrente == KPI Fatura Total
+Pela unificação na função pura `calculateInvoiceBreakdownForMonth`, o ponto da série mensal correspondente ao mês selecionado é matematicamente idêntico ao KPI de Fatura Total do Resumo para qualquer combinação de filtros (Geral, Cartão Específico ou Pessoa Específica):
+$$\text{point}(\text{selectedMonth}).\text{totalCommitted} \equiv \text{summary.totalFatura} \quad (\pm 0\text{ centavos})$$
+- **Validação Automatizada:** Testado em `tests/monthlySeries.test.js` (cenários 8, 10, 11 e 12) e verificado ponta a ponta em `e2e/kpis-and-evolution.spec.js`.
 
 ### 3.3. Invariante 2 — Conservação de Soma por Pessoa
 Em todos os meses da série (passados e futuros), a soma de todos os clientes individuais mais os itens não atribuídos equivale exatamente ao total consolidado:
 $$\sum_{p \in \text{Clients}} \text{total}(p, M) + \text{total}(\text{'unassigned'}, M) \equiv \text{total}(\text{'all'}, M) \quad \forall M$$
-- **Verificação Automatizada:** Testado em `tests/monthlySeries.test.js` (cenário 9) para todos os meses simultaneamente.
+- **Validação Automatizada:** Testado em `tests/monthlySeries.test.js` (cenário 9) para todos os meses simultaneamente.
 
-### 3.4. Tratamento de Divisão por Zero em Variações MoM
-Quando o mês anterior tem total zero:
-- Se o mês atual também for zero: `percentage: null`, `label: '0,0%'`, `direction: 'neutral'`.
-- Se o mês atual for positivo: `percentage: null`, `label: '+100,0%'`, `direction: 'up'`.
-- Sob nenhuma hipótese o valor `NaN` ou `Infinity` atinge a interface.
-
----
-
-## 4. Resolução de Órfãos e Dia Válido no CSV (Commit 0)
-
-1. **Fix de Datas Válidas no CSV (`clampDayOfMonth`):**
-   - Assinaturas cadastradas no dia 29, 30 ou 31 agora têm seu dia ajustado para o último dia válido do mês selecionado.
-   - Em fevereiro de 2026 (ano padrão não-bissexto), dia 31 é clampeado para 28.
-   - Em fevereiro de 2024 (ano bissexto), dia 31 é clampeado para 29.
-   - Testado em `tests/personReportCsv.test.js` (11 testes aprovados).
-2. **Resolução de Participantes Órfãos em Compras Compartilhadas:**
-   - Empréstimos compartilhados cujos participantes possuem `clientId` inexistente na lista de clientes ativos (`knownClientIds`) agora são atribuídos com precisão a `'unassigned'` com suas respectivas cotas de parcela.
-   - Testado em `tests/futureCommitmentsByPerson.test.js` (12 testes aprovados).
+### 3.4. Invariante 3 — Delta MoM sem Métricas Fictícias (Base Zero)
+Quando o mês anterior possui total zero:
+- Se o mês atual também for zero: `percentage: null`, `label: 'Sem variação'`, `direction: 'neutral'`.
+- Se o mês atual for positivo: `percentage: null`, `label: '—'`, `direction: 'neutral'`, acompanhado do texto descritivo factual `+ R$ X vs. mês anterior`.
+- Proibida a exibição de `+100%`, `NaN`, `Infinity` ou setas verdes de aumento.
 
 ---
 
-## 5. Novos Componentes Visuais
+## 4. Benchmark de Transições: Antes vs. Depois da Montagem Sob o Véu
 
-### 5.1. `Sparkline` (`src/components/Sparkline.jsx`)
-- Renderização vetorial leve em SVG (largura 120px, altura 36px).
-- Curva com `strokeWidth={2}` e gradiente translúcido de preenchimento (`url(#fc-sparkline-gradient)`).
-- Animação CSS nativa `@keyframes fcSparklinePath` usando `stroke-dasharray: 200` e `stroke-dashoffset: 0`.
-- Desativação automática sob `prefers-reduced-motion: reduce`.
-- Atributos acessíveis `role="img"` e `aria-label` descritivo.
+As medições foram executadas no Chromium headless com `PerformanceObserver` nativo observando **Long Tasks (> 50ms)** e **Long Animation Frames (LoAF)** durante a janela crítica da revelação (*revealStart* até *veilEnd + 300ms*):
 
-### 5.2. `SegmentedControl` (`src/components/SegmentedControl.jsx`)
-- Padrão canônico WAI-ARIA `role="radiogroup"` e `role="radio"`.
-- Navegação completa por teclado com setas (`ArrowLeft`/`ArrowRight`/`ArrowUp`/`ArrowDown`), `Home` e `End`.
-- Indicador deslizante via GPU (`transform: translate3d(...)`) sem causar layout shift.
-- Altura mínima e touch target de 44px (`min-h-[44px]`) atendendo WCAG 2.5.5.
+### Comparativo de Performance:
 
-### 5.3. `KpiCard` (`src/components/KpiCard.jsx`)
-- Cartão executivo com tokens de superfície e borda Abyss Teal.
-- Camada *Spotlight Glow* que rastreia as coordenadas do cursor via `requestAnimationFrame` (máximo de 1 cálculo por frame, sem loop ocioso quando estático).
-- Badge semântico de variação MoM com seta direcional e contraste textual.
-- Elevação cinematográfica no hover (`hover:-translate-y-1`).
-- Suporte a `secondaryContent` para acomodar barras de progresso ou detalhes contextuais.
-
-### 5.4. `MonthlyEvolutionChart` (`src/components/MonthlyEvolutionChart.jsx`)
-- Gráfico Recharts `AreaChart` responsivo com gradiente vertical suave.
-- Seletor de métrica: Total, Parcelas ou Assinaturas.
-- Seletor de período: 6 meses (3 passados, atual, 2 futuros) ou 12 meses (6 passados, atual, 5 futuros).
-- Seletor de pessoas via pills horizontais táteis com suporte a teclado.
-- `ReferenceLine` destacada no mês ativo da navegação.
-- Nota de honestidade contratual: *"Nota: assinaturas refletem o valor contratual ativo."*
-- Tabela `table.sr-only` estruturada com todos os dados numéricos para acessibilidade universal.
-- Bloqueio contextual elegante `ProFeatureLock` para usuários sem plano Pro.
-
----
-
-## 6. Medições de Performance e Transições de Tela
-
-As medições foram executadas via script automatizado com Chromium headless e `PerformanceObserver` nativo para **Long Tasks (> 50ms)** e **Long Animation Frames (LoAF)** durante a janela crítica da transição sob o véu líquido (*revealStart* até *veilEnd + 300ms*):
-
-| Transição | Tema | Janela Crítica | Long Tasks (> 50ms) | LoAF Máximo | Diagnóstico & Observações |
+| Cenário de Transição | Tema | Fase 4B Inicial (`1cfcd21`) | Fase 4B.1 Sob o Véu (`232623c`) | Redução de Travamentos | Diagnóstico Técnico |
 |---|---|---|---|---|---|
-| **Resumo → Pessoas** | Dark | 1.205,5ms | **0** | 297,6ms | Nenhuma tarefa longa na janela. Fluidez impecável na desmontagem e montagem sob o véu. |
-| **Pessoas → Resumo** | Dark | 1.359,1ms | 3 (53ms - 101ms) | 179,9ms | Re-renderização e layout dos nós Recharts + GSAP (7ms). Perfeita sincronia com descida da onda. |
-| **Resumo → Pessoas** | Light | 1.050,5ms | **0** | 171,4ms | Nenhuma tarefa longa na janela. Zero engasgos. |
-| **Pessoas → Resumo** | Light | 1.186,4ms | 3 (74ms) | 304,3ms | Montagem do módulo Resumo amortecida sob a opacidade de 92% da cortina. |
+| **Resumo → Pessoas** | Dark | 0 Long Tasks / LoAF 297ms | **0 Long Tasks / LoAF 169ms** | Fluidez total | Desmontagem leve com chunk já em memória. |
+| **Pessoas → Resumo** | Dark | 3 Long Tasks (53ms - 101ms) | **0 Long Tasks / LoAF 214ms** | **100% das Long Tasks eliminadas** | Recharts e React montam durante a opacidade total (92-96%). Na revelação, apenas o tick do GSAP (8ms) e double rAF (18ms) executam. |
+| **Cartões → Resumo** | Dark | 3 Long Tasks (60ms - 95ms) | **1 Long Task (64ms) / LoAF 213ms** | **67% de redução** | Montagem pesada do Resumo estabilizada sob o véu; revelação sem engasgos visuais. |
+| **Resumo → Pessoas** | Light | 0 Long Tasks / LoAF 171ms | **0 Long Tasks / LoAF 170ms** | Zero engasgos | Transição suave e estável. |
+| **Pessoas → Resumo** | Light | 3 Long Tasks (74ms) | **0 Long Tasks / LoAF 170ms** | **100% das Long Tasks eliminadas** | Renderização SVG do Recharts amortecida antes da descida da cortina. |
+| **Cartões → Resumo** | Light | 2 Long Tasks (68ms) | **0 Long Tasks / LoAF 200ms** | **100% das Long Tasks eliminadas** | Scripts na janela de revelação reduzidos a 7ms - 14ms. |
 
 ---
 
-## 7. Análise de Telas e Inspeção Visual
+## 5. Inspeção Visual e Screenshots
 
-Foram capturados screenshots em alta resolução cobrindo Desktop (1440x900) e Mobile (390x844) em Dark e Light mode:
-1. `desktop-dark-6m.png`: Contraste elevado, tipografia nítida, Sparklines visíveis e gráfico Recharts perfeitamente alinhado.
-2. `desktop-dark-12m.png`: Expansão suave da série para 12 meses, sem estouro de layout e sem rolagem horizontal indesejada.
-3. `desktop-light-6m.png`: Paleta Crisp Teal com contraste excelente nos badges e bordas sutis.
-4. `desktop-light-12m.png`: Consistência estética e legibilidade total das legendas e eixos.
-5. `mobile-dark-6m.png`: Layout empilhado responsivo, botões com touch targets confortáveis (>= 44px) e navegação limpa.
-6. `mobile-light-6m.png`: Nitidez preservada em viewport móvel com cards perfeitamente enquadrados.
+Foram capturados 8 screenshots em alta resolução cobrindo Desktop (1440x900) e Mobile (390x844) em Dark e Light mode:
+
+1. `desktop-dark-6m.png`: Contraste elevado Abyss Teal, Fatura Total em R$ 2.060,20 com badge de variação MoM, Sparklines ativas e gráfico Recharts alinhado com o mês ativo demarcado.
+2. `desktop-dark-12m.png`: Expansão da série histórica e projetada para 12 meses sem quebra de layout nem overflow horizontal.
+3. `desktop-dark-card-filter.png`: Filtro aplicado para o cartão *Nubank Ultravioleta*, recalculando instantaneamente o KPI da Fatura para R$ 1.115,30, a lista de pessoas e a série temporal.
+4. `desktop-light-6m.png`: Paleta Crisp Teal com contraste excelente, badges semânticos e bordas suaves.
+5. `desktop-light-12m.png`: Horizonte de 12 meses no modo claro com legibilidade intacta dos eixos e legendas.
+6. `desktop-light-card-filter.png`: Coerência do filtro de cartão em modo claro com valores perfeitamente sincronizados.
+7. `mobile-dark-6m.png`: Layout empilhado responsivo com botões de toque confortáveis (>= 44px) e tipografia escalonada.
+8. `mobile-light-6m.png`: Nitidez e preservação de contraste em viewport compacto móvel.
 
 ---
 
-## 8. Snippet do Console para Demonstração Interativa
+## 6. Snippet do Console para Demonstração Interativa
 
-Para testar imediatamente o FinControl com a suíte da Fase 4B completa no navegador (sem necessidade de cadastro ou conexão ao Firestore), abra o DevTools Console (F12) e cole o seguinte código:
+Para demonstrar imediatamente o FinControl com a suíte da Fase 4B.1 no navegador sem necessidade de autenticação no Firebase ou banco de dados externo, execute o código gerado a partir de `e2e/fixtures/demoData.js`:
 
 ```javascript
 (() => {
-  const mockClients = [
-    { id: 'client-1', name: 'Mariana Silva', phone: '11988887777' },
-    { id: 'client-2', name: 'Carlos Eduardo', phone: '11977776666' },
-    { id: 'client-3', name: 'Beatriz Costa', phone: '11966665555' }
-  ];
-  const mockCards = [
-    { id: 'card-1', name: 'Nubank Ultravioleta', limit: 15000, color: '#8A05BE', closingDay: 10, dueDay: 17 },
-    { id: 'card-2', name: 'XP Visa Infinite', limit: 25000, color: '#1A1A1A', closingDay: 5, dueDay: 12 }
-  ];
-  const mockLoans = [
-    {
-      id: 'loan-1',
-      description: 'MacBook Pro M3 Max',
-      cardId: 'card-1',
-      totalAmount: 1800000,
-      installmentsCount: 12,
-      installmentValue: 150000,
-      currentInstallment: 4,
-      startDate: '2026-08-10',
-      isMyDebt: true
-    },
-    {
-      id: 'loan-2',
-      description: 'Geladeira Inverter Compartilhada',
-      cardId: 'card-2',
-      totalAmount: 480000,
-      installmentsCount: 10,
-      installmentValue: 48000,
-      currentInstallment: 3,
-      startDate: '2026-09-05',
-      isShared: true,
-      splitOption: 'custom',
-      person1: { clientId: 'client-1', amount: 24000, percentage: 50 },
-      person2: { clientId: 'client-2', amount: 24000, percentage: 50 }
-    },
-    {
-      id: 'loan-3',
-      description: 'Passagens Aéreas Férias',
-      cardId: 'card-1',
-      totalAmount: 360000,
-      installmentsCount: 6,
-      installmentValue: 60000,
-      currentInstallment: 2,
-      startDate: '2026-10-15',
-      clientId: 'client-3',
-      isMyDebt: false
-    }
-  ];
-  const mockSubscriptions = [
-    { id: 'sub-1', name: 'Netflix Premium 4K', amount: 5990, value: 5990, dueDate: '15', cardId: 'card-1', status: 'Ativa', isActive: true },
-    { id: 'sub-2', name: 'Spotify Família', amount: 3490, value: 3490, dueDate: '10', cardId: 'card-2', status: 'Ativa', isActive: true, clientId: 'client-1' },
-    { id: 'sub-3', name: 'Amazon Prime', amount: 1990, value: 1990, dueDate: '25', cardId: 'card-1', status: 'Ativa', isActive: true }
-  ];
+  const demoData = {
+    clients: [
+      { id: "client-1", name: "Mariana Silva", phone: "11988887777" },
+      { id: "client-2", name: "Carlos Eduardo", phone: "11977776666" },
+      { id: "client-3", name: "Beatriz Costa", phone: "11966665555" }
+    ],
+    cards: [
+      { id: "card-1", name: "Nubank Ultravioleta", limit: 15000, color: "#8A05BE", closingDay: 10, dueDay: 17 },
+      { id: "card-2", name: "XP Visa Infinite", limit: 25000, color: "#1A1A1A", closingDay: 5, dueDay: 12 }
+    ],
+    loans: [
+      {
+        id: "loan-1",
+        description: "Notebook Dell Inspiron",
+        cardId: "card-1",
+        clientId: "client-1",
+        totalValue: 2400,
+        installmentsCount: 8,
+        installmentValue: 300,
+        status: "Ativo",
+        startDate: "2026-08-02",
+        firstDueDate: "2026-08-17",
+        purchaseType: "normal",
+        installments: [
+          { number: 1, value: 300, dueDate: "2026-08-17", status: "Paga", paidDate: "2026-08-15" },
+          { number: 2, value: 300, dueDate: "2026-09-17", status: "Paga", paidDate: "2026-09-15" },
+          { number: 3, value: 300, dueDate: "2026-10-17", status: "Paga", paidDate: "2026-10-15" },
+          { number: 4, value: 300, dueDate: "2026-11-17", status: "Pendente", paidDate: null },
+          { number: 5, value: 300, dueDate: "2026-12-17", status: "Pendente", paidDate: null },
+          { number: 6, value: 300, dueDate: "2027-01-17", status: "Pendente", paidDate: null },
+          { number: 7, value: 300, dueDate: "2027-02-17", status: "Pendente", paidDate: null },
+          { number: 8, value: 300, dueDate: "2027-03-17", status: "Pendente", paidDate: null }
+        ]
+      },
+      {
+        id: "loan-2",
+        description: "Geladeira French Door Compartilhada",
+        cardId: "card-2",
+        isShared: true,
+        splitOption: "custom",
+        totalValue: 5000,
+        installmentsCount: 10,
+        installmentValue: 500,
+        status: "Ativo",
+        startDate: "2026-09-01",
+        firstDueDate: "2026-09-12",
+        installments: [
+          { number: 1, value: 500, dueDate: "2026-09-12", status: "Paga" },
+          { number: 2, value: 500, dueDate: "2026-10-12", status: "Paga" },
+          { number: 3, value: 500, dueDate: "2026-11-12", status: "Pendente" },
+          { number: 4, value: 500, dueDate: "2026-12-12", status: "Pendente" },
+          { number: 5, value: 500, dueDate: "2027-01-12", status: "Pendente" },
+          { number: 6, value: 500, dueDate: "2027-02-12", status: "Pendente" },
+          { number: 7, value: 500, dueDate: "2027-03-12", status: "Pendente" },
+          { number: 8, value: 500, dueDate: "2027-04-12", status: "Pendente" },
+          { number: 9, value: 500, dueDate: "2027-05-12", status: "Pendente" },
+          { number: 10, value: 500, dueDate: "2027-06-12", status: "Pendente" }
+        ],
+        sharedDetails: {
+          person1: {
+            clientId: "client-1",
+            shareAmount: 3000,
+            sharePercentage: 60,
+            installments: [
+              { number: 1, value: 300, dueDate: "2026-09-12", status: "Paga" },
+              { number: 2, value: 300, dueDate: "2026-10-12", status: "Paga" },
+              { number: 3, value: 300, dueDate: "2026-11-12", status: "Pendente" },
+              { number: 4, value: 300, dueDate: "2026-12-12", status: "Pendente" },
+              { number: 5, value: 300, dueDate: "2027-01-12", status: "Pendente" },
+              { number: 6, value: 300, dueDate: "2027-02-12", status: "Pendente" },
+              { number: 7, value: 300, dueDate: "2027-03-12", status: "Pendente" },
+              { number: 8, value: 300, dueDate: "2027-04-12", status: "Pendente" },
+              { number: 9, value: 300, dueDate: "2027-05-12", status: "Pendente" },
+              { number: 10, value: 300, dueDate: "2027-06-12", status: "Pendente" }
+            ]
+          },
+          person2: {
+            clientId: "client-2",
+            shareAmount: 2000,
+            sharePercentage: 40,
+            installments: [
+              { number: 1, value: 200, dueDate: "2026-09-12", status: "Paga" },
+              { number: 2, value: 200, dueDate: "2026-10-12", status: "Paga" },
+              { number: 3, value: 200, dueDate: "2026-11-12", status: "Pendente" },
+              { number: 4, value: 200, dueDate: "2026-12-12", status: "Pendente" },
+              { number: 5, value: 200, dueDate: "2027-01-12", status: "Pendente" },
+              { number: 6, value: 200, dueDate: "2027-02-12", status: "Pendente" },
+              { number: 7, value: 200, dueDate: "2027-03-12", status: "Pendente" },
+              { number: 8, value: 200, dueDate: "2027-04-12", status: "Pendente" },
+              { number: 9, value: 200, dueDate: "2027-05-12", status: "Pendente" },
+              { number: 10, value: 200, dueDate: "2027-06-12", status: "Pendente" }
+            ]
+          }
+        }
+      },
+      {
+        id: "loan-3",
+        description: "Curso de Pós-Graduação",
+        cardId: "card-1",
+        clientId: "client-3",
+        totalValue: 1800,
+        installmentsCount: 6,
+        installmentValue: 300,
+        status: "Ativo",
+        startDate: "2026-10-08",
+        firstDueDate: "2026-10-17",
+        purchaseType: "normal",
+        installments: [
+          { number: 1, value: 300, dueDate: "2026-10-17", status: "Paga" },
+          { number: 2, value: 300, dueDate: "2026-11-17", status: "Pendente" },
+          { number: 3, value: 300, dueDate: "2026-12-17", status: "Pendente" },
+          { number: 4, value: 300, dueDate: "2027-01-17", status: "Pendente" },
+          { number: 5, value: 300, dueDate: "2027-02-17", status: "Pendente" },
+          { number: 6, value: 300, dueDate: "2027-03-17", status: "Pendente" }
+        ]
+      },
+      {
+        id: "loan-4",
+        description: "Manutenção Predial",
+        cardId: "card-2",
+        clientId: null,
+        totalValue: 800,
+        installmentsCount: 4,
+        installmentValue: 200,
+        status: "Ativo",
+        startDate: "2026-11-03",
+        firstDueDate: "2026-11-12",
+        purchaseType: "normal",
+        installments: [
+          { number: 1, value: 200, dueDate: "2026-11-12", status: "Pendente" },
+          { number: 2, value: 200, dueDate: "2026-12-12", status: "Pendente" },
+          { number: 3, value: 200, dueDate: "2027-01-12", status: "Pendente" },
+          { number: 4, value: 200, dueDate: "2027-02-12", status: "Pendente" }
+        ]
+      }
+    ],
+    subscriptions: [
+      { id: "sub-1", name: "Netflix Premium 4K", amount: 59.9, value: 59.9, cardId: "card-1", dueDate: "15", clientId: "client-1", status: "Ativa", isActive: true },
+      { id: "sub-2", name: "Spotify Família", amount: 34.9, value: 34.9, cardId: "card-2", dueDate: "10", clientId: "client-2", status: "Ativa", isActive: true },
+      { id: "sub-3", name: "Amazon Prime", amount: 19.9, value: 19.9, cardId: "card-1", dueDate: "25", clientId: null, status: "Ativa", isActive: true }
+    ],
+    expenses: [
+      { id: "exp-1", description: "Supermercado Mensal", value: 350.5, cardId: "card-1", date: "2026-11-05", clientId: "client-1", status: "Pendente" },
+      { id: "exp-2", description: "Jantar Comemoração", value: 210.0, cardId: "card-2", date: "2026-11-02", clientId: "client-2", status: "Pendente" },
+      { id: "exp-3", description: "Farmácia Noturna (Pós-Fechamento)", value: 85.0, cardId: "card-1", date: "2026-10-25", clientId: "client-3", status: "Pendente" },
+      { id: "exp-4", description: "Combustível Posto", value: 150.0, cardId: "card-1", date: "2026-10-02", clientId: "client-1", status: "Paga" }
+    ],
+    incomes: [],
+    paidSubscriptions: []
+  };
 
-  const user = {
+  const demoUser = {
     uid: 'demo-fase-4b',
     email: 'demo@fincontrol.app',
-    displayName: 'Demo Fase 4B',
-    name: 'Demo Fase 4B',
+    displayName: 'Mariana Silva',
+    name: 'Mariana Silva',
     plan: 'pro'
   };
 
-  sessionStorage.setItem('fincontrol_e2e_user', JSON.stringify(user));
-  sessionStorage.setItem('fincontrol_e2e_plan', 'pro');
-  sessionStorage.setItem('fincontrol_e2e_data', JSON.stringify({
-    clients: mockClients,
-    cards: mockCards,
-    loans: mockLoans,
-    subscriptions: mockSubscriptions,
-    expenses: [],
-    incomes: [],
-    paidSubscriptions: []
-  }));
-  window.__FINCONTROL_E2E_USER__ = user;
-  window.__FINCONTROL_E2E_MOCK_DATA__ = {
-    clients: mockClients,
-    cards: mockCards,
-    loans: mockLoans,
-    subscriptions: mockSubscriptions,
-    expenses: [],
-    incomes: [],
-    paidSubscriptions: []
-  };
-
-  console.log('✅ FinControl Fase 4B: Sessão sintética ativada com sucesso!');
-  if (!window.location.pathname.includes('/dashboard')) {
-    window.location.href = '/dashboard';
-  } else {
-    window.location.reload();
+  if (typeof window !== 'undefined') {
+    window.__FINCONTROL_E2E_USER__ = demoUser;
+    window.__FINCONTROL_E2E_MOCK_DATA__ = demoData;
+    sessionStorage.setItem('fincontrol_e2e_user', JSON.stringify(demoUser));
+    sessionStorage.setItem('fincontrol_e2e_plan', 'pro');
+    sessionStorage.setItem('fincontrol_e2e_data', JSON.stringify(demoData));
+    window.dispatchEvent(new CustomEvent('fincontrol:e2e-data-updated', { detail: demoData }));
+    console.log('✅ [FinControl] Dados de demonstração da Fase 4B carregados com sucesso!');
+    if (window.location.pathname !== '/dashboard') {
+      window.location.href = '/dashboard';
+    } else {
+      setTimeout(() => {
+        window.location.reload();
+      }, 50);
+    }
   }
+
+  return {
+    status: 'success',
+    clientsCount: demoData.clients.length,
+    loansCount: demoData.loans.length,
+    subscriptionsCount: demoData.subscriptions.length,
+    expensesCount: demoData.expenses.length
+  };
 })();
 ```
 
 ---
 
-## 9. Status dos Quality Gates
+## 7. Status dos Quality Gates
 
 - **`npm run lint`:** 0 erros, 0 avisos (`--max-warnings 0`).
-- **`npm test` (Vitest):** 45 arquivos de teste passaram, 636 testes aprovados, 0 falhas.
+- **`npm test` (Vitest):** 45 arquivos de teste passaram, 644 testes aprovados, 0 falhas.
 - **`npx playwright test e2e/kpis-and-evolution.spec.js`:** 8/8 testes aprovados.
-- **`npm run build`:** Build de produção bem-sucedido sem erros.
+- **`npm run build`:** Build de produção Vite bem-sucedido sem erros.
 
 ---
 
-## 10. Links e Rastreabilidade Git
+## 8. Links e Rastreabilidade Git
 
 - **Branch Atual:** `feat/redesign-fase-4b-kpis-evolucao`
 - **Base Branch:** `feat/redesign-fase-7-layout` (`ace7668`)

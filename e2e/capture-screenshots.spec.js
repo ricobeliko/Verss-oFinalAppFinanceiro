@@ -1,3 +1,4 @@
+import { getDemoData } from './fixtures/demoData.js';
 /* global process */
 // e2e/capture-screenshots.spec.js
 /**
@@ -290,5 +291,83 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
 
     await page.waitForTimeout(300); // 1400ms
     await page.screenshot({ path: 'screenshots/transicao2-light-1400ms.png' });
+  });
+
+  test('07. Fase 4B.1 KPIs Vivos e Evolução Mensal (Desktop e Mobile, Dark e Light, 6m e 12m, Filtro de Cartão)', async ({ page }) => {
+    test.setTimeout(60000);
+    const demoData = getDemoData('2026-11');
+
+    const setupSession = async (th, vp) => {
+      await page.setViewportSize(vp);
+      await page.addInitScript(({ th, d }) => {
+        localStorage.setItem('theme', th);
+        const user = {
+          uid: 'e2e-screenshot-user',
+          email: 'demo@fincontrol.app',
+          displayName: 'Mariana Silva',
+          name: 'Mariana Silva',
+          plan: 'pro'
+        };
+        window.__FINCONTROL_E2E_USER__ = user;
+        window.__FINCONTROL_E2E_MOCK_DATA__ = d;
+        sessionStorage.setItem('fincontrol_e2e_user', JSON.stringify(user));
+        sessionStorage.setItem('fincontrol_e2e_plan', 'pro');
+        sessionStorage.setItem('fincontrol_e2e_data', JSON.stringify(d));
+      }, { th, d: demoData });
+      await page.goto('/dashboard');
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1400);
+      await page.evaluate((th) => {
+        document.documentElement.setAttribute('data-theme', th);
+        if (th === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, th);
+      await page.waitForTimeout(400);
+    };
+
+    // --- DESKTOP (1440x900) DARK ---
+    await setupSession('dark', { width: 1440, height: 900 });
+    await page.screenshot({ path: 'screenshots/desktop-dark-6m.png', fullPage: true });
+
+    // Alterna para 12m
+    const btn12mDark = page.locator('.fc-monthly-evolution-chart [role="radiogroup"]').nth(1).locator('[role="radio"]:has-text("12 meses")');
+    if (await btn12mDark.isVisible()) {
+      await btn12mDark.click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: 'screenshots/desktop-dark-12m.png', fullPage: true });
+    }
+
+    // Aplica filtro de cartão (Nubank)
+    const cardSelect = page.locator('select').first();
+    if (await cardSelect.isVisible()) {
+      await cardSelect.selectOption({ label: 'Nubank Ultravioleta' });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: 'screenshots/desktop-dark-card-filter.png', fullPage: true });
+    }
+
+    // --- DESKTOP (1440x900) LIGHT ---
+    await setupSession('light', { width: 1440, height: 900 });
+    await page.screenshot({ path: 'screenshots/desktop-light-6m.png', fullPage: true });
+
+    const btn12mLight = page.locator('.fc-monthly-evolution-chart [role="radiogroup"]').nth(1).locator('[role="radio"]:has-text("12 meses")');
+    if (await btn12mLight.isVisible()) {
+      await btn12mLight.click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: 'screenshots/desktop-light-12m.png', fullPage: true });
+    }
+
+    const cardSelectLight = page.locator('select').first();
+    if (await cardSelectLight.isVisible()) {
+      await cardSelectLight.selectOption({ label: 'Nubank Ultravioleta' });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: 'screenshots/desktop-light-card-filter.png', fullPage: true });
+    }
+
+    // --- MOBILE (390x844) DARK & LIGHT ---
+    await setupSession('dark', { width: 390, height: 844 });
+    await page.screenshot({ path: 'screenshots/mobile-dark-6m.png', fullPage: true });
+
+    await setupSession('light', { width: 390, height: 844 });
+    await page.screenshot({ path: 'screenshots/mobile-light-6m.png', fullPage: true });
   });
 });

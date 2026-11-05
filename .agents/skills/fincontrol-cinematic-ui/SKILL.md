@@ -335,7 +335,7 @@ Esta seção documenta a arquitetura dos cartões de métricas do topo do Resumo
 ### 4. `MonthlyEvolutionChart` (`src/components/MonthlyEvolutionChart.jsx`)
 - **Propósito:** Gráfico em área Recharts de destaque no Resumo, substituindo a necessidade de consultas adicionais e permitindo explorar o horizonte de compromissos.
 - **Controles Integrados:**
-  - **Métrica:** Alterna entre *Total Comprometido*, *Parcelas* e *Assinaturas*.
+  - **Métrica:** Alterna entre *Total Comprometido*, *Parcelas*, *Assinaturas* e *Despesas avulsas*.
   - **Período:** Alterna entre janela de *6 Meses* e *12 Meses*.
   - **Filtro por Pessoa:** Pills horizontais com rolagem suave para filtrar a série por cliente específico, sem atribuição ou consolidado.
 - **Destaque do Mês Atual & Projeção:**
@@ -348,3 +348,29 @@ Esta seção documenta a arquitetura dos cartões de métricas do topo do Resumo
   - Contém uma tabela HTML completa (`table.sr-only`) com cabeçalhos semânticos e todas as linhas da série ativa, permitindo leitura direta por softwares de acessibilidade.
 - **Integração com Plano Pro (`ProFeatureLock`):**
   - Usuários no plano gratuito visualizam o bloqueio elegante `ProFeatureLock`, preservando a estrutura de layout e oferecendo CTA para testar o plano Pro.
+
+---
+
+## 11. Coerência Matemática e Montagem Sob o Véu (Fase 4B.1)
+
+### 1. Fonte Única da Verdade para Faturas (`calculateInvoiceBreakdownForMonth`)
+- Toda agregação de valores de fatura de cartão de crédito no FinControl (Resumo, KPIs e Série Mensal) deriva estritamente da função pura centralizada `calculateInvoiceBreakdownForMonth` em `src/services/financialService.js`.
+- **Composição da Fatura:**
+  1. **Parcelas de Empréstimos/Compras:** Parcelas com `dueDate` caindo no mês selecionado (respeitando o filtro de cartão, atribuição por cliente e compras compartilhadas).
+  2. **Assinaturas Recorrentes:** Assinaturas ativas com cobrança no mês/cartão selecionado.
+  3. **Despesas Avulsas de Cartão:** Despesas com `cardId` associado cujo vencimento da fatura (`getCardDueDateForExpense`) coincide com o mês selecionado (com suporte a rollover de fechamento de ciclo `closingDay`).
+- **Coerência Absoluta:** O KPI de Fatura Total do mês selecionado (`summary.totalFatura`) e o ponto daquele mesmo mês no gráfico de evolução mensal (`point(selectedMonth).totalCommitted`) são idênticos ao centavo por construção matemática.
+
+### 2. Variação MoM com Base Zero (Delta Transparente)
+- Quando o mês anterior possui total zero (`base = 0`):
+  - É proibido exibir percentuais fictícios como `+100%` ou setas verdes de aumento positivo.
+  - O percentual relativo é definido como `percentage: null` e a etiqueta textual é um travessão (`label: '—'`).
+  - O status semântico é neutro (`direction: 'neutral'`).
+  - O detalhe exibe a variação absoluta factual: `+ R$ X vs. mês anterior` (ou `'Sem variação'` se ambos os meses forem 0).
+
+### 3. Montagem Sob o Véu Líquido (`waitForScreenSettle`)
+- Na transição entre telas (ex: Pessoas → Resumo), o véu translúcido sobe e aguarda no ápice (opacidade 92-96%) até que todo o peso do ciclo de montagem do React e do Recharts esteja concluído:
+  1. **Desaparecimento de Skeletons:** Aguarda `!document.querySelector('.fc-skeleton')`.
+  2. **Medição do ResponsiveContainer:** Aguarda a presença de nós `<svg>` filhos em todos os containers `.recharts-responsive-container`.
+  3. **Estabilização de Estilos e Layout:** Executa dois quadros consecutivos de animação (`double rAF`).
+- O evento `fc:page-reveal-start` só é despachado após a total estabilização da árvore DOM. Consequentemente, contadores numéricos (`AnimatedCurrency`), barras de progresso e animações de entrada iniciam suavemente na descida da cortina, sem disputa de thread com o layout do Recharts e com zero Long Tasks (> 50ms).
