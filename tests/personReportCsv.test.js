@@ -297,4 +297,170 @@ describe('Export CSV Mensal e Anual por Pessoa (Commit D)', () => {
       expect(sanitizeFilename(null)).toBe('pessoa');
     });
   });
+
+  describe('5. Fase 7.1 — Consistência Estrita CSV Anual/Mensal com o Relatório e Cobertura Sem Itens', () => {
+    it('soma dos valores do CSV mensal e anual para pessoa com compra própria, compartilhada e assinatura bate ao centavo com o relatório', () => {
+      const personX = { id: 'client-X', name: 'Carlos Eduardo' };
+      const testCards = [{ id: 'card-x', name: 'Mastercard Black' }];
+
+      const personLoans = [
+        // 1. Compra própria (3 parcelas de R$ 120,50 ao longo de 2026-08, 2026-09, 2026-10)
+        {
+          id: 'loan-x-own',
+          description: 'Smartphone Trabalho',
+          clientId: personX.id,
+          cardId: 'card-x',
+          isShared: false,
+          installmentsCount: 3,
+          installments: [
+            { number: 1, value: 120.50, dueDate: '2026-08-10', status: 'Pendente' },
+            { number: 2, value: 120.50, dueDate: '2026-09-10', status: 'Pendente' },
+            { number: 3, value: 120.50, dueDate: '2026-10-10', status: 'Pendente' }
+          ]
+        },
+        // 2. Compra compartilhada (cota do Carlos: 2 parcelas de R$ 75,33 em 2026-08 e R$ 75,34 em 2026-09)
+        {
+          id: 'loan-x-shared',
+          description: 'Ar-Condicionado Compartilhado',
+          cardId: 'card-x',
+          isShared: true,
+          sharedDetails: {
+            person1: {
+              clientId: personX.id,
+              name: 'Carlos Eduardo',
+              installments: [
+                { number: 1, value: 75.33, dueDate: '2026-08-20', status: 'Pendente' },
+                { number: 2, value: 75.34, dueDate: '2026-09-20', status: 'Pendente' }
+              ]
+            },
+            person2: {
+              clientId: 'client-other',
+              name: 'Outra Pessoa',
+              installments: [
+                { number: 1, value: 75.33, dueDate: '2026-08-20', status: 'Pendente' },
+                { number: 2, value: 75.34, dueDate: '2026-09-20', status: 'Pendente' }
+              ]
+            }
+          }
+        }
+      ];
+
+      // 3. Assinatura ativa (R$ 39,90/mês)
+      const personSubs = [
+        {
+          id: 'sub-x',
+          name: 'Streaming Premium',
+          clientId: personX.id,
+          cardId: 'card-x',
+          amount: 39.90,
+          dueDate: '15',
+          isActive: true
+        }
+      ];
+
+      // 4. Despesa avulsa em 2026-08 (R$ 45,00)
+      const personExpenses = [
+        {
+          id: 'exp-x',
+          description: 'Café & Lanche',
+          clientId: personX.id,
+          cardId: 'card-x',
+          value: 45.00,
+          date: '2026-08-05'
+        }
+      ];
+
+      // --- Verificação Mensal (2026-08) ---
+      // Itens esperados no mês:
+      // - Parcela própria: 120.50
+      // - Parcela compartilhada (cota Carlos): 75.33
+      // - Assinatura: 39.90
+      // - Despesa avulsa: 45.00
+      // Total mensal: 120.50 + 75.33 + 39.90 + 45.00 = 280.73
+      const expectedMonthlyCents = 12050 + 7533 + 3990 + 4500; // 28073 centavos
+
+      const csvMonthly = generatePersonReportCsv({
+        client: personX,
+        periodType: 'month',
+        targetPeriod: '2026-08',
+        loans: personLoans,
+        expenses: personExpenses,
+        subscriptions: personSubs,
+        cards: testCards
+      });
+
+      const monthlyLines = csvMonthly.split('\r\n').filter((l) => l.trim().length > 0);
+      const monthlyDataRows = monthlyLines.slice(1);
+      expect(monthlyDataRows.length).toBe(4);
+
+      let sumMonthlyCents = 0;
+      monthlyDataRows.forEach((row) => {
+        const cols = row.split(';').map((c) => c.replace(/^"|"$/g, ''));
+        const valStr = cols[7];
+        const valNum = parseFloat(valStr.replace(',', '.'));
+        sumMonthlyCents += Math.round(valNum * 100);
+      });
+
+      expect(sumMonthlyCents).toBe(expectedMonthlyCents);
+      expect(sumMonthlyCents / 100).toBe(280.73);
+
+      // --- Verificação Anual (2026) ---
+      // Itens esperados no ano 2026:
+      // - 3 parcelas próprias: 3x 120.50 = 361.50 (36150 centavos)
+      // - 2 parcelas compartilhadas: 75.33 + 75.34 = 150.67 (15067 centavos)
+      // - 12 meses da assinatura ativa: 12x 39.90 = 478.80 (47880 centavos)
+      // - 1 despesa avulsa: 45.00 (4500 centavos)
+      // Total anual: 361.50 + 150.67 + 478.80 + 45.00 = 1035.97
+      const expectedAnnualCents = 36150 + 15067 + 47880 + 4500; // 103597 centavos
+
+      const csvAnnual = generatePersonReportCsv({
+        client: personX,
+        periodType: 'year',
+        targetPeriod: '2026',
+        loans: personLoans,
+        expenses: personExpenses,
+        subscriptions: personSubs,
+        cards: testCards
+      });
+
+      const annualLines = csvAnnual.split('\r\n').filter((l) => l.trim().length > 0);
+      const annualDataRows = annualLines.slice(1);
+      // Total de linhas: 3 próprias + 2 compartilhadas + 12 assinaturas + 1 despesa = 18 linhas
+      expect(annualDataRows.length).toBe(18);
+
+      let sumAnnualCents = 0;
+      annualDataRows.forEach((row) => {
+        const cols = row.split(';').map((c) => c.replace(/^"|"$/g, ''));
+        const valStr = cols[7];
+        const valNum = parseFloat(valStr.replace(',', '.'));
+        sumAnnualCents += Math.round(valNum * 100);
+      });
+
+      expect(sumAnnualCents).toBe(expectedAnnualCents);
+      expect(sumAnnualCents / 100).toBe(1035.97);
+    });
+
+    it('pessoa sem nenhum item gera CSV válido com BOM e cabeçalho sem lançar erro nem corromper', () => {
+      const emptyPerson = { id: 'client-empty', name: 'Nenhum Gasto' };
+
+      const csv = generatePersonReportCsv({
+        client: emptyPerson,
+        periodType: 'year',
+        targetPeriod: '2026',
+        loans: [],
+        expenses: [],
+        subscriptions: [],
+        cards: []
+      });
+
+      expect(csv.startsWith('\uFEFF')).toBe(true);
+      const lines = csv.split('\r\n').filter((l) => l.trim().length > 0);
+      // Apenas o cabeçalho
+      expect(lines.length).toBe(1);
+      expect(lines[0]).toContain('Tipo');
+      expect(lines[0]).toContain('Data');
+      expect(lines[0]).toContain('Descrição');
+      expect(lines[0]).toContain('Valor (R$)');
+    });
+  });
 });

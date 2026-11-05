@@ -388,8 +388,10 @@ export function generatePersonReportCsv({
     const safeSubs = asArray(subscriptions);
     const cardMap = new Map(asArray(cards).map(c => [c?.id, c?.name]));
 
-    const periodStr = String(targetPeriod || '').trim();
+    const rawPeriodStr = String(targetPeriod || '').trim();
     const isYear = periodType === 'year';
+    // Se for exportação anual, normaliza para os primeiros 4 dígitos do ano caso receba 'YYYY-MM'
+    const periodStr = isYear && rawPeriodStr.length >= 4 ? rawPeriodStr.slice(0, 4) : rawPeriodStr;
     const clientName = client.name || 'Pessoa';
 
     const items = [];
@@ -400,28 +402,29 @@ export function generatePersonReportCsv({
         const cardName = cardMap.get(loan.cardId) || 'Cartão';
 
         if (loan.isShared && loan.sharedDetails) {
-            let installments = [];
-            if (loan.sharedDetails.person1?.clientId === client.id) {
-                installments = asArray(loan.sharedDetails.person1.installments);
-            } else if (loan.sharedDetails.person2?.clientId === client.id) {
-                installments = asArray(loan.sharedDetails.person2.installments);
-            }
+            const addSharedPortion = (portion) => {
+                if (!portion || portion.clientId !== client.id) return;
+                const installments = asArray(portion.installments);
+                installments.forEach(inst => {
+                    if (inst?.dueDate && inst.dueDate.startsWith(periodStr)) {
+                        items.push({
+                            type: 'Compra Compartilhada (Cota)',
+                            date: inst.dueDate,
+                            description: sanitizeCsvFormula(loan.description || 'Compra Compartilhada'),
+                            category: sanitizeCsvFormula(loan.category || 'Cartão'),
+                            clientName: sanitizeCsvFormula(clientName),
+                            cardName: sanitizeCsvFormula(cardName),
+                            installment: `${inst.number || 1}/${installments.length || 1}`,
+                            value: Number(inst.value || 0),
+                            status: inst.status || 'Pendente'
+                        });
+                    }
+                });
+            };
 
-            installments.forEach(inst => {
-                if (inst?.dueDate && inst.dueDate.startsWith(periodStr)) {
-                    items.push({
-                        type: 'Compra Compartilhada (Cota)',
-                        date: inst.dueDate,
-                        description: sanitizeCsvFormula(loan.description || 'Compra Compartilhada'),
-                        category: sanitizeCsvFormula(loan.category || 'Cartão'),
-                        clientName: sanitizeCsvFormula(clientName),
-                        cardName: sanitizeCsvFormula(cardName),
-                        installment: `${inst.number || 1}/${installments.length}`,
-                        value: Number(inst.value || 0),
-                        status: inst.status || 'Pendente'
-                    });
-                }
-            });
+            // Avalia person1 e person2 de forma independente (evita omitir se ambos forem o mesmo clientId)
+            addSharedPortion(loan.sharedDetails.person1);
+            addSharedPortion(loan.sharedDetails.person2);
         } else if (loan.clientId === client.id) {
             const instList = asArray(loan.installments);
             instList.forEach(inst => {
