@@ -8,6 +8,7 @@ import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../service
 import { formatCurrencyDisplay } from '../../utils/currency';
 import {
     calculateMonthlyComparisonSummary,
+    calculateMonthlySeries,
     calculateInvoiceDueDate,
     toCents,
     fromCents,
@@ -16,6 +17,8 @@ import {
     mapDomainStatusToLoanStatus
 } from '../../services/financialService';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
+import MonthlyEvolutionChart from '../../components/MonthlyEvolutionChart';
+import KpiCard from '../../components/KpiCard';
 import GenericModal from '../../components/GenericModal';
 import FutureCommitmentsCard from '../../components/FutureCommitmentsCard';
 import FinancialSandboxSimulatorModal from '../../components/FinancialSandboxSimulatorModal';
@@ -504,6 +507,23 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         });
     }, [selectedMonth, loans, expenses, subscriptions, incomes]);
 
+    const monthlySeries = useMemo(() => {
+        return calculateMonthlySeries({
+            loans,
+            subscriptions,
+            endMonth: selectedMonth,
+            monthsBack: 5,
+            monthsForward: 0,
+            personId: selectedClientFilter || 'all',
+            knownClientIds: clients
+        });
+    }, [loans, subscriptions, selectedMonth, selectedClientFilter, clients]);
+
+    const currentMonthPoint = useMemo(() => {
+        if (!monthlySeries || monthlySeries.length === 0) return null;
+        return monthlySeries.find(p => p.isCurrent) || monthlySeries[monthlySeries.length - 1];
+    }, [monthlySeries]);
+
     const selectedClientNameForProjection = useMemo(() => {
         if (!selectedClientFilter) return '';
         return (clients || []).find(c => c && c.id === selectedClientFilter)?.name || '';
@@ -743,55 +763,54 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             {/* Grid Principal: KPIs à esquerda e Gráficos à direita */}
             <div data-enter="item" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
-                    {/* Card Fatura Total com Surface DS2 */}
-                    <Surface variant="elevated" padding="md" className="transition-all hover:border-[var(--fc-accent)]/30">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Fatura Total do Mês</h3>
-                            <div className="w-8 h-8 rounded-lg bg-[var(--fc-surface-1)] text-[var(--fc-accent)] flex items-center justify-center border border-[var(--fc-border-subtle)]">
-                                <CreditCardKpiIcon />
-                            </div>
-                        </div>
-                        <p className="text-3xl font-extrabold tracking-tight text-[var(--fc-text-primary)] mt-3">
-                            <AnimatedCurrency value={summary.totalFatura} />
-                        </p>
-                        <div className="mt-3 flex items-center gap-2">
-                            {monthlyComparison.previousInvoiceTotal > 0 ? (
-                                <Badge variant={monthlyComparison.invoiceDelta.direction === 'up' ? 'warning' : monthlyComparison.invoiceDelta.direction === 'down' ? 'success' : 'neutral'}>
-                                    <span>{monthlyComparison.invoiceDelta.direction === 'up' ? '▲' : (monthlyComparison.invoiceDelta.direction === 'down' ? '▼' : '•')}</span>
-                                    <span>{monthlyComparison.invoiceDelta.label} vs mês anterior</span>
-                                </Badge>
-                            ) : (
-                                <span className="text-xs text-[var(--fc-text-muted)] font-medium">Mês base de referência</span>
-                            )}
-                        </div>
-                    </Surface>
+                    {/* Card Fatura Total com KpiCard DS2 */}
+                    <KpiCard
+                        title="Fatura Total do Mês"
+                        value={summary.totalFatura}
+                        variant="accent"
+                        icon={<CreditCardKpiIcon />}
+                        delta={currentMonthPoint?.delta || (monthlyComparison.previousInvoiceTotal > 0 ? monthlyComparison.invoiceDelta : undefined)}
+                        deltaSubtitle="vs. mês anterior"
+                        sparklineData={monthlySeries.map(p => p.totalCommitted)}
+                        sparklineLabel="Evolução da fatura nos últimos 6 meses"
+                    />
 
-                    {/* Card Progresso de Pagamento com Surface DS2 */}
-                    <Surface variant="elevated" padding="md" className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Progresso de Pagamento</h3>
-                            <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage}%</span>
-                        </div>
-                        <AnimatedProgressBar
-                            containerClassName="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]"
-                            className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300"
-                            percentage={paidPercentage}
-                            delay={0.2}
-                            aria-label="Progresso de Pagamento da Fatura"
-                        />
-                        <div className="flex justify-between text-xs font-medium pt-1">
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
-                                <span className="text-[var(--fc-text-secondary)]">Pago:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalRecebido} /></span>
+                    {/* Card Progresso de Pagamento com KpiCard DS2 */}
+                    <KpiCard
+                        title="Progresso de Pagamento"
+                        value={summary.totalRecebido}
+                        variant="success"
+                        icon={<span>✓</span>}
+                        sparklineData={monthlySeries.map(p => p.installmentsTotal)}
+                        sparklineLabel="Evolução de parcelas nos últimos 6 meses"
+                        secondaryContent={
+                            <div className="space-y-3 pt-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Quitado</span>
+                                    <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage.toFixed(0)}%</span>
+                                </div>
+                                <AnimatedProgressBar
+                                    containerClassName="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]"
+                                    className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300"
+                                    percentage={paidPercentage}
+                                    delay={0.2}
+                                    aria-label="Progresso de Pagamento da Fatura"
+                                />
+                                <div className="flex justify-between text-xs font-medium pt-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
+                                        <span className="text-[var(--fc-text-secondary)]">Pago:</span>
+                                        <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalRecebido} /></span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
+                                        <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
+                                        <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalPendente} /></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
-                                <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalPendente} /></span>
-                            </div>
-                        </div>
-                    </Surface>
+                        }
+                    />
                 </div>
 
                 <div className="lg:col-span-2">
@@ -806,6 +825,18 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     </div>
                 </div>
             </div>
+
+            {/* Gráfico Destaque: Evolução Mensal de Compromissos (Histórico + Projeção com Recharts) */}
+            <MonthlyEvolutionChart
+                loans={loans}
+                subscriptions={subscriptions}
+                selectedMonth={selectedMonth}
+                clients={clients}
+                isPro={isPro}
+                isTrialActive={isTrialActive}
+                onUpgradeClick={handleUpgradeClick}
+                theme={theme}
+            />
 
             {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
             {hasProAccess ? (
@@ -957,4 +988,4 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     );
 }
 
-export default Dashboard;
+export default Dashboard;
