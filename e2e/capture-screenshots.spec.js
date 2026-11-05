@@ -490,4 +490,55 @@ test.describe('Captura de Screenshots Visuais (Opt-in)', () => {
     const sidebarLight = page.locator('aside');
     await sidebarLight.screenshot({ path: 'screenshots/brand-sidebar-light.png' });
   });
+
+  test('Captura de Screenshots da Landing Page — Fase 6 (Desktop & Mobile, Dark & Light)', async ({ page }) => {
+    const viewports = [
+      { name: 'desktop', width: 1440, height: 900 },
+      { name: 'mobile', width: 390, height: 844 },
+    ];
+
+    const themes = ['dark', 'light'];
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+
+      for (const th of themes) {
+        await page.addInitScript((theme) => {
+          localStorage.setItem('theme', theme);
+        }, th);
+
+        await page.goto('/');
+        await page.waitForTimeout(1000);
+
+        await page.evaluate((theme) => {
+          document.documentElement.setAttribute('data-theme', theme);
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+          else document.documentElement.classList.remove('dark');
+        }, th);
+        await page.waitForTimeout(500);
+
+        // 1. Hero
+        const hero = page.locator('#hero');
+        await hero.screenshot({ path: `screenshots/fase6-hero-${th}-${vp.name}.png` });
+
+        // 2. Features
+        const features = page.locator('#features');
+        await features.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await features.screenshot({ path: `screenshots/fase6-features-${th}-${vp.name}.png` });
+
+        // 3. Pricing
+        const pricing = page.locator('#pricing');
+        await pricing.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await pricing.screenshot({ path: `screenshots/fase6-pricing-${th}-${vp.name}.png` });
+
+        // 4. Footer
+        const footer = page.locator('footer');
+        await footer.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await footer.screenshot({ path: `screenshots/fase6-footer-${th}-${vp.name}.png` });
+      }
+    }
+  });
 });

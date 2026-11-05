@@ -21,7 +21,7 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 ## 2. Paletas de Cores & Tokens de Tema
 
 > [!NOTE]
-> A identidade visual principal do FinControl (App, Dashboard, Auth e Primitivas) adota a paleta **Abyss Teal** com o tema escuro como padrão desde o primeiro paint. A **Landing Page** permanece temporariamente em *Champagne Gold* por isolamento estético até a **Fase 6** do redesign.
+> A identidade visual completa do FinControl (App, Dashboard, Auth, Modais e **Landing Page como concluído na Fase 6**) adota a paleta **Abyss Teal** com o tema escuro como padrão canônico e o tema **Crisp Teal** como alternativo. A Landing Page opera 100% com tokens semânticos (`--fc-bg`, `--fc-surface-1/2/3`, `--fc-text-primary/secondary/muted`, `--fc-accent`, `--fc-accent-hover`, `--fc-border-subtle/default/strong`, `--fc-glow-cool/warm`, `--fc-wave-1/2/3`), com zero cores hex fixas.
 
 ### Modo Escuro — Padrão do Sistema (Abyss Teal)
 - **Background Primário (`--fc-bg`):** `#04171F`
@@ -65,7 +65,7 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 | **Layer 2** | Structural Light & Haze | Haze luminoso difuso posicionado atrás do produto e linhas estruturais vetoriais. Parallax intermediário (2-4px). |
 | **Layer 3** | Living Ledger Stage | Card principal com multi-plano financeiro, backplate translúcido e prévia do próximo ciclo. 3D tilt responsivo suave e reflexo luminoso (sheen). |
 | **Layer 4** | Product Proof Chips | Chips flutuantes factuais de resolução de dívidas compartilhadas e cálculo matemático exato com micro-parallax (6-9px). |
-| **Layer 5** | Cursor Aura (Spotlight) | Aura luminosa sutil (320px) em Champagne Gold seguindo o ponteiro do mouse diretamente via `gsap.quickTo`. Desativada em touch/coarse. |
+| **Layer 5** | Cursor Aura (Spotlight) | Aura luminosa sutil (320px) em Aqua / Crisp Teal (`--fc-accent-soft`) seguindo o ponteiro do mouse diretamente via `gsap.quickTo`. Desativada em touch/coarse. |
 
 ---
 

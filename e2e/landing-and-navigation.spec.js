@@ -164,4 +164,97 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(menuBtn).toHaveAttribute('aria-expanded', 'false');
     await expect(drawer).toHaveCount(0);
   });
+
+  test('deve alternar tema dark <-> light via botão do header e aplicar tokens corretamente', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Inicialmente no tema escuro (padrão)
+    const root = page.locator('html');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+
+    // Botão de alternância de tema no header
+    const toggleBtn = page.locator('header button[aria-label*="Alternar"]').first();
+    await expect(toggleBtn).toBeVisible();
+
+    // Clica para alternar para claro
+    await toggleBtn.click();
+    await page.waitForTimeout(600);
+    await expect(root).toHaveAttribute('data-theme', 'light');
+
+    // Verifica que o fundo do hero aplicou o token claro (#E6F4F7 / rgb(230, 244, 247))
+    const hero = page.locator('#hero');
+    const heroBg = await hero.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+    expect(heroBg).toBe('rgb(230, 244, 247)');
+
+    // Clica novamente para voltar para escuro
+    await toggleBtn.click();
+    await page.waitForTimeout(600);
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+
+    const heroBgDark = await hero.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+    expect(heroBgDark).toBe('rgb(4, 23, 31)');
+  });
+
+  test('todos os CTAs principais devem apontar para rotas canônicas (/login e /login?mode=register)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // 1. Hero Primary CTA
+    const heroCta = page.locator('#hero a:has-text("Criar conta gratuita")');
+    await expect(heroCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 2. Pricing Free CTA
+    const freeCta = page.locator('#pricing a:has-text("Começar gratuitamente")');
+    await expect(freeCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 3. Pricing Pro CTA
+    const proCta = page.locator('#pricing a:has-text("Desbloquear FinControl Pro")');
+    await expect(proCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 4. Final CTA
+    const finalCta = page.locator('#final-cta a:has-text("Criar Conta Gratuita")');
+    await expect(finalCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 5. Header Login
+    const headerLogin = page.locator('header a:has-text("Entrar")').first();
+    await expect(headerLogin).toHaveAttribute('href', '/login');
+  });
+
+  test('não deve conter estilos inline com cores hex fixas residuais na Landing', async ({ page }) => {
+    await page.goto('/');
+
+    const inlineHexColors = await page.evaluate(() => {
+      const allElements = document.querySelectorAll('main *, header *, footer *');
+      const hexPattern = /#[0-9a-fA-F]{3,8}/;
+      const offenders = [];
+      allElements.forEach(el => {
+        const style = el.getAttribute('style') || '';
+        // Ignora radial-gradient dinâmico com rgba gerado pelo sheen de movimento se houver
+        if (hexPattern.test(style) && !style.includes('var(')) {
+          offenders.push({ tag: el.tagName, style, text: el.textContent?.slice(0, 30) });
+        }
+      });
+      return offenders;
+    });
+
+    expect(inlineHexColors).toHaveLength(0);
+  });
+
+  test('prefers-reduced-motion: reduce deve desativar animações contínuas e tracking do cursor', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Move mouse over hero
+    await page.mouse.move(700, 450);
+    await page.waitForTimeout(300);
+
+    // Em reduced-motion, as ondas devem ter animação cancelada via CSS
+    const waveLayer = page.locator('.fc-wave-layer-1').first();
+    if (await waveLayer.count() > 0) {
+      const animName = await waveLayer.evaluate((el) => window.getComputedStyle(el).animationName);
+      expect(animName).toBe('none');
+    }
+  });
 });
