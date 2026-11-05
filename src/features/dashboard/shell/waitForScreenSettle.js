@@ -1,12 +1,15 @@
 // src/features/dashboard/shell/waitForScreenSettle.js
 /**
  * Utilitário para aguardar a estabilização completa da tela montada sob o véu.
- * Utiliza requestIdleCallback para aguardar que o scheduler do React (performWorkUntilDeadline)
- * processe todos os useEffects pendentes (ex: carregamento de dados em hooks e remoção de skeletons),
- * seguido de requestAnimationFrame para garantir que a renderização pesada ocorra enquanto
- * a tela está 100% oculta sob o véu.
- * Inclui fallback resiliente via setTimeout para ambientes sem suporte a requestIdleCallback (ex: Safari).
- * Respeita o tempo mínimo configurado em motion.pageTransition.hold e impõe timeout de segurança.
+ * 
+ * Pipeline de assentamento sob o véu ("Montar sob o véu, assentar, só então animar"):
+ * 1. Verifica frame a frame (rAF) se a tela recém-montada possui skeletons pendentes.
+ * 2. Verifica se os containers de gráficos (Recharts ResponsiveContainer) já foram
+ *    medidos pelo ResizeObserver e tiveram seus elementos SVG gerados no DOM.
+ * 3. Após a estabilização completa da estrutura e dados sob o véu, executa um duplo rAF
+ *    para assegurar que o GPU compositor tenha a tela 100% pronta.
+ * 4. Respeita a duração mínima (minHoldMs) antes de resolver a promessa e autorizar
+ *    o início do reveal, com timeout de segurança (maxHoldMs).
  *
  * @param {number} minHoldMs - Duração mínima de espera em ms (padrão 120ms).
  * @param {number} maxHoldMs - Timeout máximo de segurança em ms (padrão 600ms).
@@ -31,32 +34,51 @@ export function waitForScreenSettle(minHoldMs = 120, maxHoldMs = 600) {
 
     const maxTimer = setTimeout(finish, maxHoldMs);
 
-    // Permite que o scheduler do React drene a fila de trabalho antes de iniciar o reveal
-    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(() => {
-        if (typeof requestAnimationFrame === 'function') {
+    const checkSettled = () => {
+      if (settled) return;
+
+      if (typeof document !== 'undefined') {
+        // 1. Aguarda skeletons de carregamento inicial desaparecerem
+        const hasSkeleton = document.querySelector('.fc-skeleton, [data-skeleton="true"]');
+        if (hasSkeleton) {
+          requestAnimationFrame(checkSettled);
+          return;
+        }
+
+        // 2. Aguarda medição de layout e geração de SVG dos gráficos Recharts
+        const chartContainers = document.querySelectorAll('.recharts-responsive-container');
+        if (chartContainers.length > 0) {
+          let allMeasured = true;
+          chartContainers.forEach((container) => {
+            if (!container.querySelector('svg')) {
+              allMeasured = false;
+            }
+          });
+          if (!allMeasured) {
+            requestAnimationFrame(checkSettled);
+            return;
+          }
+        }
+      }
+
+      // 3. Tela assentada sob o véu: duplo rAF para flush do pipeline de layout/GPU
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             clearTimeout(maxTimer);
             finish();
           });
-        } else {
-          clearTimeout(maxTimer);
-          finish();
-        }
-      }, { timeout: Math.min(maxHoldMs, 250) });
+        });
+      } else {
+        clearTimeout(maxTimer);
+        finish();
+      }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(checkSettled);
     } else {
-      // Fallback para Safari / navegadores sem requestIdleCallback
-      setTimeout(() => {
-        if (typeof requestAnimationFrame === 'function') {
-          requestAnimationFrame(() => {
-            clearTimeout(maxTimer);
-            finish();
-          });
-        } else {
-          clearTimeout(maxTimer);
-          finish();
-        }
-      }, 50);
+      setTimeout(finish, minHoldMs);
     }
   });
 }
