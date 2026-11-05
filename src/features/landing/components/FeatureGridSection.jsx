@@ -34,8 +34,8 @@ export default function FeatureGridSection() {
     },
     {
       icon: <FiFileText className="w-6 h-6 text-[#A78BFA]" />,
-      title: 'Exportação PDF & CSV Limpa',
-      desc: 'Gere extratos organizados de faturas e relatórios consolidados a qualquer momento com um clique.',
+      title: 'Exportação CSV & PDF por Pessoa',
+      desc: 'Exporte extratos em CSV (mensal e anual) e relatórios em PDF organizados por pessoa para prestação de contas transparente.',
       tag: 'Relatórios',
       hoverGlow: 'hover:shadow-[0_0_30px_rgba(167,139,250,0.15)] hover:border-[#A78BFA]/40',
     },

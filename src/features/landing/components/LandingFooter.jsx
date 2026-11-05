@@ -21,7 +21,7 @@ export default function LandingFooter() {
               FinControl
             </span>
             <span className="text-xs text-[#9CA3AF]">
-              • Inteligência Financeira e Compras Compartilhadas
+              • Gestão de Cartões e Compras Compartilhadas
             </span>
           </div>
 

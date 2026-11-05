@@ -58,6 +58,10 @@ export default function UpgradePrompt({
         <ul className="space-y-1.5 text-xs text-[var(--fc-text-primary)]">
           <li className="flex items-center gap-2">
             <span className="text-[var(--fc-accent)] font-bold">✓</span>
+            <span>Pessoas e cartões de crédito ilimitados</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-[var(--fc-accent)] font-bold">✓</span>
             <span>Receitas e balanço mensal</span>
           </li>
           <li className="flex items-center gap-2">
@@ -70,7 +74,7 @@ export default function UpgradePrompt({
           </li>
           <li className="flex items-center gap-2">
             <span className="text-[var(--fc-accent)] font-bold">✓</span>
-            <span>Modo Crise para auditoria de gastos</span>
+            <span>Projeção e evolução de faturas por pessoa</span>
           </li>
         </ul>
       </div>

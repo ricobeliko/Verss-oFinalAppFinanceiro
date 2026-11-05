@@ -213,7 +213,7 @@ export default function LandingHero({ prefersReducedMotion }) {
               className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#161920] border border-[#E5B842]/25 text-xs font-semibold text-[#F5D580] mb-6 shadow-md shadow-black/60"
             >
               <span className="w-2 h-2 rounded-full bg-[#34D399] motion-safe:animate-ping" />
-              <span className="tracking-wide uppercase">Controle Financeiro Inteligente</span>
+              <span className="tracking-wide uppercase">Controle de Cartões e Compras Compartilhadas</span>
             </div>
 
             {/* Headline */}

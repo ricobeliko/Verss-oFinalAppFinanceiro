@@ -39,7 +39,7 @@ export default function PricingPlansSection() {
               <div className="mb-6">
                 <h3 className="text-xl font-bold text-[#F9FAFB] mb-1">Gratuito</h3>
                 <p className="text-xs text-[#9CA3AF] min-h-[32px]">
-                  O essencial para organizar cartões, faturas e compras compartilhadas.
+                  Até 3 pessoas e até 2 cartões para organizar faturas e compras compartilhadas.
                 </p>
               </div>
 
@@ -59,7 +59,7 @@ export default function PricingPlansSection() {
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#9CA3AF]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
-                  <span>Cadastro de pessoas e divisão de compras</span>
+                  <span>Até 3 pessoas e até 2 cartões de crédito</span>
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#9CA3AF]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
@@ -105,7 +105,7 @@ export default function PricingPlansSection() {
                   </span>
                 </div>
                 <p className="text-xs text-[#9CA3AF]">
-                  Controle financeiro com gráficos analíticos, receitas e modo crise.
+                  Pessoas e cartões ilimitados, gráficos analíticos, evolução mensal e projeção por pessoa.
                 </p>
               </div>
 
@@ -128,7 +128,7 @@ export default function PricingPlansSection() {
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#F9FAFB]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
-                  <span>Tudo incluído no plano Gratuito</span>
+                  <span>Pessoas e cartões de crédito ilimitados</span>
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#F9FAFB]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
@@ -140,11 +140,15 @@ export default function PricingPlansSection() {
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#F9FAFB]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
-                  <span>Gráficos analíticos por pessoa e categoria</span>
+                  <span>Gráficos analíticos e evolução mensal (6 e 12 meses)</span>
                 </div>
                 <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#F9FAFB]">
                   <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
-                  <span>Modo Crise para auditoria e corte de gastos</span>
+                  <span>Projeção de parcelas futuras por pessoa</span>
+                </div>
+                <div className="flex items-start gap-2.5 text-xs sm:text-sm text-[#F9FAFB]">
+                  <FiCheck className="w-4 h-4 text-[#34D399] shrink-0 mt-0.5" />
+                  <span>Exportação de CSV mensal e anual por pessoa</span>
                 </div>
               </div>
             </div>

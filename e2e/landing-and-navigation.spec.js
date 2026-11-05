@@ -97,11 +97,13 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(pricing.locator('text=Desbloquear FinControl Pro').first()).toBeVisible();
     await expect(pricing.locator('text=Pagamento único. Acesso vitalício.').first()).toBeVisible();
 
-    // Features oficiais do plano Pro
-    await expect(pricing.locator('text=Cadastro de pessoas e divisão de compras')).toBeVisible();
+    // Features oficiais do plano Pro e Free
+    await expect(pricing.locator('text=Até 3 pessoas e até 2 cartões de crédito')).toBeVisible();
     await expect(pricing.locator('text=Gestão de cartões de crédito e faturas')).toBeVisible();
     await expect(pricing.locator('text=Registro de receitas e balanço mensal')).toBeVisible();
-    await expect(pricing.locator('text=Modo Crise para auditoria e corte de gastos')).toBeVisible();
+    await expect(pricing.locator('text=Pessoas e cartões de crédito ilimitados')).toBeVisible();
+    await expect(pricing.locator('text=Projeção de parcelas futuras por pessoa')).toBeVisible();
+    await expect(pricing.locator('text=Modo Crise')).toHaveCount(0);
 
     // Ausência de modelos de assinatura não canônicos
     await expect(page.locator('button:has-text("Anual")')).toHaveCount(0);
