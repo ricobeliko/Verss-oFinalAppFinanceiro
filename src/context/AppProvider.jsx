@@ -39,7 +39,7 @@ export function AppProvider({ children }) {
     useEffect(() => {
         // Suporte Seguro para Sessão de Testes E2E (Isolamento Estrito de Produção)
         const e2eSession =
-            typeof window !== 'undefined'
+            import.meta.env.DEV && typeof window !== 'undefined'
                 ? window.__FINCONTROL_E2E_USER__ || JSON.parse(sessionStorage.getItem('fincontrol_e2e_user') || 'null')
                 : null;
 
@@ -88,7 +88,7 @@ export function AppProvider({ children }) {
 
     const logout = useCallback(async () => {
         try {
-            if (typeof window !== 'undefined' && (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__)) {
+            if (import.meta.env.DEV && typeof window !== 'undefined' && (sessionStorage.getItem('fincontrol_e2e_user') || window.__FINCONTROL_E2E_USER__)) {
                 delete window.__FINCONTROL_E2E_USER__;
                 sessionStorage.removeItem('fincontrol_e2e_user');
                 clearAllSubscriptions();

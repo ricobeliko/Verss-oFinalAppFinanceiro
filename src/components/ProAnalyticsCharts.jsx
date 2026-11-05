@@ -43,9 +43,11 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
     }), [prefersReducedMotion]);
 
     const handleActivateTrial = async () => {
-        if (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_USER__ || sessionStorage.getItem('fincontrol_e2e_user'))) {
-            showToast('Teste Pro ativado com sucesso! Aproveite 30 dias de acesso aos recursos Pro.', 'success');
-            return;
+        if (import.meta.env.DEV) {
+            if (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_USER__ || sessionStorage.getItem('fincontrol_e2e_user'))) {
+                showToast('[DEV] Teste Pro ativado localmente', 'success');
+                return;
+            }
         }
         if (typeof activateFreeTrial === 'function') {
             await activateFreeTrial();

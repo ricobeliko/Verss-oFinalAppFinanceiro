@@ -19,7 +19,8 @@ class ErrorBoundary extends React.Component {
 
     // Telemetria Sanitizada: Reporta falha ao backend via Cloud Functions (Zero PII)
     try {
-      if (typeof window !== 'undefined' && !window.__FINCONTROL_E2E_USER__) {
+      const isE2ESession = import.meta.env.DEV ? Boolean(typeof window !== 'undefined' && window.__FINCONTROL_E2E_USER__) : false;
+      if (!isE2ESession && typeof window !== 'undefined') {
         import('firebase/functions').then(({ getFunctions, httpsCallable }) => {
           import('../utils/firebase').then(({ app }) => {
             const functions = getFunctions(app, 'southamerica-east1');
