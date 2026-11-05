@@ -28,108 +28,112 @@ export default function SharedPurchaseSection() {
   const mockNames = ['Você', 'Lucas', 'Mariana', 'Beatriz', 'Felipe'];
 
   return (
-    <section id="shared-purchases" className="py-24 scroll-mt-20 bg-[#0D0E11] relative overflow-hidden">
+    <section id="shared-purchases" className="py-24 scroll-mt-20 bg-[var(--fc-bg)] relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           {/* Left Column: Explanatory & Math Integrity */}
           <div className="lg:col-span-6">
-            <span className="text-xs font-semibold text-[#38BDF8] uppercase tracking-wider px-3 py-1 rounded-full bg-[#38BDF8]/10 border border-[#38BDF8]/20">
+            <span className="text-xs font-semibold text-[var(--fc-accent)] uppercase tracking-wider px-3 py-1 rounded-full bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/20">
               Engenharia de Divisão
             </span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#F9FAFB] mt-4 mb-4 tracking-tight leading-tight">
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--fc-text-primary)] mt-4 mb-4 tracking-tight leading-tight">
               Fim das discussões de "quem deve quanto" no final do mês.
             </h2>
-            <p className="text-[#9CA3AF] text-base leading-relaxed mb-6">
+            <p className="text-[var(--fc-text-secondary)] text-base leading-relaxed mb-6">
               Quando você passa uma compra conjunta no seu cartão de crédito (uma viagem, o jantar com amigos, ou uma assinatura compartilhada), o FinControl calcula a fração exata de cada um sem deixar centavos perdidos no limbo.
             </p>
 
             <div className="space-y-3.5 mb-8">
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-[#34D399]/15 border border-[#34D399]/30 text-[#34D399] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-[var(--fc-success-soft)] border border-[var(--fc-success)]/30 text-[var(--fc-success)] flex items-center justify-center shrink-0 mt-0.5">
                   <FiCheck className="w-3 h-3" />
                 </div>
-                <p className="text-sm text-[#9CA3AF]">
-                  <strong className="text-[#F9FAFB]">Precisão em Cada Centavo:</strong> A soma das partes sempre resulta rigorosamente no valor total da transação.
+                <p className="text-sm text-[var(--fc-text-secondary)]">
+                  <strong className="text-[var(--fc-text-primary)]">Precisão em Cada Centavo:</strong> A soma das partes sempre resulta rigorosamente no valor total da transação.
                 </p>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-[#E5B842]/15 border border-[#E5B842]/30 text-[#E5B842] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/30 text-[var(--fc-accent)] flex items-center justify-center shrink-0 mt-0.5">
                   <FiCheck className="w-3 h-3" />
                 </div>
-                <p className="text-sm text-[#9CA3AF]">
-                  <strong className="text-[#F9FAFB]">Controle de Reembolsos:</strong> Saiba quem já fez o Pix e quem ainda está com o pagamento pendente.
+                <p className="text-sm text-[var(--fc-text-secondary)]">
+                  <strong className="text-[var(--fc-text-primary)]">Controle de Reembolsos:</strong> Saiba quem já fez o Pix e quem ainda está com o pagamento pendente.
                 </p>
               </div>
 
               <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-[var(--fc-info-soft)] border border-[var(--fc-info)]/30 text-[var(--fc-info)] flex items-center justify-center shrink-0 mt-0.5">
                   <FiCheck className="w-3 h-3" />
                 </div>
-                <p className="text-sm text-[#9CA3AF]">
-                  <strong className="text-[#F9FAFB]">Parcelamentos Compartilhados:</strong> Se a compra for em 10x, o FinControl projeta a cobrança mês a mês para todos.
+                <p className="text-sm text-[var(--fc-text-secondary)]">
+                  <strong className="text-[var(--fc-text-primary)]">Parcelamentos Compartilhados:</strong> Se a compra for parcelada, o FinControl projeta a cobrança mês a mês para todos.
                 </p>
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-2 p-3 rounded-xl bg-[#13151A] border border-white/5 text-xs text-[#9CA3AF]">
-              <FiShield className="text-[#E5B842] w-4 h-4 shrink-0" />
+            <div className="inline-flex items-center gap-2 p-3 rounded-xl bg-[var(--fc-surface-1)] border border-[var(--fc-border-subtle)] text-xs text-[var(--fc-text-secondary)]">
+              <FiShield className="text-[var(--fc-accent)] w-4 h-4 shrink-0" />
               <span>Cálculos realizados com validação exata em centavos no FinControl.</span>
             </div>
           </div>
 
           {/* Right Column: Live Interactive Split Simulator */}
-          <div className="lg:col-span-6 bg-[#13151A] rounded-2xl border border-white/10 p-6 md:p-8 shadow-2xl relative group">
+          <div className="lg:col-span-6 bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 shadow-[var(--fc-shadow-lg)] relative group">
             
             {/* Ambient Background Glow */}
-            <div className="absolute top-0 right-0 w-48 h-48 bg-[#E5B842]/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-48 h-48 bg-[var(--fc-glow-cool)] rounded-full blur-2xl pointer-events-none" />
 
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--fc-border-subtle)]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#E5B842]/10 border border-[#E5B842]/30 flex items-center justify-center text-[#E5B842]">
+                <div className="w-8 h-8 rounded-lg bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/30 flex items-center justify-center text-[var(--fc-accent)]">
                   <FiUsers className="w-4 h-4" />
                 </div>
-                <span className="text-sm font-bold text-[#F9FAFB]">Simulador de Divisão Exata</span>
+                <span className="text-sm font-bold text-[var(--fc-text-primary)]">Simulador de Divisão Exata</span>
+                <span className="text-[10px] font-medium text-[var(--fc-text-muted)] px-1.5 py-0.5 rounded bg-[var(--fc-surface-2)]">
+                  Dados de exemplo
+                </span>
               </div>
-              <span className="text-[11px] font-semibold text-[#34D399] bg-[#34D399]/10 px-2.5 py-0.5 rounded-full border border-[#34D399]/30">
-                Exatidão de Centavos Ativa
+              <span className="text-[11px] font-semibold text-[var(--fc-success)] bg-[var(--fc-success-soft)] px-2.5 py-0.5 rounded-full border border-[var(--fc-success)]/30">
+                Exatidão Ativa
               </span>
             </div>
 
             {/* Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-medium text-[#9CA3AF] mb-2">
+                <label className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
                   Valor Total da Compra (R$)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#9CA3AF]">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--fc-text-muted)]">
                     R$
                   </span>
                   <input
                     type="number"
                     value={totalAmount}
                     onChange={(e) => setTotalAmount(Math.max(1, Number(e.target.value)))}
-                    className="w-full bg-[#181B22] border border-white/10 rounded-xl py-2 pl-9 pr-3 text-sm text-[#F9FAFB] focus:border-[#E5B842] focus:outline-none"
+                    className="w-full bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl py-2 pl-9 pr-3 text-sm text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#9CA3AF] mb-2">
+                <label className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
                   Pessoas na Divisão ({peopleCount})
                 </label>
                 <div className="flex items-center gap-2">
                   {[2, 3, 4, 5].map((cnt) => (
                     <button
                       key={cnt}
+                      type="button"
                       onClick={() => setPeopleCount(cnt)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         peopleCount === cnt
-                          ? 'bg-[#E5B842] text-[#0D0E11]'
-                          : 'bg-[#181B22] text-[#9CA3AF] hover:text-[#F9FAFB] border border-white/5'
+                          ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
+                          : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
                       }`}
                     >
                       {cnt}
@@ -141,24 +145,24 @@ export default function SharedPurchaseSection() {
 
             {/* Live Distribution Output */}
             <div className="space-y-2.5 mb-6">
-              <div className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-2">
+              <div className="text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider mb-2">
                 Resultado por Pessoa:
               </div>
               {shares.map((share, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#181B22] border border-white/5"
+                  className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)]"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-white/10 text-xs font-bold text-[#F5D580] flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-[var(--fc-accent-soft)] text-xs font-bold text-[var(--fc-accent)] flex items-center justify-center">
                       {idx + 1}
                     </div>
-                    <span className="text-xs font-medium text-[#F9FAFB]">
+                    <span className="text-xs font-medium text-[var(--fc-text-primary)]">
                       {mockNames[idx] || `Pessoa ${idx + 1}`}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-bold text-[#F9FAFB] font-mono">
+                    <span className="text-xs font-bold text-[var(--fc-text-primary)] font-mono">
                       R$ {share.replace('.', ',')}
                     </span>
                   </div>
@@ -167,16 +171,16 @@ export default function SharedPurchaseSection() {
             </div>
 
             {/* Math Audit Box */}
-            <div className="p-4 rounded-xl bg-[#0E1015] border border-white/5 flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-[#9CA3AF] uppercase block">Soma das Parcelas</span>
-                <span className="text-sm font-bold text-[#34D399] font-mono">
+                <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Soma das Parcelas</span>
+                <span className="text-sm font-bold text-[var(--fc-success)] font-mono">
                   R$ {sumOfShares.replace('.', ',')}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-[#9CA3AF] uppercase block">Diferença Residual</span>
-                <span className="text-sm font-bold text-[#F5D580] font-mono">
+                <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Diferença Residual</span>
+                <span className="text-sm font-bold text-[var(--fc-accent)] font-mono">
                   R$ {drift.replace('.', ',')}
                 </span>
               </div>

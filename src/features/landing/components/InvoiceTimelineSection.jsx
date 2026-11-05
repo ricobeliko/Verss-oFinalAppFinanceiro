@@ -14,18 +14,23 @@ export default function InvoiceTimelineSection() {
   ];
 
   return (
-    <section id="invoices-timeline" className="py-24 bg-[#101217] relative">
+    <section id="invoices-timeline" className="py-24 bg-[var(--fc-bg)] relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-xs font-semibold text-[#E5B842] uppercase tracking-wider px-3 py-1 rounded-full bg-[#E5B842]/10 border border-[#E5B842]/20">
-            Previsibilidade Financeira
-          </span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#F9FAFB] mt-4 mb-4 tracking-tight">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <span className="text-xs font-semibold text-[var(--fc-accent)] uppercase tracking-wider px-3 py-1 rounded-full bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/20">
+              Previsibilidade Financeira
+            </span>
+            <span className="text-[10px] font-medium text-[var(--fc-text-muted)] px-2 py-0.5 rounded-md bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)]">
+              Dados de exemplo
+            </span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--fc-text-primary)] mt-2 mb-4 tracking-tight">
             Saiba quanto suas faturas vão cobrar antes mesmo do mês começar
           </h2>
-          <p className="text-[#9CA3AF] text-base leading-relaxed">
+          <p className="text-[var(--fc-text-secondary)] text-base leading-relaxed">
             Todas as compras parceladas e assinaturas futuras são projetadas mês a mês, sem surpresas no limite do cartão.
           </p>
         </div>
@@ -37,29 +42,29 @@ export default function InvoiceTimelineSection() {
               key={idx}
               className={`p-5 rounded-2xl border transition-all duration-300 ${
                 idx === 0
-                  ? 'bg-[#1A1D24] border-[#E5B842]/50 shadow-lg shadow-[#E5B842]/10 scale-[1.02]'
-                  : 'bg-[#13151A] border-white/5 hover:border-white/15'
+                  ? 'bg-[var(--fc-surface-2)] border-[var(--fc-accent)] shadow-[var(--fc-shadow-md)] scale-[1.02]'
+                  : 'bg-[var(--fc-surface-1)] border-[var(--fc-border-subtle)] hover:border-[var(--fc-border-strong)]'
               }`}
             >
               <div className="flex items-center justify-between text-xs mb-3">
-                <span className="text-[#9CA3AF] font-medium">{m.month} {m.year}</span>
+                <span className="text-[var(--fc-text-secondary)] font-medium">{m.month} {m.year}</span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                     idx === 0
-                      ? 'bg-[#E5B842]/20 text-[#F5D580]'
-                      : 'bg-white/5 text-[#9CA3AF]'
+                      ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)]'
+                      : 'bg-[var(--fc-surface-3)] text-[var(--fc-text-secondary)]'
                   }`}
                 >
                   {m.status}
                 </span>
               </div>
 
-              <div className="text-xl font-extrabold text-[#F9FAFB] mb-2 tracking-tight">
+              <div className="text-xl font-extrabold text-[var(--fc-text-primary)] mb-2 tracking-tight">
                 {m.total}
               </div>
 
-              <div className="text-xs text-[#9CA3AF] flex items-center gap-1.5">
-                <FiClock className="w-3.5 h-3.5 text-[#E5B842]" />
+              <div className="text-xs text-[var(--fc-text-secondary)] flex items-center gap-1.5">
+                <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)]" />
                 <span>{m.installments} parcelas ativas</span>
               </div>
             </div>
@@ -67,27 +72,32 @@ export default function InvoiceTimelineSection() {
         </div>
 
         {/* The 1 Cent Residual Domain Rule Interactive Showcase */}
-        <div className="bg-[#13151A] rounded-2xl border border-white/10 p-6 md:p-8 max-w-3xl mx-auto shadow-2xl">
+        <div className="bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 max-w-3xl mx-auto shadow-[var(--fc-shadow-lg)]">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-[#E5B842]/15 border border-[#E5B842]/30 flex items-center justify-center text-[#E5B842]">
+            <div className="w-9 h-9 rounded-xl bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/30 flex items-center justify-center text-[var(--fc-accent)]">
               <FiCheckCircle className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#F9FAFB]">
-                Rigor Matemático: O Princípio de R$ 0,01
-              </h3>
-              <p className="text-xs text-[#9CA3AF]">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-[var(--fc-text-primary)]">
+                  Rigor Matemático: O Princípio de R$ 0,01
+                </h3>
+                <span className="text-[10px] font-medium text-[var(--fc-text-muted)] px-1.5 py-0.5 rounded bg-[var(--fc-surface-2)]">
+                  Dados de exemplo
+                </span>
+              </div>
+              <p className="text-xs text-[var(--fc-text-secondary)]">
                 No FinControl, 1 centavo ainda é dívida. Nenhuma fatura é dada como quitada prematuramente.
               </p>
             </div>
           </div>
 
-          <div className="bg-[#181B22] rounded-xl p-4 border border-white/5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-[var(--fc-surface-2)] rounded-xl p-4 border border-[var(--fc-border-subtle)] mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="text-xs text-[#9CA3AF]">Fatura Exemplo: R$ 100,00</div>
-              <div className="text-sm font-semibold text-[#F9FAFB] mt-0.5">
+              <div className="text-xs text-[var(--fc-text-secondary)]">Fatura Exemplo: R$ 100,00</div>
+              <div className="text-sm font-semibold text-[var(--fc-text-primary)] mt-0.5">
                 Valor Pago: {isCentPaid ? 'R$ 100,00' : 'R$ 99,99'} • Saldo Devedor:{' '}
-                <span className={isCentPaid ? 'text-[#34D399] font-mono' : 'text-[#F87171] font-mono'}>
+                <span className={isCentPaid ? 'text-[var(--fc-success)] font-mono' : 'text-[var(--fc-danger)] font-mono'}>
                   {isCentPaid ? 'R$ 0,00' : 'R$ 0,01'}
                 </span>
               </div>
@@ -97,23 +107,24 @@ export default function InvoiceTimelineSection() {
               <span
                 className={`px-3 py-1 rounded-full text-xs font-bold border ${
                   isCentPaid
-                    ? 'bg-[#34D399]/15 border-[#34D399]/30 text-[#34D399]'
-                    : 'bg-[#FBBF24]/15 border-[#FBBF24]/30 text-[#FBBF24]'
+                    ? 'bg-[var(--fc-success-soft)] border-[var(--fc-success)]/30 text-[var(--fc-success)]'
+                    : 'bg-[var(--fc-warning-soft)] border-[var(--fc-warning)]/30 text-[var(--fc-warning)]'
                 }`}
               >
                 {isCentPaid ? 'Pago Total' : 'Pago Parcial'}
               </span>
 
               <button
+                type="button"
                 onClick={() => setIsCentPaid(!isCentPaid)}
-                className="px-3 py-1.5 rounded-lg bg-[#222630] hover:bg-[#2A2F3D] text-xs text-[#F5D580] font-medium transition-colors border border-white/10"
+                className="px-3 py-1.5 rounded-lg bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-3)] text-xs text-[var(--fc-accent)] font-medium transition-colors border border-[var(--fc-border-default)] cursor-pointer"
               >
                 {isCentPaid ? 'Simular saldo de R$ 0,01' : 'Pagar R$ 0,01 restante'}
               </button>
             </div>
           </div>
 
-          <p className="text-xs text-[#9CA3AF] leading-relaxed">
+          <p className="text-xs text-[var(--fc-text-secondary)] leading-relaxed">
             Esse padrão garante que extratos bancários, adiantamentos e reconciliações financeiras nunca apresentem discrepâncias em relatórios exportados.
           </p>
         </div>

@@ -29,7 +29,7 @@ export default function LandingPage() {
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-[#0D0E11] text-[#F9FAFB] antialiased selection:bg-[#E5B842]/30 selection:text-[#F5D580] overflow-x-hidden font-sans"
+      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] antialiased selection:bg-[var(--fc-accent-soft)] selection:text-[var(--fc-accent)] overflow-x-hidden font-sans"
     >
       {/* Top Header */}
       <LandingHeader />
