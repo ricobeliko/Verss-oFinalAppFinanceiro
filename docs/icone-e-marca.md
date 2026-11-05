@@ -24,15 +24,15 @@ A **Fase Ícone** do Redesign do FinControl estabelece a nova identidade visual 
 | Arquivo | Dimensões | Formato | Finalidade | Tratamento de Borda |
 |---|---|---|---|---|
 | `public/favicon.svg` | Vetorial (512x512) | SVG Nativo | Navegadores modernos desktop | Cantos arredondados (`rx=116`) |
-| `public/favicon-16.png` | 16x16 | PNG | Fallback abas compactas | Cantos arredondados com antialiasing |
+| `public/favicon-16.png` | 16x16 | PNG | Fallback abas compactas | Cantos arredondados |
 | `public/favicon-32.png` | 32x32 | PNG | Padrão abas desktop e favoritos | Cantos arredondados |
 | `public/favicon-48.png` | 48x48 | PNG | Barra de tarefas Windows / Bookmarks | Cantos arredondados |
 | `public/favicon.ico` | 16, 32 e 48 | ICO Multi-formato | Fallback legado para navegadores/proxies | 3 frames PNG empacotados |
 | `public/apple-touch-icon.png` | 180x180 | PNG | iOS Home Screen / Safari Touch | **Full-bleed** (quadrado sem cantos; o iOS arredonda) |
 | `public/icon-192.png` | 192x192 | PNG | PWA Android / Chrome Web App | Cantos arredondados |
 | `public/icon-512.png` | 512x512 | PNG | PWA Splash Screen de inicialização | Cantos arredondados |
-| `public/icon-maskable-512.png` | 512x512 | PNG | PWA Ícone Adaptativo Android | **Full-bleed**, ondas contidas na zona segura central de 80% |
-| `public/site.webmanifest` | - | JSON | Manifesto PWA (nome, cores e ícones) | Configuração de tema `#04171F` |
+| `public/icon-maskable-512.png` | 512x512 | PNG | PWA Ícone Adaptativo Android | **Full-bleed**, ondas contidas na zona segura central de 80% (raio $\le 204.8\text{px}$) |
+| `public/site.webmanifest` | - | JSON | Manifesto PWA (nome, cores e ícones) | Cores: `theme_color: "#04171F"`, `background_color: "#04171F"` |
 
 > [!NOTE]
 > O arquivo legado `public/favicon.png` (de 1.2 MB) foi removido do repositório por estar obsoleto e não ser mais referenciado em nenhum ponto da aplicação.
@@ -53,19 +53,20 @@ O script [`scripts/generate-icons.mjs`](file:///c:/Users/CyberLiko/projects/app-
 
 ## 4. Política de Cache e Versionamento (?v=1)
 
-No arquivo [`firebase.json`](file:///c:/Users/CyberLiko/projects/app-financeiro/firebase.json), foram configuradas regras estritas de cabeçalho:
+No arquivo [`firebase.json`](file:///c:/Users/CyberLiko/projects/app-financeiro/firebase.json), foram configuradas regras estritas de cabeçalho correspondentes a cada recurso:
 
-1. **`index.html` e `/`:**
+1. **`source: "/index.html"` e `source: "/"`:**
    - `Cache-Control: no-cache, no-store, must-revalidate`
-   - O documento principal nunca é retido em caches longos, garantindo que qualquer subida de versão de CSS, JS ou ícones seja capturada no próximo acesso.
-2. **Ícones (`**/*.@(ico|svg|png)`) e `site.webmanifest`:**
+   - Garante que a raiz e o documento HTML principal sejam sempre revalidados com o servidor, permitindo que alterações nos links de versão de assets entrem em vigor imediatamente.
+2. **`source: "/site.webmanifest"`:**
+   - `Content-Type: application/manifest+json; charset=utf-8`
    - `Cache-Control: public, max-age=31536000, immutable`
-   - Podem ser cacheados permanentemente (1 ano) por navegadores e CDNs porque as URLs em `index.html` levam a query string de versão (ex: `/favicon.svg?v=1`).
-   - Para atualizações visuais futuras, basta incrementar para `?v=2` em `index.html` e `site.webmanifest`.
-3. **Content-Type do Manifest:**
-   - Servido explicitamente com `Content-Type: application/manifest+json; charset=utf-8`.
+   - As cores configuradas são rigorosamente `background_color: "#04171F"` e `theme_color: "#04171F"`, correspondentes à paleta Abyss Teal.
+3. **`source: "**/*.@(ico|svg|png)"`:**
+   - `Cache-Control: public, max-age=31536000, immutable`
+   - Cache longo e imutável de 1 ano para todos os ícones estáticos, dado que qualquer atualização de asset incrementa a query string de versionamento (`?v=1` $\to$ `?v=2`) em `index.html` e `site.webmanifest`.
 4. **Preservação de Segurança:**
-   - A CSP de produção (`default-src 'self'`, `img-src 'self' data: blob: ...`) e os cabeçalhos de segurança (`X-Frame-Options: DENY`, `nosniff`, `HSTS`) foram 100% preservados sem qualquer relaxamento.
+   - A CSP de produção (`default-src 'self'`, `img-src 'self' data: blob: ...`) e os cabeçalhos de segurança (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `HSTS`) permanecem inalterados e plenamente respeitados.
 
 ---
 
@@ -75,15 +76,15 @@ O componente centralizado [`src/components/FinControlMark.jsx`](file:///c:/Users
 
 1. **Tela de Autenticação (`src/features/auth/AuthScreen.jsx`):**
    - Marca grande em destaque (`size={56}`) centralizada acima do título *FinControl*.
-   - Modo `animated={true}` com as três ondas deslizando de forma suave e contínua em loop linear (8.5s, 10.5s e 12.5s) com defasagem orgânica.
+   - Modo `animated={true}` com as três ondas deslizando de forma suave e contínua em loop linear (8.5s, 10.5s e 12.5s) com defasagem horizontal.
 2. **Sidebar Desktop (`src/features/dashboard/shell/AppSidebar.jsx`):**
-   - Marca em destaque no topo (`size={36}`) no estado expandido e recolhido.
+   - Marca no topo (`size={36}`) no estado expandido e recolhido.
    - Modo `hoverAnimated={true}`: estática por padrão, ativando deslizamento suave das ondas ao passar o cursor pelo bloco da marca (`group-hover/brand`).
-   - Acessibilidade: `ariaHidden={true}` no modo expandido (pois o texto "FinControl" está logo ao lado); `aria-label="FinControl"` no modo recolhido (quando o texto está oculto).
+   - Acessibilidade: `ariaHidden={true}` no modo expandido (quando o texto "FinControl" está visível); `aria-label="FinControl"` no modo recolhido (quando o texto está oculto).
 3. **Barra Superior Mobile (`src/features/dashboard/shell/AppTopbar.jsx`):**
-   - Marca compacta (`size={28}`) ao lado do gatilho do menu hambúrguer com `hoverAnimated={true}`.
+   - Marca compacta (`size={28}`) com `hoverAnimated={true}`.
 4. **Drawer Móvel (`src/features/dashboard/shell/MobileNavigation.jsx`):**
-   - Marca no cabeçalho do menu móvel (`size={32}`) ao lado do título com `hoverAnimated={true}`.
+   - Marca no cabeçalho do menu móvel (`size={32}`) com `hoverAnimated={true}`.
 
 ---
 
@@ -108,4 +109,13 @@ O componente centralizado [`src/components/FinControlMark.jsx`](file:///c:/Users
     }
   }
   ```
-  Sob redução de movimento, a marca é renderizada com as ondas perfeitamente estáticas, idêntica ao favicon.
+  Sob redução de movimento, a marca permanece perfeitamente estática, preservando a identidade visual sem animação contínua.
+
+---
+
+## 7. Verificações Técnicas Medidas
+
+- **Dimensões PNG:** Confirmadas via leitura binária dos bytes 16 a 23 do cabeçalho IHDR (`16x16`, `32x32`, `48x48`, `180x180`, `192x192`, `512x512`, `512x512 maskable`).
+- **Cabeçalho ICO:** Confirmado container de tipo 1 com exatamente 3 entradas (`16x16`, `32x32` e `48x48`) apontando para fluxos PNG válidos.
+- **Zona Segura Maskable:** Confirmado raio máximo dos vetores a $\le 176.8\text{px}$ do centro, dentro do limite de segurança de 80% ($204.8\text{px}$).
+- **Index HTML:** Confirmados os 5 elementos de link de ícones e manifesto, todos portando `?v=1`.
