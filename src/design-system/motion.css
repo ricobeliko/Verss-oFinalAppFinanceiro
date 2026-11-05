@@ -272,3 +272,68 @@ html.fc-transitioning [data-fc-aura] {
   opacity: 0 !important;
   will-change: auto !important;
 }
+
+/* =========================================================================
+   FINCONTROL BRAND MARK MOTION (Fase Ícone)
+   Pure GPU translate3d wave sliding motion, phased and seamless
+   ========================================================================= */
+@keyframes fcMarkWaveSlide {
+  0% {
+    transform: translate3d(-352px, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.fc-mark-wave {
+  transform: translate3d(0, 0, 0);
+}
+
+.fc-mark-wave-anim-1 {
+  animation: fcMarkWaveSlide 8.5s linear infinite;
+  will-change: transform;
+}
+
+.fc-mark-wave-anim-2 {
+  animation: fcMarkWaveSlide 10.5s linear infinite;
+  will-change: transform;
+}
+
+.fc-mark-wave-anim-3 {
+  animation: fcMarkWaveSlide 12.5s linear infinite;
+  will-change: transform;
+}
+
+/* Hover-triggered wave animation */
+.group:hover .fc-mark-wave-hover-1,
+.fc-mark:hover .fc-mark-wave-hover-1 {
+  animation: fcMarkWaveSlide 8.5s linear infinite;
+  will-change: transform;
+}
+
+.group:hover .fc-mark-wave-hover-2,
+.fc-mark:hover .fc-mark-wave-hover-2 {
+  animation: fcMarkWaveSlide 10.5s linear infinite;
+  will-change: transform;
+}
+
+.group:hover .fc-mark-wave-hover-3,
+.fc-mark:hover .fc-mark-wave-hover-3 {
+  animation: fcMarkWaveSlide 12.5s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-mark-wave,
+  .fc-mark-wave-anim-1,
+  .fc-mark-wave-anim-2,
+  .fc-mark-wave-anim-3,
+  .fc-mark-wave-hover-1,
+  .fc-mark-wave-hover-2,
+  .fc-mark-wave-hover-3 {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
