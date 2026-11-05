@@ -537,6 +537,175 @@ export function calculateFutureCommitmentsForPerson({ loans = [], subscriptions 
 }
 
 /**
+/**
+ * Desloca um mês 'YYYY-MM' por uma quantidade de meses (positiva ou negativa).
+ *
+ * @param {string} monthStr - 'YYYY-MM'
+ * @param {number} delta - Quantidade de meses para somar ou subtrair
+ * @returns {string} Novo mês no formato 'YYYY-MM'
+ */
+export function shiftMonth(monthStr, delta = 0) {
+    if (!monthStr || typeof monthStr !== 'string' || !monthStr.includes('-')) return '';
+    const [y, m] = monthStr.split('-').map(Number);
+    if (isNaN(y) || isNaN(m)) return '';
+    const date = new Date(Date.UTC(y, m - 1 + delta, 1));
+    const newY = date.getUTCFullYear();
+    const newM = String(date.getUTCMonth() + 1).padStart(2, '0');
+    return `${newY}-${newM}`;
+}
+
+/**
+ * Calcula a série mensal histórica e projetada de compromissos financeiros (parcelas e assinaturas).
+ * Garante fidelidade ao centavo inteiro e cálculo consistente de variação (MoM).
+ *
+ * NOTA DE HONESTIDADE:
+ * O modelo do FinControl armazena assinaturas recorrentes sem histórico de data de início/término.
+ * Portanto, para competências passadas, as assinaturas ativas refletem o valor contratual vigente HOJE.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} [params.loans=[]] - Lista de compras parceladas
+ * @param {Array<Object>} [params.subscriptions=[]] - Lista de assinaturas
+ * @param {string} [params.endMonth] - Mês de referência (ex: '2026-08')
+ * @param {string} [params.selectedMonth] - Alias de compatibilidade para endMonth
+ * @param {string} [params.startMonth] - Mês inicial explícito 'YYYY-MM' (opcional)
+ * @param {number} [params.monthsBack=5] - Quantidade de meses passados em relação a endMonth
+ * @param {number} [params.monthsForward=0] - Quantidade de meses futuros em relação a endMonth
+ * @param {number} [params.monthsCount] - Quantidade total explícita de meses (opcional)
+ * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
+ * @param {Array<Object>} [params.knownClientIds=null] - Clientes válidos para mapear órfãos
+ * @returns {Array<{
+ *   month: string,
+ *   label: string,
+ *   installmentsTotal: number,
+ *   subscriptionsTotal: number,
+ *   totalCommitted: number,
+ *   installmentsCents: number,
+ *   subscriptionsCents: number,
+ *   totalCommittedCents: number,
+ *   isProjected: boolean,
+ *   isCurrent: boolean,
+ *   delta: {
+ *     value: number,
+ *     deltaCents: number,
+ *     percentage: number | null,
+ *     direction: 'up' | 'down' | 'neutral',
+ *     label: string
+ *   }
+ * }>}
+ */
+export function calculateMonthlySeries({
+    loans = [],
+    subscriptions = [],
+    endMonth,
+    selectedMonth,
+    startMonth: explicitStartMonth,
+    monthsBack = 5,
+    monthsForward = 0,
+    monthsCount: explicitMonthsCount,
+    personId = 'all',
+    knownClientIds = null
+}) {
+    const baseMonth = endMonth || selectedMonth || new Date().toISOString().slice(0, 7);
+
+    let actualStartMonth;
+    let actualMonthsCount;
+
+    if (explicitStartMonth && explicitMonthsCount) {
+        actualStartMonth = explicitStartMonth;
+        actualMonthsCount = explicitMonthsCount;
+    } else {
+        const back = Math.max(0, parseInt(monthsBack, 10) || 0);
+        const forward = Math.max(0, parseInt(monthsForward, 10) || 0);
+        actualStartMonth = shiftMonth(baseMonth, -back);
+        actualMonthsCount = back + 1 + forward;
+    }
+
+    if (!actualStartMonth || actualMonthsCount <= 0) {
+        return [];
+    }
+
+    const { loans: filteredLoans, subscriptions: filteredSubs } = filterCommitmentsForPerson({
+        loans,
+        subscriptions,
+        personId,
+        knownClientIds
+    });
+
+    // Calcula 1 mês antes para obter a linha de base de variação do primeiro mês
+    const queryStart = shiftMonth(actualStartMonth, -1);
+    const queryCount = actualMonthsCount + 1;
+
+    const rawCommitments = calculateFutureCommitments({
+        loans: filteredLoans,
+        subscriptions: filteredSubs,
+        startMonth: queryStart,
+        monthsCount: queryCount
+    });
+
+    if (rawCommitments.length < 2) {
+        return [];
+    }
+
+    const series = [];
+
+    for (let i = 1; i <= actualMonthsCount && i < rawCommitments.length; i++) {
+        const cur = rawCommitments[i];
+        const prev = rawCommitments[i - 1];
+
+        const installmentsCents = toCents(cur.installmentsTotal || 0);
+        const subscriptionsCents = toCents(cur.subscriptionsTotal || 0);
+        const totalCommittedCents = installmentsCents + subscriptionsCents;
+        const prevTotalCents = toCents(prev.totalCommitted || 0);
+
+        const deltaCents = totalCommittedCents - prevTotalCents;
+        const deltaValue = fromCents(deltaCents);
+
+        let percentage = null;
+        let direction = 'neutral';
+        let label = '—';
+
+        if (prevTotalCents === 0) {
+            if (totalCommittedCents === 0) {
+                percentage = 0;
+                direction = 'neutral';
+                label = '0,0%';
+            } else {
+                percentage = null;
+                direction = 'up';
+                label = '+100,0%';
+            }
+        } else {
+            const rawPct = (deltaCents / prevTotalCents) * 100;
+            percentage = Number(rawPct.toFixed(1));
+            direction = percentage > 0 ? 'up' : (percentage < 0 ? 'down' : 'neutral');
+            label = `${percentage > 0 ? '+' : ''}${percentage.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+        }
+
+        series.push({
+            month: cur.month,
+            label: cur.label,
+            installmentsTotal: cur.installmentsTotal,
+            subscriptionsTotal: cur.subscriptionsTotal,
+            totalCommitted: cur.totalCommitted,
+            installmentsCents,
+            subscriptionsCents,
+            totalCommittedCents,
+            isProjected: cur.month > baseMonth,
+            isCurrent: cur.month === baseMonth,
+            delta: {
+                value: deltaValue,
+                deltaCents,
+                percentage,
+                direction,
+                label
+            }
+        });
+    }
+
+    return series;
+}
+
+/**
  * Consolida os repasses de terceiros (valores que amigos/familiares devem ao titular)
  * para um mês específico e projeta o saldo devedor futuro total por pessoa.
  *
