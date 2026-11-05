@@ -9,7 +9,7 @@ import { formatCurrencyDisplay } from '../../utils/currency';
 import {
     calculateMonthlyComparisonSummary,
     calculateMonthlySeries,
-    calculateInvoiceDueDate,
+    calculateInvoiceBreakdownForMonth,
     toCents,
     fromCents,
     calculateRemainingAmount,
@@ -345,116 +345,31 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     } = useMemo(() => {
         try {
             if (isLoading || clients.length === 0) {
-                return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
+                return {
+                    displayableItems: [],
+                    filteredLoansForChart: [],
+                    filteredExpensesForChart: [],
+                    filteredSubscriptionsForChart: [],
+                    summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 }
+                };
             }
 
-            const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
-            const todayAtMidnight = new Date();
-            todayAtMidnight.setHours(0, 0, 0, 0);
-            let allItems = [];
+            const breakdown = calculateInvoiceBreakdownForMonth({
+                targetMonth: selectedMonth,
+                loans,
+                subscriptions,
+                expenses,
+                cards,
+                personId: selectedClientFilter || 'all',
+                cardId: selectedCardFilter || 'all',
+                knownClientIds: clients,
+                paidSubscriptions
+            });
 
-            const safeLoans = Array.isArray(loans) ? loans : [];
-            const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
-            const safeExpenses = Array.isArray(expenses) ? expenses : [];
-            const safeCards = Array.isArray(cards) ? cards : [];
             const safeClients = Array.isArray(clients) ? clients : [];
-            const safePaidSubscriptions = Array.isArray(paidSubscriptions) ? paidSubscriptions : [];
+            const safeCards = Array.isArray(cards) ? cards : [];
 
-            safeLoans.forEach(loan => {
-                if (!loan || typeof loan.totalValue !== 'number') return;
-                const processInstallments = (installments, personDetails) => {
-                    if (Array.isArray(installments)) {
-                        installments.forEach(inst => {
-                            if (!inst) return;
-                            const instDate = new Date(inst.dueDate + "T00:00:00Z");
-                            if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
-                                (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
-                                (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
-                                let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
-                                
-                                const itemData = {
-                                    ...loan,
-                                    ...inst,
-                                    value: inst.value,
-                                    id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`,
-                                    type: 'Parcela',
-                                    loanId: loan.id,
-                                    personKey: personDetails.key,
-                                    clientId: personDetails.clientId,
-                                    description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'),
-                                    currentStatus: status
-                                };
-                                delete itemData.installments;
-                                allItems.push(itemData);
-                            }
-                        });
-                    }
-                };
-                if (loan.isShared && loan.sharedDetails) {
-                    if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
-                    if (loan.sharedDetails.person2 && loan.sharedDetails.person2?.shareAmount > 0) processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
-                } else {
-                    processInstallments(loan.installments, { key: null, clientId: loan.clientId });
-                }
-            });
-
-            const addedSubKeys = new Set();
-            safeSubscriptions.forEach(sub => {
-                if (!sub) return;
-                if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
-                    const card = safeCards.find(c => c && c.id === sub.cardId);
-                    if (!card) return;
-
-                    [-1, 0].forEach(monthOffset => {
-                        const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
-                        const invoiceDueDate = calculateInvoiceDueDate(chargeDate, card);
-                        
-                        if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
-                            const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
-                            if (!addedSubKeys.has(uniqueKey)) {
-                                const isPaid = safePaidSubscriptions.some(ps => ps && ps.subscriptionId === sub.id && ps.month === selectedMonth);
-                                allItems.push({ 
-                                    ...sub, 
-                                    type: 'Assinatura', 
-                                    id: uniqueKey,
-                                    originalId: sub.id,
-                                    description: sub.name, 
-                                    dueDate: chargeDate.toISOString().split('T')[0], 
-                                    currentStatus: isPaid ? 'Paga' : 'Pendente',
-                                    value: sub.amount 
-                                });
-                                addedSubKeys.add(uniqueKey);
-                            }
-                        }
-                    });
-                }
-            });
-            
-            safeExpenses.forEach(expense => {
-                if (!expense) return;
-                const expenseDate = expense.date;
-                if (!(expenseDate instanceof Date) || isNaN(expenseDate)) return;
-
-                if (
-                    (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
-                    (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
-                ) {
-                    const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
-                    const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
-                    
-                    if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
-                        allItems.push({ 
-                            ...expense, 
-                            type: 'Despesa', 
-                            dueDate: expense.date.toISOString().split('T')[0], 
-                            currentStatus: expense.status || 'Pendente',
-                            value: expense.value 
-                        });
-                    }
-                }
-            });
-
-            allItems.sort((a, b) => {
+            const sortedItems = [...breakdown.items].sort((a, b) => {
                 let aValue = a[sortConfig.key] || '';
                 let bValue = b[sortConfig.key] || '';
 
@@ -476,24 +391,26 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     : String(bValue).localeCompare(String(aValue));
             });
 
-            const faturaCents = allItems.reduce((sum, item) => sum + toCents(item.value || 0), 0);
-            const recebidoCents = allItems.filter(item => item.currentStatus === 'Paga').reduce((sum, item) => sum + toCents(item.value || 0), 0);
-            const pendenteCents = Math.max(0, faturaCents - recebidoCents);
-
             return {
-                displayableItems: allItems,
-                filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'),
-                filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
-                filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
+                displayableItems: sortedItems,
+                filteredLoansForChart: breakdown.filteredLoansForChart,
+                filteredExpensesForChart: breakdown.filteredExpensesForChart,
+                filteredSubscriptionsForChart: breakdown.filteredSubscriptionsForChart,
                 summary: {
-                    totalFatura: fromCents(faturaCents),
-                    totalRecebido: fromCents(recebidoCents),
-                    totalPendente: fromCents(pendenteCents),
+                    totalFatura: breakdown.totalCommitted,
+                    totalRecebido: breakdown.totalRecebido,
+                    totalPendente: breakdown.totalPendente,
                 }
             };
         } catch (error) {
             console.error("ERRO FATAL DURANTE O CÁLCULO DO RESUMO:", error);
-            return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
+            return {
+                displayableItems: [],
+                filteredLoansForChart: [],
+                filteredExpensesForChart: [],
+                filteredSubscriptionsForChart: [],
+                summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 }
+            };
         }
     }, [isLoading, loans, clients, cards, subscriptions, expenses, paidSubscriptions, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
     
@@ -511,13 +428,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         return calculateMonthlySeries({
             loans,
             subscriptions,
+            expenses,
+            cards,
             endMonth: selectedMonth,
             monthsBack: 5,
             monthsForward: 0,
             personId: selectedClientFilter || 'all',
+            cardId: selectedCardFilter || 'all',
             knownClientIds: clients
         });
-    }, [loans, subscriptions, selectedMonth, selectedClientFilter, clients]);
+    }, [loans, subscriptions, expenses, cards, selectedMonth, selectedClientFilter, selectedCardFilter, clients]);
 
     const currentMonthPoint = useMemo(() => {
         if (!monthlySeries || monthlySeries.length === 0) return null;
@@ -830,7 +750,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             <MonthlyEvolutionChart
                 loans={loans}
                 subscriptions={subscriptions}
+                expenses={expenses}
+                cards={cards}
                 selectedMonth={selectedMonth}
+                selectedCardFilter={selectedCardFilter}
                 clients={clients}
                 isPro={isPro}
                 isTrialActive={isTrialActive}

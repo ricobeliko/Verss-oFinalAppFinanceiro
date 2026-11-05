@@ -21,6 +21,7 @@ const METRIC_OPTIONS = [
   { id: 'total', label: 'Total' },
   { id: 'installments', label: 'Parcelas' },
   { id: 'subscriptions', label: 'Assinaturas' },
+  { id: 'expenses', label: 'Despesas avulsas' },
 ];
 
 const PERIOD_OPTIONS = [
@@ -94,7 +95,10 @@ const CustomEvolutionTooltip = ({ active, payload, label, metricLabel }) => {
 export default function MonthlyEvolutionChart({
   loans = [],
   subscriptions = [],
+  expenses = [],
+  cards = [],
   selectedMonth,
+  selectedCardFilter = 'all',
   clients = [],
   isPro = false,
   isTrialActive = false,
@@ -133,13 +137,16 @@ export default function MonthlyEvolutionChart({
     return calculateMonthlySeries({
       loans,
       subscriptions,
+      expenses,
+      cards,
       endMonth: selectedMonth,
       monthsBack,
       monthsForward,
       personId: selectedPersonId,
+      cardId: selectedCardFilter || 'all',
       knownClientIds: clients,
     });
-  }, [loans, subscriptions, selectedMonth, monthsBack, monthsForward, selectedPersonId, clients]);
+  }, [loans, subscriptions, expenses, cards, selectedMonth, monthsBack, monthsForward, selectedPersonId, selectedCardFilter, clients]);
 
   // Mapeamento dos dados para o Recharts
   const chartData = useMemo(() => {
@@ -148,6 +155,7 @@ export default function MonthlyEvolutionChart({
       if (metric === 'total') val = pt.totalCommitted;
       else if (metric === 'installments') val = pt.installmentsTotal;
       else if (metric === 'subscriptions') val = pt.subscriptionsTotal;
+      else if (metric === 'expenses') val = pt.expensesTotal;
 
       return {
         month: pt.month,
@@ -166,6 +174,7 @@ export default function MonthlyEvolutionChart({
   const metricLabel = useMemo(() => {
     if (metric === 'installments') return 'Parcelas';
     if (metric === 'subscriptions') return 'Assinaturas';
+    if (metric === 'expenses') return 'Despesas Avulsas';
     return 'Total Comprometido';
   }, [metric]);
 
@@ -353,6 +362,7 @@ export default function MonthlyEvolutionChart({
               <th scope="col">Total Comprometido</th>
               <th scope="col">Parcelas</th>
               <th scope="col">Assinaturas</th>
+              <th scope="col">Despesas Avulsas</th>
               <th scope="col">Tipo de Dado</th>
             </tr>
           </thead>
@@ -363,6 +373,7 @@ export default function MonthlyEvolutionChart({
                 <td>{formatCurrencyDisplay(pt.totalCommitted)}</td>
                 <td>{formatCurrencyDisplay(pt.installmentsTotal)}</td>
                 <td>{formatCurrencyDisplay(pt.subscriptionsTotal)}</td>
+                <td>{formatCurrencyDisplay(pt.expensesTotal)}</td>
                 <td>{pt.isProjected ? 'Projeção Futura' : 'Histórico'}</td>
               </tr>
             ))}
