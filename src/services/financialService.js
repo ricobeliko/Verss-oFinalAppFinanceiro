@@ -432,40 +432,72 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
         return { loans: safeLoans, subscriptions: safeSubs };
     }
 
-    if (personId === 'unassigned') {
-        const unassignedLoans = safeLoans.filter(l => l && !l.isShared && !l.clientId);
-        const unassignedSubs = safeSubs.filter(s => s && !s.clientId);
-        return { loans: unassignedLoans, subscriptions: unassignedSubs };
-    }
+    const isUnassigned = personId === 'unassigned';
 
     const filteredLoans = [];
     safeLoans.forEach(loan => {
         if (!loan) return;
+
         if (loan.isShared && loan.sharedDetails) {
-            if (loan.sharedDetails.person1?.clientId === personId && loan.sharedDetails.person1?.installments) {
-                filteredLoans.push({
-                    ...loan,
-                    id: `${loan.id}-p1`,
-                    clientId: personId,
-                    isShared: false,
-                    installments: loan.sharedDetails.person1.installments
-                });
+            const p1 = loan.sharedDetails.person1;
+            const p2 = loan.sharedDetails.person2;
+
+            if (isUnassigned) {
+                // Compras compartilhadas em que person1 ou person2 NÃO tem clientId entram em 'Sem atribuição'
+                if (p1 && (!p1.clientId || p1.clientId === 'unassigned')) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p1`,
+                        clientId: null,
+                        isShared: false,
+                        installments: asArray(p1.installments)
+                    });
+                }
+                if (p2 && (!p2.clientId || p2.clientId === 'unassigned')) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p2`,
+                        clientId: null,
+                        isShared: false,
+                        installments: asArray(p2.installments)
+                    });
+                }
+            } else {
+                if (p1 && p1.clientId === personId) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p1`,
+                        clientId: personId,
+                        isShared: false,
+                        installments: asArray(p1.installments)
+                    });
+                }
+                if (p2 && p2.clientId === personId) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p2`,
+                        clientId: personId,
+                        isShared: false,
+                        installments: asArray(p2.installments)
+                    });
+                }
             }
-            if (loan.sharedDetails.person2?.clientId === personId && loan.sharedDetails.person2?.installments) {
-                filteredLoans.push({
-                    ...loan,
-                    id: `${loan.id}-p2`,
-                    clientId: personId,
-                    isShared: false,
-                    installments: loan.sharedDetails.person2.installments
-                });
+        } else if (isUnassigned) {
+            if (!loan.clientId || loan.clientId === 'unassigned') {
+                filteredLoans.push(loan);
             }
         } else if (loan.clientId === personId) {
             filteredLoans.push(loan);
         }
     });
 
-    const filteredSubs = safeSubs.filter(s => s && s.clientId === personId);
+    const filteredSubs = safeSubs.filter(s => {
+        if (!s) return false;
+        if (isUnassigned) {
+            return !s.clientId || s.clientId === 'unassigned';
+        }
+        return s.clientId === personId;
+    });
 
     return { loans: filteredLoans, subscriptions: filteredSubs };
 }

@@ -254,4 +254,268 @@ describe('Projeção dos Próximos Meses por Pessoa — Domínio e Invariantes (
     expect(html).toContain('Projeção dos Próximos Meses');
     expect(html).toContain('Ago/26');
   });
+
+  describe('Fase 7.1 — 7 Cenários de Borda do Invariante Matemático', () => {
+    function assertInvariantZeroDrift({ loans: lns = [], subscriptions: sbs = [], startMonth: sm, monthsCount: mc = 4, peopleIds = [] }) {
+      const projTodos = calculateFutureCommitments({ loans: lns, subscriptions: sbs, startMonth: sm, monthsCount: mc });
+      const projByPerson = peopleIds.map((pId) =>
+        calculateFutureCommitmentsForPerson({ loans: lns, subscriptions: sbs, startMonth: sm, monthsCount: mc, personId: pId })
+      );
+      const projSemPessoa = calculateFutureCommitmentsForPerson({
+        loans: lns,
+        subscriptions: sbs,
+        startMonth: sm,
+        monthsCount: mc,
+        personId: 'unassigned',
+      });
+
+      expect(projTodos.length).toBe(mc);
+
+      for (let m = 0; m < mc; m++) {
+        const monthLabel = projTodos[m]?.label || `Mês ${m}`;
+
+        const somaInstCents =
+          projByPerson.reduce((acc, p) => acc + Math.round((p[m]?.installmentsTotal || 0) * 100), 0) +
+          Math.round((projSemPessoa[m]?.installmentsTotal || 0) * 100);
+        const todosInstCents = Math.round((projTodos[m]?.installmentsTotal || 0) * 100);
+
+        const somaSubsCents =
+          projByPerson.reduce((acc, p) => acc + Math.round((p[m]?.subscriptionsTotal || 0) * 100), 0) +
+          Math.round((projSemPessoa[m]?.subscriptionsTotal || 0) * 100);
+        const todosSubsCents = Math.round((projTodos[m]?.subscriptionsTotal || 0) * 100);
+
+        const somaTotalCents =
+          projByPerson.reduce((acc, p) => acc + Math.round((p[m]?.totalCommitted || 0) * 100), 0) +
+          Math.round((projSemPessoa[m]?.totalCommitted || 0) * 100);
+        const todosTotalCents = Math.round((projTodos[m]?.totalCommitted || 0) * 100);
+
+        expect(
+          somaInstCents,
+          `Divergência de parcelas em ${monthLabel}: soma partes (${somaInstCents}) != todos (${todosInstCents})`
+        ).toBe(todosInstCents);
+
+        expect(
+          somaSubsCents,
+          `Divergência de assinaturas em ${monthLabel}: soma partes (${somaSubsCents}) != todos (${todosSubsCents})`
+        ).toBe(todosSubsCents);
+
+        expect(
+          somaTotalCents,
+          `Divergência de total comprometido em ${monthLabel}: soma partes (${somaTotalCents}) != todos (${todosTotalCents})`
+        ).toBe(todosTotalCents);
+      }
+    }
+
+    it('Cenário (a): compartilhada com person2 sem clientId atribui parte de person2 a unassigned a zero centavos', () => {
+      const testLoans = [{
+        id: 'loan-shared-no-client-2',
+        description: 'Mesa de Escritório',
+        isShared: true,
+        sharedDetails: {
+          person1: {
+            clientId: 'client-1',
+            installments: [
+              { number: 1, value: 150.55, dueDate: '2026-08-10' },
+              { number: 2, value: 150.55, dueDate: '2026-09-10' }
+            ]
+          },
+          person2: {
+            clientId: null,
+            installments: [
+              { number: 1, value: 150.55, dueDate: '2026-08-10' },
+              { number: 2, value: 150.55, dueDate: '2026-09-10' }
+            ]
+          }
+        },
+        installments: [
+          { number: 1, value: 301.10, dueDate: '2026-08-10' },
+          { number: 2, value: 301.10, dueDate: '2026-09-10' }
+        ]
+      }];
+
+      assertInvariantZeroDrift({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 4,
+        peopleIds: ['client-1']
+      });
+    });
+
+    it('Cenário (b): compartilhada onde person1 e person2 são o MESMO clientId não causa dupla contagem e preserva zero drift', () => {
+      const testLoans = [{
+        id: 'loan-shared-same-client',
+        description: 'Compra Dupla Mesma Pessoa',
+        isShared: true,
+        sharedDetails: {
+          person1: {
+            clientId: 'client-same',
+            installments: [
+              { number: 1, value: 75.25, dueDate: '2026-08-12' },
+              { number: 2, value: 75.25, dueDate: '2026-09-12' }
+            ]
+          },
+          person2: {
+            clientId: 'client-same',
+            installments: [
+              { number: 1, value: 75.25, dueDate: '2026-08-12' },
+              { number: 2, value: 75.25, dueDate: '2026-09-12' }
+            ]
+          }
+        },
+        installments: [
+          { number: 1, value: 150.50, dueDate: '2026-08-12' },
+          { number: 2, value: 150.50, dueDate: '2026-09-12' }
+        ]
+      }];
+
+      assertInvariantZeroDrift({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 4,
+        peopleIds: ['client-same']
+      });
+    });
+
+    it('Cenário (c): divisão bem desigual 70/30 com centavos ímpares preserva soma exata a zero centavos', () => {
+      const testLoans = [{
+        id: 'loan-shared-unequal-70-30',
+        description: 'Reforma Compartilhada 70/30',
+        isShared: true,
+        sharedDetails: {
+          person1: {
+            clientId: 'client-1',
+            installments: [
+              { number: 1, value: 233.33, dueDate: '2026-08-15' },
+              { number: 2, value: 233.34, dueDate: '2026-09-15' }
+            ]
+          },
+          person2: {
+            clientId: 'client-2',
+            installments: [
+              { number: 1, value: 100.00, dueDate: '2026-08-15' },
+              { number: 2, value: 99.99, dueDate: '2026-09-15' }
+            ]
+          }
+        },
+        installments: [
+          { number: 1, value: 333.33, dueDate: '2026-08-15' },
+          { number: 2, value: 333.33, dueDate: '2026-09-15' }
+        ]
+      }];
+
+      assertInvariantZeroDrift({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 4,
+        peopleIds: ['client-1', 'client-2']
+      });
+    });
+
+    it('Cenário (d): horizonte cruzando virada de ano (2026-11 a 2027-02) preserva zero drift em todos os meses', () => {
+      const testLoans = [
+        {
+          id: 'loan-year-cross-1',
+          clientId: 'client-1',
+          installments: [
+            { number: 1, value: 100.00, dueDate: '2026-11-20' },
+            { number: 2, value: 100.00, dueDate: '2026-12-20' },
+            { number: 3, value: 100.00, dueDate: '2027-01-20' },
+            { number: 4, value: 100.00, dueDate: '2027-02-20' }
+          ]
+        },
+        {
+          id: 'loan-year-cross-unassigned',
+          clientId: null,
+          installments: [
+            { number: 1, value: 50.33, dueDate: '2026-11-05' },
+            { number: 2, value: 50.33, dueDate: '2026-12-05' },
+            { number: 3, value: 50.33, dueDate: '2027-01-05' },
+            { number: 4, value: 50.34, dueDate: '2027-02-05' }
+          ]
+        }
+      ];
+
+      assertInvariantZeroDrift({
+        loans: testLoans,
+        subscriptions: [{ id: 'sub-year', name: 'Nuvem', amount: 29.90, clientId: 'client-1', isActive: true }],
+        startMonth: '2026-11',
+        monthsCount: 4,
+        peopleIds: ['client-1']
+      });
+    });
+
+    it('Cenário (e): mês intermediário sem nenhuma parcela retorna zero sem drift matemático', () => {
+      const testLoans = [
+        {
+          id: 'loan-gap',
+          clientId: 'client-1',
+          installments: [
+            { number: 1, value: 80.00, dueDate: '2026-08-10' },
+            { number: 2, value: 80.00, dueDate: '2026-10-10' }
+          ]
+        }
+      ];
+
+      assertInvariantZeroDrift({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 3,
+        peopleIds: ['client-1']
+      });
+    });
+
+    it('Cenário (f): compartilhada sem sharedDetails.person1.installments não lança erro nem cria centavo fantasma', () => {
+      const testLoans = [{
+        id: 'loan-shared-missing-p1-inst',
+        description: 'Compra Incompleta Legada',
+        isShared: true,
+        sharedDetails: {
+          person1: {
+            clientId: 'client-1'
+          },
+          person2: {
+            clientId: 'client-2',
+            installments: [
+              { number: 1, value: 99.50, dueDate: '2026-08-15' },
+              { number: 2, value: 99.50, dueDate: '2026-09-15' }
+            ]
+          }
+        },
+        installments: [
+          { number: 1, value: 99.50, dueDate: '2026-08-15' },
+          { number: 2, value: 99.50, dueDate: '2026-09-15' }
+        ]
+      }];
+
+      expect(() => {
+        assertInvariantZeroDrift({
+          loans: testLoans,
+          subscriptions: [],
+          startMonth: '2026-08',
+          monthsCount: 3,
+          peopleIds: ['client-1', 'client-2']
+        });
+      }).not.toThrow();
+    });
+
+    it('Cenário (g): assinaturas inativas não são computadas e preservam zero drift', () => {
+      const testSubs = [
+        { id: 'sub-active', name: 'Ativa', amount: 49.90, clientId: 'client-1', isActive: true },
+        { id: 'sub-inactive-1', name: 'Inativa 1', amount: 99.00, clientId: 'client-1', isActive: false },
+        { id: 'sub-inactive-2', name: 'Inativa 2', amount: 150.00, clientId: null, status: 'Inativa' }
+      ];
+
+      assertInvariantZeroDrift({
+        loans: [],
+        subscriptions: testSubs,
+        startMonth: '2026-08',
+        monthsCount: 4,
+        peopleIds: ['client-1']
+      });
+    });
+  });
 });
