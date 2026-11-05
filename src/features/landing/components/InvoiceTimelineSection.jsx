@@ -59,7 +59,7 @@ export default function InvoiceTimelineSection() {
 
               <div className="text-xs text-[var(--fc-text-secondary)] flex items-center gap-1.5">
                 <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)]" />
-                <span>{m.installments} parcelas ativas</span>
+                <span>{m.installments} {m.installments === 1 ? 'parcela ativa' : 'parcelas ativas'}</span>
               </div>
             </div>
           ))}

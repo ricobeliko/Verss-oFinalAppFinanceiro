@@ -153,7 +153,7 @@ const LivingLedgerStage = forwardRef(function LivingLedgerStage({ prefersReduced
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--fc-accent-subtle)] border border-[var(--fc-border-default)] text-xs text-[var(--fc-accent)] font-medium">
+          <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--fc-accent-subtle)] border border-[var(--fc-border-default)] text-xs text-[var(--fc-accent)] font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--fc-accent)] motion-safe:animate-pulse" />
             Fatura Aberta
           </div>

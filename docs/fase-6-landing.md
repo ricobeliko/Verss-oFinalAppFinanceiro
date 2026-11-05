@@ -197,3 +197,81 @@ Foram gerados 16 screenshots capturando Hero, Features, Pricing e Rodapé em Des
 - **Testes Unitários:** Executados com `cmd /c npm test` $\to$ **655 testes passando** em 17 arquivos.
 - **Testes E2E da Landing:** `e2e/landing-and-navigation.spec.js` $\to$ **9 testes passando (100%)** em 52.2s.
 - **Compilação de Produção:** `cmd /c npm run build` $\to$ **Concluído com sucesso (built in 26s)**.
+
+---
+
+## 10. Adendo Fase 6.1 — Simulador de Divisão, Auditoria Numérica e Marca Animada
+
+### 10.1. Causa Raiz do Bug do 11000 e Solução de Entrada
+- **Causa Raiz:** O simulador anterior utilizava `<input type="number" value={totalAmount} onChange={e => setTotalAmount(Math.max(1, Number(e.target.value)))}>`. Quando o usuário limpava o campo com Backspace, o valor vazio `""` era convertido por `Number("")` em `0`, e `Math.max(1, 0)` forçava imediatamente o estado para `1`. Ao teclar em seguida `"1000"`, o caractere era anexado ao `1`, resultando em `"11000"` (R$ 11.000,00). Além disso, `type="number"` exibia spinners nativos indesejados, colava o prefixo `"R$"` no valor e não permitia formatação brasileira com separadores de milhar e centavos.
+- **Solução Arquitetural:**
+  - Substituição por `<input type="text" inputMode="decimal" autoComplete="off">` em container unificado com prefixo monetário `R$` e fonte monoespaçada (`font-mono tabular-nums`).
+  - Criação do módulo utilitário desacoplado `src/features/landing/lib/splitExactCents.js`.
+  - Tratamento de estado vazio (`rawInput === ''` ou centavos inválidos): exibe mensagem orientadora clara "Informe um valor para simular a divisão" e traços de invariante ("—"), sem forçar valor residual arbitrário.
+  - Ao perder o foco (`onBlur`), se houver valor válido em centavos, formata como pt-BR limpo (`formatCentsForInput`).
+
+### 10.2. Regras do Parser e Divisão Exata em Centavos
+- **Normalização de Entrada (`parseCurrencyToCents`):**
+  - Sanitização de caracteres proibidos e limite de 12 dígitos para prevenção de overflow.
+  - Suporte resiliente a separador decimal com vírgula (`1234,56`) ou ponto (`1234.56`), e separador de milhar pt-BR (`1.234,56`).
+  - Teto de segurança: R$ 1.000.000,00 (`100000000` centavos).
+- **Divisão Exata e Zero Drift (`calculateSplitInCents`):**
+  - Quociente base: `baseCents = Math.floor(totalCents / people)`.
+  - Resto exato: `remainder = totalCents % people`.
+  - Distribuição determinística: os primeiros `remainder` participantes recebem `baseCents + 1`, e os demais recebem `baseCents`.
+  - Invariante formal garantido: $\sum_{i=1}^n \text{share}_i \equiv \text{totalCents}$, $\Delta \text{drift} = 0$, $\max(\text{share}) - \min(\text{share}) \le 1\text{ centavo}$.
+  - Formatação com espaço regular normalizado: substituição do non-breaking space `\u00A0` do `Intl.NumberFormat` por espaço comum `' '` para estabilidade visual e de asserções de teste.
+
+### 10.3. Auditoria de Todos os Números da Landing & Coerência Global
+- Criação de `src/features/landing/lib/sampleData.js` como **Fonte Única da Verdade** para todos os números demonstrativos.
+- Todas as datas de faturas e cronogramas são geradas dinamicamente a partir do mês corrente (`new Date()`), eliminando referências estáticas datadas.
+- **Tabela de Auditoria Global:**
+
+| Arquivo / Seção | Dado / Valor | Significado no Domínio | Relação Matemática & Invariante |
+| :--- | :--- | :--- | :--- |
+| `sampleData.js` | R$ 10.000,00 (`1000000`¢) | Limite total do Cartão Principal | Limite Total = Limite Utilizado + Limite Disponível |
+| `sampleData.js` | R$ 3.840,25 (`384025`¢) | Fatura atual (mês 0) | $\sum$ dos 7 lançamentos do cartão $\equiv$ R$ 3.840,25 |
+| `sampleData.js` | R$ 6.159,75 (`615975`¢) | Limite disponível do Cartão | R$ 10.000,00 - R$ 3.840,25 = R$ 6.159,75 (38,4% utilizado) |
+| `sampleData.js` | R$ 1.150,00 (`115000`¢) | Parcela 3/10 Notebook Pro | Parcela de compra parcelada |
+| `sampleData.js` | R$ 625,00 (`62500`¢) | Parcela 8/12 Smartphone Ultra | Parcela de compra parcelada |
+| `sampleData.js` | R$ 315,00 (`31500`¢) | Parcela 2/4 Revisão Automotiva | Parcela de compra parcelada |
+| `sampleData.js` | R$ 450,00 (`45000`¢) | Parcela 1/6 Curso Especialização | Parcela de compra parcelada |
+| `sampleData.js` | R$ 59,90 (`5990`¢) | Assinatura Streaming 4K | Custo fixo recorrente |
+| `sampleData.js` | R$ 139,90 (`13990`¢) | Assinatura Academia | Custo fixo recorrente |
+| `sampleData.js` | R$ 1.100,45 (`110045`¢) | Despesa avulsa Supermercado | Gasto avulso do ciclo atual |
+| `sampleData.js` | R$ 575,00 (`57500`¢) | Parcela compartilhada Lucas | Exatamente 50% da parcela de R$ 1.150,00 do Notebook |
+| `sampleData.js` | R$ 3.840,25 / R$ 2.410,20 / R$ 1.645,30 / R$ 1.075,00 / R$ 625,00 | Linha do tempo de 5 meses | Decrescimento matemático exato conforme parcelas chegam ao fim (mês 4 resta apenas Smartphone R$ 625,00) |
+| `PricingPlansSection.jsx` | R$ 0 / Grátis | Plano gratuito | Limites claros: até 3 pessoas, até 2 cartões |
+| `PricingPlansSection.jsx` | R$ 29,99 / Vitalício | Plano Pro vitalício | Bate 100% com `functions/index.js:243` (`PRO-LIFETIME-01`) |
+| `SharedPurchaseSection.jsx` | R$ 0,01 | Princípio do centavo residual | Regra de integridade do FinControl |
+
+### 10.4. Confirmação do Preço da Cloud Function
+- **Arquivo Auditado:** `functions/index.js` (linhas 235–255).
+- **Item Configurado no Mercado Pago:**
+  - `id`: `"PRO-LIFETIME-01"`
+  - `title`: `"FinControl Pro - Acesso Vitalício"`
+  - `unit_price`: `29.99`
+  - `currency_id`: `"BRL"`
+- **Conclusão:** Coerência de 100% entre o valor anunciado na landing (R$ 29,99 em pagamento único) e o backend de processamento de pagamentos.
+
+### 10.5. Grep de Números Hardcoded: Antes vs Depois
+- **Antes (Fase 6):** 34 ocorrências de valores monetários fixos espalhados sem centralização por 4 arquivos de componentes (`LivingLedgerStage.jsx`, `FinancialControlSection.jsx`, `InvoiceTimelineSection.jsx`, `SharedPurchaseSection.jsx`). Datas estáticas fixadas em Maio/2026.
+- **Depois (Fase 6.1):** 0 valores fictícios hardcoded nos componentes. Todos os dados derivam de `sampleData.js` com centavos inteiros e datas relativas dinâmicas. Restam apenas os preços comerciais canônicos do plano Pro (R$ 29,99), do plano Grátis (R$ 0) e o nome do princípio matemático ("O Princípio de R$ 0,01").
+
+### 10.6. Marca Animada Contínua e Métricas de Performance
+- `LandingHeader.jsx` e `LandingFooter.jsx` atualizados com `animated={true}` em `<FinControlMark />`.
+- As ondas em CSS utilizam exclusivamente `transform: translate3d(...)` acelerado por GPU com `will-change: transform`.
+- **Métricas no Chrome Headless (Playwright via Vite Preview de Produção):**
+  - **Long Tasks em repouso (janela de 5 segundos contínuos):** **0** (zero).
+  - **Cumulative Layout Shift (CLS) em repouso:** **0** (zero).
+  - **Acessibilidade:** Suporte rigoroso a `prefers-reduced-motion: reduce`, desativando qualquer animação quando solicitado pelo sistema operacional.
+
+### 10.7. Inspeção Visual das Provas (28 Screenshots em `public/screenshots-fase-6-1/`)
+- **Simulador:**
+  - `sim-2p-1000.png`: R$ 1.000,00 dividido por 2 $\to$ R$ 500,00 para cada, soma R$ 1.000,00, diferença residual R$ 0,00.
+  - `sim-3p-1000.png`: R$ 1.000,00 dividido por 3 $\to$ P1: R$ 333,34, P2: R$ 333,33, P3: R$ 333,33. Soma R$ 1.000,00, diferença R$ 0,00.
+  - `sim-5p-1234-56.png`: R$ 1.234,56 dividido por 5 $\to$ P1: R$ 246,92, P2: R$ 246,91, P3: R$ 246,91, P4: R$ 246,91, P5: R$ 246,91. Soma R$ 1.234,56, diferença R$ 0,00.
+  - `sim-empty.png`: Estado vazio exibindo aviso explicativo limpo e traços `—` no invariante.
+- **Ajuste Fino Realizado:**
+  - Em telas mobile (`390x844`), a pílula secundária "Fatura Aberta" no header do cartão foi ocultada em viewports menores que `sm` (`hidden sm:inline-flex`), garantindo respiração perfeita sem colisão com o chip flutuante "Lucas deve R$ 575,00".
+  - Ajuste de concordância gramatical em `InvoiceTimelineSection.jsx` para "1 parcela ativa" no singular quando aplicável.
