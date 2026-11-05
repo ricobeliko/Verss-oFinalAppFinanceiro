@@ -9,6 +9,18 @@ import { clearAllSubscriptions, clearUserSubscriptions } from '../services/fires
 import { AppContext } from './AppContext';
 import { setupAuthLifecycle, getUserCollectionPathSegments } from './authLifecycle';
 
+// Restauração de dados sintéticos em modo DEV para suporte a sessões E2E e snippet de demonstração
+if (import.meta.env.DEV && typeof window !== 'undefined' && !window.__FINCONTROL_E2E_MOCK_DATA__) {
+    const rawMock = sessionStorage.getItem('fincontrol_e2e_data');
+    if (rawMock) {
+        try {
+            window.__FINCONTROL_E2E_MOCK_DATA__ = JSON.parse(rawMock);
+        } catch {
+            // noop
+        }
+    }
+}
+
 export function AppProvider({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);

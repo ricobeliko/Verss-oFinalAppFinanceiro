@@ -368,7 +368,7 @@ export default function MonthlyEvolutionChart({
           </thead>
           <tbody>
             {series.map((pt) => (
-              <tr key={pt.month}>
+              <tr key={pt.month} data-month={pt.month}>
                 <td>{pt.label}</td>
                 <td>{formatCurrencyDisplay(pt.totalCommitted)}</td>
                 <td>{formatCurrencyDisplay(pt.installmentsTotal)}</td>
