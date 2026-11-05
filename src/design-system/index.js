@@ -14,3 +14,6 @@ export { default as Skeleton, SkeletonPage } from './primitives/Skeleton';
 export { default as AnimatedCurrency } from '../components/AnimatedCurrency';
 export { default as AnimatedProgressBar } from '../components/AnimatedProgressBar';
 export { default as useAnimatedProgressBar } from '../hooks/useAnimatedProgressBar';
+export { default as Sparkline } from '../components/Sparkline';
+export { default as SegmentedControl } from '../components/SegmentedControl';
+export { default as KpiCard } from '../components/KpiCard';
