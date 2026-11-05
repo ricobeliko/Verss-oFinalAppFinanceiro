@@ -165,7 +165,7 @@ export default function KpiCard({
       onPointerMove={handlePointerMove}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      className={`relative rounded-3xl transition-transform duration-200 ease-out hover:-translate-y-1 ${className}`}
+      className={`relative rounded-3xl fc-kpi-card transition-transform duration-200 ease-out hover:-translate-y-1 ${className}`}
     >
       <Surface
         variant="elevated"
@@ -175,7 +175,7 @@ export default function KpiCard({
         {/* Camada de Brilho Dinâmico (Spotlight Cursor Glow) */}
         <div
           aria-hidden="true"
-          className={`absolute inset-0 rounded-3xl pointer-events-none transition-opacity duration-300 ${
+          className={`absolute inset-0 rounded-3xl fc-kpi-spotlight pointer-events-none transition-opacity duration-300 ${
             isHovered && !prefersReducedMotion ? 'opacity-100' : 'opacity-0'
           }`}
           style={{

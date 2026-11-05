@@ -289,3 +289,62 @@ A função `shouldBypassViewTransition()` desvia para a troca imediata clássica
 - **Zero Drift:** Os dados monetários permanecem inalterados e renderizados com centavos e formatação canônica inalterada.
 
 
+
+
+---
+
+## 11. KPIs Vivos e Evolução Mensal (Fase 4B: KpiCard, Sparkline, SegmentedControl e MonthlyEvolutionChart)
+
+Esta seção documenta a arquitetura dos cartões de métricas do topo do Resumo e o novo componente proeminente de evolução mensal interativa, unindo apresentação dinâmica hipnotizante e rigor inegociável de integridade financeira.
+
+### 1. `KpiCard` (`src/components/KpiCard.jsx`)
+- **Propósito:** Card unificado para as métricas executivas do topo do Dashboard (ex: *Fatura Total do Mês*, *Progresso de Pagamento*).
+- **Apresentação Viva & Spotlight Cursor Glow:**
+  - Camada de gradiente radial (`.fc-kpi-spotlight`) que acompanha as coordenadas do cursor (`--fc-mx`, `--fc-my`) com atenuação elástica suave.
+  - **Eficiência Estrita:** O cálculo de posição é limitado estritamente a no máximo 1 atualização por quadro via `requestAnimationFrame` (`rAF`), garantindo que o listener de `pointermove` nunca sobrecarregue a thread principal.
+  - **Zero Idle Loop:** Não há `rAF` rodando quando o mouse está estático ou fora do card.
+  - **Desativação Inteligente:** Em dispositivos móveis (`pointer: coarse`) ou sob `prefers-reduced-motion: reduce`, o efeito de spotlight é completamente desligado.
+- **Micro-interações:**
+  - Elevação sutil via GPU (`translate3d(0, -4px, 0)` no hover) com transição de 200ms.
+- **Badge Semântico MoM (Month-over-Month):**
+  - Exibe seta direcional (`▲`, `▼`, `•`), percentual formatado e texto acessível descritivo completo para leitores de tela (`aria-label="Aumento de 12,5% vs. mês anterior"`).
+  - Suporta inversão semântica via `invertDeltaSemantics` (ex: aumento de despesas é alerta/warning; aumento de receitas é sucesso/success).
+- **Zero Drift Integrado:** O valor principal é renderizado pelo `AnimatedCurrency`, interpolando centavos inteiros e formatando para moeda sem divergência.
+- **Conteúdo Secundário Opcional:** Suporte a elementos aninhados como `AnimatedProgressBar` e mini-auditoria de valores pagos/pendentes.
+
+### 2. `Sparkline` (`src/components/Sparkline.jsx`)
+- **Propósito:** Mini-gráfico de tendência vetorial embutido nos cartões de métricas.
+- **Construção Vetorial Leve:**
+  - SVG puro sem dependências pesadas, desenhado dinamicamente com curva suave ou segmentos pontuados.
+  - Gradiente de área translúcida abaixo da curva (`fill="url(#sparkline-gradient)"`).
+  - Círculo pulsante ou destacado no ponto mais recente da série.
+- **Motion & A11y:**
+  - Animação de revelação do traço via CSS `@keyframes fcSparklinePath` usando `stroke-dasharray` e `stroke-dashoffset`.
+  - Sob `prefers-reduced-motion: reduce`, o traço é desenhado estaticamente de imediato (`stroke-dashoffset: 0 !important; animation: none !important;`).
+  - Atributos `role="img"` e `aria-label` fornecem contexto semântico detalhado para tecnologias assistivas.
+
+### 3. `SegmentedControl` (`src/components/SegmentedControl.jsx`)
+- **Propósito:** Alternador segmentado em formato *pill* para seleções discretas (ex: períodos 6m/12m, métricas Total/Parcelas/Assinaturas).
+- **Acessibilidade Completa (WAI-ARIA):**
+  - Implementa padrão canônico `role="radiogroup"` com itens `role="radio"` e estado `aria-checked="true|false"`.
+  - Navegação fluida via teclado: suporte a `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home` e `End`.
+  - Altura mínima e área de toque de 44px (`min-h-[44px]`), em total conformidade com WCAG 2.5.5.
+- **Indicador Deslizante na GPU:**
+  - Pill de fundo animado via `transform: translate3d(Xpx, 0, 0)` e `width` calculados por medição do elemento ativo, com `clearProps` e sem layout shift no conteúdo.
+
+### 4. `MonthlyEvolutionChart` (`src/components/MonthlyEvolutionChart.jsx`)
+- **Propósito:** Gráfico em área Recharts de destaque no Resumo, substituindo a necessidade de consultas adicionais e permitindo explorar o horizonte de compromissos.
+- **Controles Integrados:**
+  - **Métrica:** Alterna entre *Total Comprometido*, *Parcelas* e *Assinaturas*.
+  - **Período:** Alterna entre janela de *6 Meses* e *12 Meses*.
+  - **Filtro por Pessoa:** Pills horizontais com rolagem suave para filtrar a série por cliente específico, sem atribuição ou consolidado.
+- **Destaque do Mês Atual & Projeção:**
+  - `ReferenceLine` destacada no mês corrente da navegação do dashboard.
+  - Linha sólida e gradiente para o período histórico; linha tracejada (`strokeDasharray="4 4"`) para meses futuros projetados.
+- **Nota de Honestidade Contratual (Product Proof):**
+  - Como o modelo do Firestore armazena assinaturas ativas sem histórico retroativo de datas contratuais passadas, o FinControl adota transparência factual:
+  - *Nota: assinaturas refletem o valor contratual ativo.* Exibida no cabeçalho do gráfico e nas tooltips contextuais.
+- **Tabela Acessível Visualmente Oculta (WCAG):**
+  - Contém uma tabela HTML completa (`table.sr-only`) com cabeçalhos semânticos e todas as linhas da série ativa, permitindo leitura direta por softwares de acessibilidade.
+- **Integração com Plano Pro (`ProFeatureLock`):**
+  - Usuários no plano gratuito visualizam o bloqueio elegante `ProFeatureLock`, preservando a estrutura de layout e oferecendo CTA para testar o plano Pro.

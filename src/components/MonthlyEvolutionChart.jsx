@@ -183,8 +183,9 @@ export default function MonthlyEvolutionChart({
 
   if (!hasProAccess) {
     return (
-      <div data-enter="item" className="w-full">
+      <div data-enter="item" className="w-full fc-monthly-evolution-chart">
         <ProFeatureLock
+          className="fc-pro-feature-lock"
           title="Evolução Mensal de Compromissos"
           description="Visualize a linha do tempo de faturas em 6 e 12 meses, com separação de parcelas e assinaturas por pessoa."
           onAction={onUpgradeClick}
@@ -196,7 +197,7 @@ export default function MonthlyEvolutionChart({
   return (
     <div
       data-enter="item"
-      className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-7 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-6 animate-fadeIn"
+      className="fc-monthly-evolution-chart bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-7 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-6 animate-fadeIn"
     >
       {/* Cabeçalho e Controles */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[var(--fc-border-subtle)] pb-5">
@@ -345,7 +346,7 @@ export default function MonthlyEvolutionChart({
       {/* Tabela Acessível Visualmente Oculta (WCAG / Leitores de Tela) */}
       <div className="sr-only">
         <h4>Tabela de dados de evolução mensal ({metricLabel})</h4>
-        <table>
+        <table className="sr-only">
           <thead>
             <tr>
               <th scope="col">Mês</th>
