@@ -118,7 +118,7 @@ const LivingLedgerStage = forwardRef(function LivingLedgerStage({ prefersReduced
       {/* Layer 2: Main Card (The Living Ledger) */}
       <div
         ref={cardMainRef}
-        className="relative bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-default)] p-5 md:p-7 shadow-[0_35px_80px_-15px_rgba(0,0,0,0.5)] overflow-hidden transition-all duration-300 group hover:border-[var(--fc-border-strong)]"
+        className="relative fc-glass-card rounded-2xl border border-[var(--fc-border-default)] p-5 md:p-7 shadow-[0_35px_80px_-15px_rgba(0,0,0,0.5)] overflow-hidden transition-all duration-300 group hover:border-[var(--fc-border-strong)]"
       >
         {/* Dynamic Sheen Overlay */}
         <div

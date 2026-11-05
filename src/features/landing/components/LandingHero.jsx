@@ -198,6 +198,71 @@ export default function LandingHero({ prefersReducedMotion }) {
       {/* PLANE 4 — FOREGROUND VIGNETTE (Gentle Edge Shading to Bring Content Forward) */}
       <div className="absolute inset-0 pointer-events-none -z-10 bg-[radial-gradient(ellipse_at_center,transparent_60%,var(--fc-bg)_100%)]" />
 
+      {/* PLANE 0 — BOTTOM PERIODIC WAVES */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-44 pointer-events-none overflow-hidden -z-20"
+        style={{
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.4) 25%, black 75%)',
+          maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.4) 25%, black 75%)',
+        }}
+        aria-hidden="true"
+      >
+        <svg
+          className="fc-wave-layer-1 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-1" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 140 C 131 95, 229 95, 360 140 C 491 185, 589 185, 720 140 C 851 95, 949 95, 1080 140 C 1211 185, 1309 185, 1440 140 C 1571 95, 1669 95, 1800 140 C 1931 185, 2029 185, 2160 140 C 2291 95, 2389 95, 2520 140 C 2651 185, 2749 185, 2880 140 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-1)"
+            stroke="var(--fc-wave-1)"
+            strokeWidth="1.5"
+          />
+        </svg>
+        <svg
+          className="fc-wave-layer-2 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-2" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 175 C 87 140, 153 140, 240 175 C 327 210, 393 210, 480 175 C 567 140, 633 140, 720 175 C 807 210, 873 210, 960 175 C 1047 140, 1113 140, 1200 175 C 1287 210, 1353 210, 1440 175 C 1527 140, 1593 140, 1680 175 C 1767 210, 1833 210, 1920 175 C 2007 140, 2073 140, 2160 175 C 2247 210, 2313 210, 2400 175 C 2487 140, 2553 140, 2640 175 C 2727 210, 2793 210, 2880 175 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-2)"
+            stroke="var(--fc-wave-2)"
+            strokeWidth="1.25"
+          />
+        </svg>
+        <svg
+          className="fc-wave-layer-3 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-3" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 200 C 262 145, 458 145, 720 200 C 982 255, 1178 255, 1440 200 C 1702 145, 1898 145, 2160 200 C 2422 255, 2618 255, 2880 200 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-3)"
+            stroke="var(--fc-wave-3)"
+            strokeWidth="1.25"
+          />
+        </svg>
+      </div>
+
       {/* ========================================================================= */}
       {/* MAIN CONTENT STAGE                                                        */}
       {/* ========================================================================= */}

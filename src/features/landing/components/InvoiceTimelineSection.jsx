@@ -72,7 +72,7 @@ export default function InvoiceTimelineSection() {
         </div>
 
         {/* The 1 Cent Residual Domain Rule Interactive Showcase */}
-        <div className="bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 max-w-3xl mx-auto shadow-[var(--fc-shadow-lg)]">
+        <div className="fc-glass-card rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 max-w-3xl mx-auto shadow-[var(--fc-shadow-lg)]">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-xl bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/30 flex items-center justify-center text-[var(--fc-accent)]">
               <FiCheckCircle className="w-5 h-5" />

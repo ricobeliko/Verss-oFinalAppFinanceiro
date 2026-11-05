@@ -142,7 +142,7 @@ export default function FinancialControlSection() {
             {cardsData.map((c, idx) => (
               <div
                 key={idx}
-                className="bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-subtle)] p-6 hover:border-[var(--fc-border-strong)] transition-all duration-300 shadow-[var(--fc-shadow-md)]"
+                className="fc-glass-card rounded-2xl border border-[var(--fc-border-subtle)] p-6 hover:border-[var(--fc-border-strong)] transition-all duration-300 shadow-[var(--fc-shadow-md)]"
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-medium text-[var(--fc-text-secondary)]">{c.type}</span>
@@ -178,7 +178,7 @@ export default function FinancialControlSection() {
 
         {/* Tab 2: Installments */}
         {activeTab === 'installments' && (
-          <div className="bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-subtle)] overflow-hidden shadow-[var(--fc-shadow-md)] animate-in fade-in duration-300">
+          <div className="fc-glass-card rounded-2xl border border-[var(--fc-border-subtle)] overflow-hidden shadow-[var(--fc-shadow-md)] animate-in fade-in duration-300">
             <div className="p-6 divide-y divide-[var(--fc-border-subtle)] space-y-4">
               {installmentsData.map((item, idx) => (
                 <div key={idx} className="pt-4 first:pt-0 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -223,7 +223,7 @@ export default function FinancialControlSection() {
             {subscriptionsData.map((sub, idx) => (
               <div
                 key={idx}
-                className="p-5 rounded-2xl bg-[var(--fc-surface-1)] border border-[var(--fc-border-subtle)] hover:border-[var(--fc-border-strong)] transition-all shadow-[var(--fc-shadow-md)]"
+                className="p-5 rounded-2xl fc-glass-card border border-[var(--fc-border-subtle)] hover:border-[var(--fc-border-strong)] transition-all shadow-[var(--fc-shadow-md)]"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-8 h-8 rounded-lg bg-[var(--fc-info-soft)] border border-[var(--fc-info)]/20 flex items-center justify-center text-[var(--fc-info)]">

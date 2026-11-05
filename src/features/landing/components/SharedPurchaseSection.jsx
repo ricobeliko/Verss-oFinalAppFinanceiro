@@ -81,7 +81,7 @@ export default function SharedPurchaseSection() {
           </div>
 
           {/* Right Column: Live Interactive Split Simulator */}
-          <div className="lg:col-span-6 bg-[var(--fc-surface-1)] rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 shadow-[var(--fc-shadow-lg)] relative group">
+          <div className="lg:col-span-6 fc-glass-card rounded-2xl border border-[var(--fc-border-default)] p-6 md:p-8 shadow-[var(--fc-shadow-lg)] relative group">
             
             {/* Ambient Background Glow */}
             <div className="absolute top-0 right-0 w-48 h-48 bg-[var(--fc-glow-cool)] rounded-full blur-2xl pointer-events-none" />
