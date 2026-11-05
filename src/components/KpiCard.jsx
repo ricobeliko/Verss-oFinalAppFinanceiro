@@ -231,7 +231,7 @@ export default function KpiCard({
               <span>{deltaBadgeConfig.label}</span>
             </Badge>
             <span className="text-[11px] text-[var(--fc-text-muted)]">
-              {deltaSubtitle}
+              {delta.label === '—' && delta.absoluteText ? delta.absoluteText : deltaSubtitle}
             </span>
             <span className="sr-only">{deltaBadgeConfig.ariaText}</span>
           </div>

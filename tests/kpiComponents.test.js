@@ -140,6 +140,55 @@ describe('Componentes Visuais de KPIs (Fase 4B - Commit B)', () => {
       expect(htmlQueda).toContain('border-[var(--fc-success)]');
     });
 
+    it('trata variação indefinida (base 0) exibindo traço — e valor absoluto sem seta enganosa', () => {
+      const deltaIndefinido = {
+        value: 250,
+        percentage: null,
+        direction: 'neutral',
+        label: '—',
+        absoluteText: '+ R$ 250,00 vs. mês anterior',
+      };
+
+      const html = renderToString(
+        React.createElement(KpiCard, {
+          title: 'Fatura',
+          value: 250,
+          delta: deltaIndefinido,
+          deltaSubtitle: 'vs. mês anterior',
+        })
+      );
+
+      expect(html).toContain('•');
+      expect(html).toContain('—');
+      expect(html).not.toContain('▲');
+      expect(html).not.toContain('+100');
+      expect(html).toContain('+ R$ 250,00 vs. mês anterior');
+    });
+
+    it('trata ausência de variação (ambos 0) exibindo Sem variação e ícone neutro', () => {
+      const deltaZero = {
+        value: 0,
+        percentage: null,
+        direction: 'neutral',
+        label: 'Sem variação',
+        absoluteText: 'Sem variação',
+      };
+
+      const html = renderToString(
+        React.createElement(KpiCard, {
+          title: 'Fatura',
+          value: 0,
+          delta: deltaZero,
+          deltaSubtitle: 'vs. mês anterior',
+        })
+      );
+
+      expect(html).toContain('•');
+      expect(html).toContain('Sem variação');
+      expect(html).not.toContain('▲');
+      expect(html).not.toContain('▼');
+    });
+
     it('renderiza Sparkline integrado quando sparklineData é fornecido', () => {
       const html = renderToString(
         React.createElement(KpiCard, {
