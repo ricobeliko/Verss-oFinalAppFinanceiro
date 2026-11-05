@@ -424,7 +424,7 @@ export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCoun
  * @param {string} [params.personId='all'] - ID da pessoa, 'all' para todos ou 'unassigned' para sem vínculo
  * @returns {{ loans: Array<Object>, subscriptions: Array<Object> }}
  */
-export function filterCommitmentsForPerson({ loans = [], subscriptions = [], personId = 'all' }) {
+export function filterCommitmentsForPerson({ loans = [], subscriptions = [], personId = 'all', knownClientIds = null }) {
     const safeLoans = asArray(loans);
     const safeSubs = asArray(subscriptions);
 
@@ -433,6 +433,13 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
     }
 
     const isUnassigned = personId === 'unassigned';
+    const validClientIds = knownClientIds ? new Set(asArray(knownClientIds).map(c => typeof c === 'object' ? c?.id : c).filter(Boolean)) : null;
+
+    const isClientUnassigned = (cid) => {
+        if (!cid || cid === 'unassigned') return true;
+        if (validClientIds && !validClientIds.has(cid)) return true;
+        return false;
+    };
 
     const filteredLoans = [];
     safeLoans.forEach(loan => {
@@ -444,7 +451,7 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
 
             if (isUnassigned) {
                 // Compras compartilhadas em que person1 ou person2 NÃO tem clientId entram em 'Sem atribuição'
-                if (p1 && (!p1.clientId || p1.clientId === 'unassigned')) {
+                if (p1 && isClientUnassigned(p1.clientId)) {
                     filteredLoans.push({
                         ...loan,
                         id: `${loan.id}-p1`,
@@ -453,7 +460,7 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
                         installments: asArray(p1.installments)
                     });
                 }
-                if (p2 && (!p2.clientId || p2.clientId === 'unassigned')) {
+                if (p2 && isClientUnassigned(p2.clientId)) {
                     filteredLoans.push({
                         ...loan,
                         id: `${loan.id}-p2`,
@@ -483,7 +490,7 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
                 }
             }
         } else if (isUnassigned) {
-            if (!loan.clientId || loan.clientId === 'unassigned') {
+            if (isClientUnassigned(loan.clientId)) {
                 filteredLoans.push(loan);
             }
         } else if (loan.clientId === personId) {
@@ -494,7 +501,7 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
     const filteredSubs = safeSubs.filter(s => {
         if (!s) return false;
         if (isUnassigned) {
-            return !s.clientId || s.clientId === 'unassigned';
+            return isClientUnassigned(s.clientId);
         }
         return s.clientId === personId;
     });
@@ -513,11 +520,12 @@ export function filterCommitmentsForPerson({ loans = [], subscriptions = [], per
  * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
  * @returns {Array<Object>}
  */
-export function calculateFutureCommitmentsForPerson({ loans = [], subscriptions = [], startMonth, monthsCount = 4, personId = 'all' }) {
+export function calculateFutureCommitmentsForPerson({ loans = [], subscriptions = [], startMonth, monthsCount = 4, personId = 'all', knownClientIds = null }) {
     const { loans: filteredLoans, subscriptions: filteredSubs } = filterCommitmentsForPerson({
         loans,
         subscriptions,
-        personId
+        personId,
+        knownClientIds
     });
 
     return calculateFutureCommitments({

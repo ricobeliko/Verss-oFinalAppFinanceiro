@@ -502,6 +502,77 @@ describe('Projeção dos Próximos Meses por Pessoa — Domínio e Invariantes (
       }).not.toThrow();
     });
 
+    it('Cenário (h): compra compartilhada com parte apontando para clientId órfão entra em unassigned via knownClientIds', () => {
+      const testLoans = [{
+        id: 'loan-shared-orphan-client',
+        description: 'Compra com Pessoa Deletada',
+        isShared: true,
+        sharedDetails: {
+          person1: {
+            clientId: 'client-active',
+            installments: [
+              { number: 1, value: 120.50, dueDate: '2026-08-10' },
+              { number: 2, value: 120.50, dueDate: '2026-09-10' }
+            ]
+          },
+          person2: {
+            clientId: 'client-deleted-999',
+            installments: [
+              { number: 1, value: 80.50, dueDate: '2026-08-10' },
+              { number: 2, value: 80.50, dueDate: '2026-09-10' }
+            ]
+          }
+        },
+        installments: [
+          { number: 1, value: 201.00, dueDate: '2026-08-10' },
+          { number: 2, value: 201.00, dueDate: '2026-09-10' }
+        ]
+      }];
+
+      const knownClients = [{ id: 'client-active', name: 'Ativo' }];
+
+      const projAll = calculateFutureCommitmentsForPerson({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 2,
+        personId: 'all',
+        knownClientIds: knownClients
+      });
+
+      const projActive = calculateFutureCommitmentsForPerson({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 2,
+        personId: 'client-active',
+        knownClientIds: knownClients
+      });
+
+      const projUnassigned = calculateFutureCommitmentsForPerson({
+        loans: testLoans,
+        subscriptions: [],
+        startMonth: '2026-08',
+        monthsCount: 2,
+        personId: 'unassigned',
+        knownClientIds: knownClients
+      });
+
+      // Mês 1: 120.50 + 80.50 = 201.00
+      expect(projActive[0].totalCommitted).toBe(120.50);
+      expect(projUnassigned[0].totalCommitted).toBe(80.50);
+      expect(projAll[0].totalCommitted).toBe(201.00);
+      expect(Math.round((projActive[0].totalCommitted + projUnassigned[0].totalCommitted) * 100))
+        .toBe(Math.round(projAll[0].totalCommitted * 100));
+
+      // Mês 2: 120.50 + 80.50 = 201.00
+      expect(projActive[1].totalCommitted).toBe(120.50);
+      expect(projUnassigned[1].totalCommitted).toBe(80.50);
+      expect(projAll[1].totalCommitted).toBe(201.00);
+      expect(Math.round((projActive[1].totalCommitted + projUnassigned[1].totalCommitted) * 100))
+        .toBe(Math.round(projAll[1].totalCommitted * 100));
+    });
+
     it('Cenário (g): assinaturas inativas não são computadas e preservam zero drift', () => {
       const testSubs = [
         { id: 'sub-active', name: 'Ativa', amount: 49.90, clientId: 'client-1', isActive: true },

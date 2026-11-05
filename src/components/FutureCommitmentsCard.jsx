@@ -44,6 +44,7 @@ export default function FutureCommitmentsCard({
       loans,
       subscriptions,
       personId: 'unassigned',
+      knownClientIds: clients,
     });
 
     if (unassignedLoans.length > 0 || unassignedSubs.length > 0) {
@@ -63,22 +64,24 @@ export default function FutureCommitmentsCard({
   // Filtra compras para a pessoa ativa (para cálculo de alívio)
   const { loans: activeLoans } = useMemo(() => {
     return filterCommitmentsForPerson({
+      knownClientIds: clients,
       loans,
       subscriptions,
       personId: selectedPersonId,
     });
-  }, [loans, subscriptions, selectedPersonId]);
+  }, [loans, subscriptions, selectedPersonId, clients]);
 
   // Projeção dos próximos 4 meses
   const projection = useMemo(() => {
     return calculateFutureCommitmentsForPerson({
+      knownClientIds: clients,
       loans,
       subscriptions,
       startMonth: selectedMonth,
       monthsCount: 4,
       personId: selectedPersonId,
     });
-  }, [loans, subscriptions, selectedMonth, selectedPersonId]);
+  }, [loans, subscriptions, selectedMonth, selectedPersonId, clients]);
 
   // Curva de descompressão financeira (alívio com fim de parcelas)
   const relief = useMemo(() => {

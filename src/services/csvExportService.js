@@ -37,6 +37,27 @@ export function formatCsvCurrency(value) {
 }
 
 /**
+ * Retorna o dia do mês ajustado (clamp) para o último dia válido daquele ano/mês.
+ * Evita datas inexistentes como 2026-02-31 ou 2024-02-30.
+ *
+ * @param {number|string} year - Ano (ex: 2026 ou '2026')
+ * @param {number|string} month - Mês de 1 a 12 (ex: 2 ou '02')
+ * @param {number|string} desiredDay - Dia desejado (ex: 31)
+ * @returns {string} Dia formatado com dois dígitos (ex: '28', '29', '30', '31')
+ */
+export function clampDayOfMonth(year, month, desiredDay) {
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    const d = parseInt(desiredDay, 10);
+    if (isNaN(y) || isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1) {
+        return String(Math.max(1, Math.min(28, isNaN(d) ? 1 : d))).padStart(2, '0');
+    }
+    const maxDays = new Date(y, m, 0).getDate();
+    const clamped = Math.min(d, maxDays);
+    return String(clamped).padStart(2, '0');
+}
+
+/**
  * Gera o conteúdo CSV de transações financeiras consolidadas.
  * 
  * @param {Array<Object>} transactions
@@ -238,7 +259,7 @@ export function generateAnnualReportCsv({
 
         for (let m = 1; m <= 12; m++) {
             const mStr = String(m).padStart(2, '0');
-            const dayStr = String(sub.dueDate || sub.dia || 1).padStart(2, '0');
+            const dayStr = clampDayOfMonth(yearStr, m, sub.dueDate || sub.dia || 1);
             const subDate = `${yearStr}-${mStr}-${dayStr}`;
 
             totalSubscriptionsCents += subValCents;
@@ -472,11 +493,12 @@ export function generatePersonReportCsv({
         if (!sub || sub.clientId !== client.id || sub.isActive === false || sub.status === 'Inativa') return;
         const subVal = Number(sub.amount !== undefined ? sub.amount : (sub.value || 0));
         const cardName = cardMap.get(sub.cardId) || 'Cartão';
-        const dayStr = String(sub.dueDate || sub.dia || 1).padStart(2, '0');
+        const rawDay = sub.dueDate || sub.dia || 1;
 
         if (isYear) {
             for (let m = 1; m <= 12; m++) {
                 const mStr = String(m).padStart(2, '0');
+                const dayStr = clampDayOfMonth(periodStr, m, rawDay);
                 items.push({
                     type: 'Assinatura',
                     date: `${periodStr}-${mStr}-${dayStr}`,
@@ -492,7 +514,7 @@ export function generatePersonReportCsv({
         } else {
             items.push({
                 type: 'Assinatura',
-                date: `${periodStr}-${dayStr}`,
+                date: `${periodStr}-${clampDayOfMonth(periodStr.slice(0, 4), periodStr.slice(5, 7) || 1, rawDay)}`,
                 description: sanitizeCsvFormula(sub.name || 'Assinatura'),
                 category: 'Assinaturas',
                 clientName: sanitizeCsvFormula(clientName),

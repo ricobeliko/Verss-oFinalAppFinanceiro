@@ -4,6 +4,7 @@ import {
   generatePersonReportCsv,
   sanitizeCsvFormula,
   sanitizeFilename,
+  clampDayOfMonth,
 } from '../src/services/csvExportService';
 
 describe('Export CSV Mensal e Anual por Pessoa (Commit D)', () => {
@@ -438,6 +439,71 @@ describe('Export CSV Mensal e Anual por Pessoa (Commit D)', () => {
 
       expect(sumAnnualCents).toBe(expectedAnnualCents);
       expect(sumAnnualCents / 100).toBe(1035.97);
+    });
+
+    it('clampDayOfMonth ajusta corretamente dias para o último dia válido do mês (inclusive bissexto)', () => {
+      expect(clampDayOfMonth(2026, 2, 31)).toBe('28');
+      expect(clampDayOfMonth(2024, 2, 31)).toBe('29'); // Ano bissexto
+      expect(clampDayOfMonth(2026, 4, 31)).toBe('30'); // Abril
+      expect(clampDayOfMonth(2026, 1, 31)).toBe('31'); // Janeiro
+      expect(clampDayOfMonth(2026, 2, 15)).toBe('15'); // Dia dentro do limite
+    });
+
+    it('assinatura com dia 31 em fevereiro gera data clamped válida (28 em 2026, 29 em 2024)', () => {
+      const client = { id: 'client-sub-31', name: 'Carla Dias' };
+      const testCards = [{ id: 'card-1', name: 'Nubank' }];
+      const sub31 = [{
+        id: 'sub-netflix',
+        name: 'Streaming 4K',
+        amount: 55.90,
+        clientId: client.id,
+        cardId: 'card-1',
+        dueDate: 31,
+        isActive: true
+      }];
+
+      // Mensal 2026-02 (não bissexto) -> deve clamp para 2026-02-28
+      const csv2026 = generatePersonReportCsv({
+        client,
+        periodType: 'month',
+        targetPeriod: '2026-02',
+        loans: [],
+        expenses: [],
+        subscriptions: sub31,
+        cards: testCards
+      });
+      expect(csv2026).toContain('2026-02-28');
+      expect(csv2026).not.toContain('2026-02-31');
+
+      // Mensal 2024-02 (bissexto) -> deve clamp para 2024-02-29
+      const csv2024 = generatePersonReportCsv({
+        client,
+        periodType: 'month',
+        targetPeriod: '2024-02',
+        loans: [],
+        expenses: [],
+        subscriptions: sub31,
+        cards: testCards
+      });
+      expect(csv2024).toContain('2024-02-29');
+      expect(csv2024).not.toContain('2024-02-31');
+
+      // Anual 2026 -> verifica fevereiro clamped para 28 e meses de 30 dias clamped para 30
+      const csvAnnual = generatePersonReportCsv({
+        client,
+        periodType: 'year',
+        targetPeriod: '2026',
+        loans: [],
+        expenses: [],
+        subscriptions: sub31,
+        cards: testCards
+      });
+      expect(csvAnnual).toContain('2026-02-28');
+      expect(csvAnnual).toContain('2026-04-30');
+      expect(csvAnnual).toContain('2026-06-30');
+      expect(csvAnnual).toContain('2026-09-30');
+      expect(csvAnnual).toContain('2026-11-30');
+      expect(csvAnnual).toContain('2026-01-31');
     });
 
     it('pessoa sem nenhum item gera CSV válido com BOM e cabeçalho sem lançar erro nem corromper', () => {
