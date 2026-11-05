@@ -50,7 +50,7 @@ export default function LandingHeader() {
         <a href="#hero" className="flex items-center gap-2.5 group/brand focus:outline-none">
           <FinControlMark
             size={34}
-            hoverAnimated={true}
+            animated={true}
             ariaHidden={true}
             className="transition-transform group-hover/brand:scale-105"
           />

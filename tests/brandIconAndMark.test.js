@@ -196,4 +196,18 @@ describe('Fase Ícone — Validação de Favicons, Manifest e Marca FinControl',
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.fc-mark-wave-anim-1[\s\S]*?animation:\s*none\s*!important/);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.fc-mark-wave-anim-1[\s\S]*?transform:\s*none\s*!important/);
   });
+
+  it('6. LandingHeader e LandingFooter utilizam FinControlMark com animated={true}', () => {
+    const headerPath = path.join(projectRoot, 'src', 'features', 'landing', 'components', 'LandingHeader.jsx');
+    const footerPath = path.join(projectRoot, 'src', 'features', 'landing', 'components', 'LandingFooter.jsx');
+
+    const headerContent = fs.readFileSync(headerPath, 'utf8');
+    const footerContent = fs.readFileSync(footerPath, 'utf8');
+
+    expect(headerContent).toContain('animated={true}');
+    expect(headerContent).not.toContain('hoverAnimated={true}');
+
+    expect(footerContent).toContain('animated={true}');
+    expect(footerContent).not.toContain('hoverAnimated={true}');
+  });
 });

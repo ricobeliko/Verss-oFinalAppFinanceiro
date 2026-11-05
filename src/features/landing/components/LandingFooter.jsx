@@ -13,7 +13,7 @@ export default function LandingFooter() {
           <div className="flex items-center gap-3 group/brand">
             <FinControlMark
               size={28}
-              hoverAnimated={true}
+              animated={true}
               ariaHidden={true}
               className="transition-transform group-hover/brand:scale-105"
             />

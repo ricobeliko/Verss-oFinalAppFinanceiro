@@ -321,4 +321,69 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(sharedSection.locator('text=R$ 1.234,56').first()).toBeVisible();
     await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
   });
+
+  test('Performance e Motion: FinControlMark sempre animada não gera Long Tasks nem CLS em repouso', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Verifica que as ondas possuem classes de animação contínua ativas no header e no footer
+    const headerMark = page.locator('header svg.fc-mark');
+    await expect(headerMark).toBeVisible();
+    const animatedWaveHeader = headerMark.locator('.fc-mark-wave-anim-1');
+    await expect(animatedWaveHeader).toHaveCount(1);
+
+    const footerMark = page.locator('footer svg.fc-mark');
+    await expect(footerMark).toBeVisible();
+    const animatedWaveFooter = footerMark.locator('.fc-mark-wave-anim-1');
+    await expect(animatedWaveFooter).toHaveCount(1);
+
+    // Aguarda hidratação inicial e estabilização de entrada
+    await page.waitForTimeout(6500);
+
+    // Instala observer para medir estritamente o período de repouso (3 segundos)
+    await page.evaluate(() => {
+      window.__restLongTasks = [];
+      window.__restClsScore = 0;
+
+      try {
+        const restObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            window.__restLongTasks.push({
+              duration: entry.duration,
+              startTime: entry.startTime,
+            });
+          }
+        });
+        restObserver.observe({ entryTypes: ['longtask'] });
+      } catch (e) {
+        // longtask
+      }
+
+      try {
+        const restClsObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              window.__restClsScore += entry.value;
+            }
+          }
+        });
+        restClsObserver.observe({ type: 'layout-shift', buffered: false });
+      } catch (e) {
+        // layout-shift
+      }
+    });
+
+    await page.waitForTimeout(3000);
+
+    const perfMetrics = await page.evaluate(() => {
+      return {
+        longTasksCount: window.__restLongTasks?.length || 0,
+        clsScore: window.__restClsScore || 0,
+      };
+    });
+
+    // Em repouso não há Long Tasks nem CLS provocados pela animação GPU das ondas
+    expect(perfMetrics.longTasksCount).toBe(0);
+    expect(perfMetrics.clsScore).toBe(0);
+  });
 });
