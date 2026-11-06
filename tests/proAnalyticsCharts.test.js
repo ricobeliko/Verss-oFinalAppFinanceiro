@@ -168,4 +168,92 @@ describe('ProAnalyticsCharts — Rosca Interativa, Invariantes e Acessibilidade 
     // Prompt de upgrade Pro deve ser renderizado
     expect(html).toContain('Conheça o FinControl Pro');
   });
+
+  describe('Detalhamento de Gastos por Pessoa na Legenda e Centro (Fase 9.2)', () => {
+    it('renderiza corretamente a legenda com 1 pessoa exibindo nome, valor completo e percentual', () => {
+      const html = renderToString(
+        React.createElement(ProAnalyticsCharts, {
+          loans: [{ id: 'l1', isMyDebt: true, value: 741.80 }],
+          clients: [],
+          expenses: [],
+          subscriptions: [],
+          theme: 'dark',
+        })
+      );
+
+      expect(html).toContain('Minhas despesas');
+      expect(html).toContain('741,80');
+      expect(html).toContain('100%');
+      expect(html).toMatch(/aria-label="Minhas despesas: R\$\s*741,80, 100% do total"/);
+      // Garante empilhamento vertical total
+      expect(html).toContain('flex flex-col items-center gap-6 w-full');
+    });
+
+    it('renderiza corretamente a legenda com 2 pessoas exibindo nome, valores completos e percentuais', () => {
+      const html = renderToString(
+        React.createElement(ProAnalyticsCharts, {
+          loans: [
+            { id: 'l1', isMyDebt: true, value: 500.00 },
+            { id: 'l2', clientId: 'c1', isMyDebt: false, value: 241.80 }
+          ],
+          clients: [{ id: 'c1', name: 'Mariana Costa' }],
+          expenses: [],
+          subscriptions: [],
+          theme: 'dark',
+        })
+      );
+
+      expect(html).toContain('Minhas despesas');
+      expect(html).toContain('Mariana Costa');
+      expect(html).toContain('500,00');
+      expect(html).toContain('241,80');
+      expect(html).toContain('67%');
+      expect(html).toContain('33%');
+      expect(html).toMatch(/aria-label="Mariana Costa: R\$\s*241,80, 33% do total"/);
+    });
+
+    it('renderiza corretamente a legenda com 6 pessoas exibindo todos os nomes, valores completos e percentuais', () => {
+      const clients = [
+        { id: 'c1', name: 'Ana Silva' },
+        { id: 'c2', name: 'Bruno Lima' },
+        { id: 'c3', name: 'Carla Dias' },
+        { id: 'c4', name: 'Daniel Alves' },
+        { id: 'c5', name: 'Eduarda Santos' }
+      ];
+      const loans = [
+        { id: 'l0', isMyDebt: true, value: 200.00 },
+        { id: 'l1', clientId: 'c1', isMyDebt: false, value: 150.00 },
+        { id: 'l2', clientId: 'c2', isMyDebt: false, value: 100.00 },
+        { id: 'l3', clientId: 'c3', isMyDebt: false, value: 100.00 },
+        { id: 'l4', clientId: 'c4', isMyDebt: false, value: 100.00 },
+        { id: 'l5', clientId: 'c5', isMyDebt: false, value: 91.80 }
+      ];
+
+      const html = renderToString(
+        React.createElement(ProAnalyticsCharts, {
+          loans,
+          clients,
+          expenses: [],
+          subscriptions: [],
+          theme: 'dark',
+        })
+      );
+
+      expect(html).toContain('Minhas despesas');
+      expect(html).toContain('Ana Silva');
+      expect(html).toContain('Bruno Lima');
+      expect(html).toContain('Carla Dias');
+      expect(html).toContain('Daniel Alves');
+      expect(html).toContain('Eduarda Santos');
+
+      expect(html).toContain('200,00');
+      expect(html).toContain('150,00');
+      expect(html).toContain('100,00');
+      expect(html).toContain('91,80');
+
+      // Classes de controle de overflow e largura
+      expect(html).toContain('overflow-y-auto overflow-x-hidden');
+      expect(html).toContain('whitespace-nowrap');
+    });
+  });
 });
