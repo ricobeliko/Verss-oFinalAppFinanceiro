@@ -33,3 +33,4 @@ playwright-report/
 src/tailwind-output.css
 
 screenshots/
+public/screenshots*/

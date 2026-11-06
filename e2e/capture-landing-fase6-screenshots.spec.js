@@ -4,7 +4,7 @@ import { test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const outDir = path.resolve('public', 'screenshots-fase-6-1');
+const outDir = path.resolve('screenshots');
 
 test.describe('Captura Oficial de Provas Visuais — Fase 6.1', () => {
   test.beforeEach(() => {
