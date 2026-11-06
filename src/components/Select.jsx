@@ -16,14 +16,16 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
 /**
  * MiniWaveIcon — Ícone identitário de 3 ondas do FinControl para itens selecionados.
  */
-const MiniWaveIcon = ({ className = 'w-4 h-4 text-[var(--fc-accent)] shrink-0' }) => (
+const MiniWaveIcon = ({ className = '' }) => (
   <svg
+    width={16}
+    height={16}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2.5"
     strokeLinecap="round"
-    className={className}
+    className={`w-4 h-4 shrink-0 text-[var(--fc-accent)] ${className}`.trim()}
     aria-hidden="true"
   >
     <path d="M3 7c2.5-1.8 5-1.8 7.5 0s5 1.8 7.5 0" />
@@ -32,15 +34,17 @@ const MiniWaveIcon = ({ className = 'w-4 h-4 text-[var(--fc-accent)] shrink-0' }
   </svg>
 );
 
-const ChevronIcon = ({ className = 'w-4 h-4 text-[var(--fc-text-muted)] shrink-0' }) => (
+const ChevronIcon = ({ className = '' }) => (
   <svg
+    width={16}
+    height={16}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className={className}
+    className={`w-4 h-4 shrink-0 text-[var(--fc-text-muted)] ${className}`.trim()}
     aria-hidden="true"
   >
     <polyline points="6 9 12 15 18 9" />
@@ -447,7 +451,7 @@ export default function Select({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         onKeyDown={handleKeyDown}
-        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-none focus:border-[var(--fc-accent)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`w-full min-h-[44px] h-[44px] px-3.5 py-2.5 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-none focus:border-[var(--fc-accent)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
           isOpen ? 'border-[var(--fc-accent)] ring-2 ring-[var(--fc-focus-ring)] shadow-[var(--fc-shadow-sm)]' : ''
         }`}
         {...rest}

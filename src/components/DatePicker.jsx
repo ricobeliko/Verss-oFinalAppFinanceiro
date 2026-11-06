@@ -23,15 +23,17 @@ const MONTH_NAMES_ABBR = [
 
 const WEEKDAY_NAMES = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-const CalendarIcon = ({ className = 'w-4 h-4 text-[var(--fc-text-muted)] shrink-0' }) => (
+const CalendarIcon = ({ className = '' }) => (
   <svg
+    width={16}
+    height={16}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className={className}
+    className={`w-4 h-4 shrink-0 ${className}`.trim()}
     aria-hidden="true"
   >
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -41,14 +43,36 @@ const CalendarIcon = ({ className = 'w-4 h-4 text-[var(--fc-text-muted)] shrink-
   </svg>
 );
 
-const ChevronLeftIcon = ({ className = 'w-4 h-4 text-[var(--fc-text-secondary)]' }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+const ChevronLeftIcon = ({ className = '' }) => (
+  <svg
+    width={16}
+    height={16}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={`w-4 h-4 shrink-0 text-[var(--fc-text-secondary)] ${className}`.trim()}
+    aria-hidden="true"
+  >
     <polyline points="15 18 9 12 15 6" />
   </svg>
 );
 
-const ChevronRightIcon = ({ className = 'w-4 h-4 text-[var(--fc-text-secondary)]' }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+const ChevronRightIcon = ({ className = '' }) => (
+  <svg
+    width={16}
+    height={16}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={`w-4 h-4 shrink-0 text-[var(--fc-text-secondary)] ${className}`.trim()}
+    aria-hidden="true"
+  >
     <polyline points="9 18 15 12 9 6" />
   </svg>
 );
@@ -612,12 +636,12 @@ export default function DatePicker({
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         onKeyDown={handleKeyDown}
-        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-2xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-none focus:border-[var(--fc-accent)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`w-full min-h-[44px] h-[44px] px-3.5 py-2.5 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-none focus:border-[var(--fc-accent)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
           isOpen ? 'border-[var(--fc-accent)] ring-2 ring-[var(--fc-focus-ring)] shadow-[var(--fc-shadow-sm)]' : ''
         }`}
         {...rest}
       >
-        <div className="flex items-center gap-2.5 truncate">
+        <div className="flex items-center gap-2.5 truncate min-w-0">
           <CalendarIcon className={isOpen ? 'text-[var(--fc-accent)]' : 'text-[var(--fc-text-muted)]'} />
           <span
             className={`text-sm truncate ${

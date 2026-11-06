@@ -633,14 +633,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
 
                 {/* Filtros */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                    <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 pt-2">
+                    <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-1">
                         <button
                             type="button"
                             onClick={handlePrevMonth}
                             aria-label="Mês anterior"
                             title="Mês anterior"
-                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
+                            className="min-w-[44px] min-h-[44px] h-[44px] p-2.5 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ◀
                         </button>
@@ -648,14 +648,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(e.target.value)}
                             aria-label="Selecionar mês e ano de competência"
-                            className="w-full sm:w-auto min-w-[210px]"
+                            className="flex-1 w-full min-w-[210px]"
                         />
                         <button
                             type="button"
                             onClick={handleNextMonth}
                             aria-label="Próximo mês"
                             title="Próximo mês"
-                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
+                            className="min-w-[44px] min-h-[44px] h-[44px] p-2.5 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ▶
                         </button>
