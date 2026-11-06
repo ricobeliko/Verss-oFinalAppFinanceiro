@@ -509,6 +509,8 @@ export default function MonthPicker({
     return createPortal(
       <div
         ref={popoverRef}
+        role="dialog"
+        aria-label={ariaLabel || 'Selecionar Mês'}
         style={{
           position: 'fixed',
           top: `${popoverPosition.top}px`,

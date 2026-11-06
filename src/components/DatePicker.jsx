@@ -608,6 +608,8 @@ export default function DatePicker({
     return createPortal(
       <div
         ref={popoverRef}
+        role="dialog"
+        aria-label={ariaLabel || 'Selecionar Data'}
         style={{
           position: 'fixed',
           top: `${popoverPosition.top}px`,
