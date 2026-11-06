@@ -210,4 +210,23 @@ describe('Fase Ícone — Validação de Favicons, Manifest e Marca FinControl',
     expect(footerContent).toContain('animated={true}');
     expect(footerContent).not.toContain('hoverAnimated={true}');
   });
+
+  it('7. AppSidebar, AppTopbar e MobileNavigation utilizam FinControlMark com animated={true}', () => {
+    const sidebarPath = path.join(projectRoot, 'src', 'features', 'dashboard', 'shell', 'AppSidebar.jsx');
+    const topbarPath = path.join(projectRoot, 'src', 'features', 'dashboard', 'shell', 'AppTopbar.jsx');
+    const mobileNavPath = path.join(projectRoot, 'src', 'features', 'dashboard', 'shell', 'MobileNavigation.jsx');
+
+    const sidebarContent = fs.readFileSync(sidebarPath, 'utf8');
+    const topbarContent = fs.readFileSync(topbarPath, 'utf8');
+    const mobileNavContent = fs.readFileSync(mobileNavPath, 'utf8');
+
+    expect(sidebarContent).toContain('animated={true}');
+    expect(sidebarContent).not.toContain('hoverAnimated={true}');
+
+    expect(topbarContent).toContain('animated={true}');
+    expect(topbarContent).not.toContain('hoverAnimated={true}');
+
+    expect(mobileNavContent).toContain('animated={true}');
+    expect(mobileNavContent).not.toContain('hoverAnimated={true}');
+  });
 });

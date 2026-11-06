@@ -202,7 +202,7 @@ export default function MobileNavigation({
             <div className="flex items-center gap-2.5 group/brand">
               <FinControlMark
                 size={32}
-                hoverAnimated={true}
+                animated={true}
                 ariaHidden={true}
                 className="transition-transform duration-200 group-hover/brand:scale-105"
               />

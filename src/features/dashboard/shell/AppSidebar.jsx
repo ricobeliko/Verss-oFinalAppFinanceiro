@@ -246,7 +246,7 @@ export default function AppSidebar({
           <div className="flex items-center gap-3 overflow-hidden group/brand cursor-default">
             <FinControlMark
               size={36}
-              hoverAnimated={true}
+              animated={true}
               ariaHidden={!isCollapsed}
               ariaLabel={isCollapsed ? 'FinControl' : undefined}
               className="transition-transform duration-200 group-hover/brand:scale-105"

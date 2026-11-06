@@ -61,7 +61,7 @@ export default function AppTopbar({
         <div className="flex items-center gap-2 group/brand">
           <FinControlMark
             size={28}
-            hoverAnimated={true}
+            animated={true}
             ariaHidden={true}
             className="transition-transform duration-200 group-hover/brand:scale-105"
           />
