@@ -275,3 +275,76 @@ Foram gerados 16 screenshots capturando Hero, Features, Pricing e Rodapé em Des
 - **Ajuste Fino Realizado:**
   - Em telas mobile (`390x844`), a pílula secundária "Fatura Aberta" no header do cartão foi ocultada em viewports menores que `sm` (`hidden sm:inline-flex`), garantindo respiração perfeita sem colisão com o chip flutuante "Lucas deve R$ 575,00".
   - Ajuste de concordância gramatical em `InvoiceTimelineSection.jsx` para "1 parcela ativa" no singular quando aplicável.
+
+---
+
+## 11. Adendo Fase 6.2 — Limpeza de Screenshots, Fonte Única Derivada e Simulador Fiel ao App
+
+### 11.1. Remoção de Screenshots Indevidos de `public/`
+- **Diagnóstico:** 28 imagens de screenshot (totalizando **2.360.662 bytes / ~2,25 MB**) haviam sido gravadas em `public/screenshots-fase-6-1/`. Como a pasta `public/` é copiada integralmente para a raiz do Hosting no build de produção, essas imagens seriam publicadas desnecessariamente.
+- **Ações Corretivas Executadas:**
+  1. Remoção imediata via `git rm -r public/screenshots-fase-6-1/`.
+  2. Adição da regra de proteção `public/screenshots*/` no [`.gitignore`](file:///c:/Users/CyberLiko/projects/app-financeiro/.gitignore).
+  3. Criação do teste unitário de segurança [`tests/publicAssetsSanity.test.js`](file:///c:/Users/CyberLiko/projects/app-financeiro/tests/publicAssetsSanity.test.js), que escaneia recursivamente `public/` e falha se qualquer arquivo contiver `'screenshot'` no nome ou caminho.
+  4. Redirecionamento de todos os scripts de captura e testes visuais para a pasta local [`screenshots/`](file:///c:/Users/CyberLiko/projects/app-financeiro/screenshots/), devidamente ignorada pelo Git.
+  - *Nota de Histórico:* As imagens permanecem nos commits anteriores da branch (`7bf55ce` e antecessores) ocupando 2,25 MB no histórico git local, sem reescrita destrutiva nem force-push. O diretório `dist/` gerado no build final contém **0 imagens de screenshot**.
+
+### 11.2. Fonte Única de Verdade 100% Derivada (`sampleData.js`)
+O arquivo [`sampleData.js`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/lib/sampleData.js) foi completamente reestruturado para eliminar qualquer valor calculado ou total digitado à mão:
+- **Modelo Base Bruto (`RAW_SAMPLE_MODEL`):** Contém estritamente inteiros e centavos: limites dos 3 cartões, compras parceladas (valor da parcela, parcela atual, total de parcelas, flag compartilhada e cota em centavos), assinaturas (valor em centavos) e uma despesa avulsa no mês atual.
+- **Funções Puras de Derivação:**
+  - `calculateMonthInvoice(cardId, monthOffset, rawModel)`: projeta a fatura exata para qualquer mês relativo.
+  - `calculateCardUsedPercent(totalCents, limitCents)`: calcula a porcentagem com aritmética inteira pura a 1 casa decimal (arredondamento determinístico).
+  - Totais, disponíveis, percentuais, saldo devedor restante, meses de término, contagem de lançamentos e status (`Atual`, `Previsto`, `Final`) são 100% computados.
+- **Ajuste de Coerência da Janela de 5 Meses:**
+  - O parcelamento do `Notebook de Trabalho` foi ajustado para `07 de 10` (encerrando no Mês 3).
+  - O `Smartphone de Trabalho` opera em `08 de 12` (encerrando no Mês 4).
+  - No Mês 4, vence a 12ª e última parcela do Smartphone, que é a última parcela de todas as compras ativas no Cartão Principal, atribuindo legitimamente o status `"Final"` ao 5º mês da timeline.
+
+### 11.3. Tabela de Auditoria REAL (Mês a Mês — Cartão Principal)
+Tabela gerada diretamente a partir da execução do modelo (`getSampleData(new Date(2026, 10, 5))`):
+
+| Mês Relativo | Nome / Ano | Status | Parcelas Ativas | Assinaturas | Avulsas | Total da Fatura | Contagem de Lançamentos | Detalhamento |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Mês 0** | Novembro 2026 | **Atual** | 4 (R$ 2.540,00) | 2 (R$ 199,80) | 1 (R$ 1.100,45) | **R$ 3.840,25** | **7 lançamentos** | 4 parcelas + 2 assinaturas + 1 avulsa |
+| **Mês 1** | Dezembro 2026 | **Previsto** | 3 (R$ 2.090,00) | 2 (R$ 199,80) | 0 (R$ 0,00) | **R$ 2.289,80** | **5 lançamentos** | 3 parcelas + 2 assinaturas |
+| **Mês 2** | Janeiro 2027 | **Previsto** | 3 (R$ 2.090,00) | 2 (R$ 199,80) | 0 (R$ 0,00) | **R$ 2.289,80** | **5 lançamentos** | 3 parcelas + 2 assinaturas |
+| **Mês 3** | Fevereiro 2027 | **Previsto** | 2 (R$ 1.775,00) | 2 (R$ 199,80) | 0 (R$ 0,00) | **R$ 1.974,80** | **4 lançamentos** | 2 parcelas + 2 assinaturas |
+| **Mês 4** | Março 2027 | **Final** | 1 (R$ 625,00) | 2 (R$ 199,80) | 0 (R$ 0,00) | **R$ 824,80** | **3 lançamentos** | 1 parcela + 2 assinaturas |
+
+- **Coerência Entre Seções:** A fatura atual (`R$ 3.840,25`) e a fatura seguinte (`R$ 2.289,80`) coincidem 100% entre [`LivingLedgerStage`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/components/LivingLedgerStage.jsx), [`FinancialControlSection`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/components/FinancialControlSection.jsx) e [`InvoiceTimelineSection`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/components/InvoiceTimelineSection.jsx).
+
+### 11.4. Grep de Literais Monetários e Percentuais
+```bash
+$ git grep "R\$" src/features/landing/lib/sampleData.js src/features/landing/components/LivingLedgerStage.jsx src/features/landing/components/FinancialControlSection.jsx src/features/landing/components/InvoiceTimelineSection.jsx
+src/features/landing/components/InvoiceTimelineSection.jsx:  Rigor Matemático: O Princípio de R$ 0,01
+src/features/landing/components/LivingLedgerStage.jsx:        Sem resíduo de arredondamento: R$ 0,00
+src/features/landing/lib/sampleData.js:                      freeDisplay: 'R$ 0',
+src/features/landing/lib/sampleData.js:                      proDisplay: 'R$ 29,99'
+```
+**Resultado:** Zero literais monetários digitados além do nome da regra conceitual, do resíduo nulo de arredondamento e dos preços canônicos oficiais.
+
+### 11.5. Simulador Fiel ao App Real
+- **Alinhamento com o App de Produção:**
+  - No app ([`LoanManagement.jsx`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/loans/LoanManagement.jsx#L142-L143)), uma compra compartilhada ocorre entre **duas pessoas**: a Pessoa 1 define sua cota (ou divide 50/50) e a Pessoa 2 recebe o complemento exato (`total - pessoa1`).
+  - As parcelas seguem a regra canônica de [`financialService.js:calculateInstallments`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/services/financialService.js#L52-L85), onde as primeiras $N-1$ parcelas recebem `floor(total / N)` e a **última parcela absorve a diferença inteira de centavos residuais**.
+- **Regras Implementadas no Simulador:**
+  - Suporte a modo `"Meio a meio"` (`floor(total / 2)`) e `"Definir Pessoa 1"`.
+  - Se Pessoa 1 for maior que o total, exibe erro claro sem produzir valores negativos.
+  - Seleção de parcelas entre `1x, 2x, 3x, 6x, 10x, 12x` com botões acessíveis ($\ge 44$px).
+  - Exibição detalhada de parcelas por pessoa (ex.: `"2 × R$ 166,66 + última R$ 166,68"`).
+  - Auditoria matemática com soma das partes e diferença residual estritamente nula (`R$ 0,00`).
+- **Prova de Paridade Matemática Exaustiva:**
+  - O teste [`tests/splitExactCents.test.js`](file:///c:/Users/CyberLiko/projects/app-financeiro/tests/splitExactCents.test.js) executou uma varredura cruzada de **60.000 casos** (valores de 1 a 5.000 centavos para parcelas de 1 a 12), comparando a função `calculateAppInstallments` diretamente com `calculateInstallments` do `financialService.js`.
+  - **Resultado:** 100% de paridade em todos os 60.000 cenários, com **0 divergências**.
+
+### 11.6. Inspeção Visual das Provas em `screenshots/`
+Foram capturados 20 screenshots em Desktop (1440x900) e Mobile (390x844) nos temas escuro e claro:
+1. `desktop-dark-sim-half-1000-01-3x.png`: Divisão de R$ 1.000,01 em 2 pessoas (P1: R$ 500,00, P2: R$ 500,01) com 3 parcelas (P1: 2 × R$ 166,66 + última R$ 166,68; P2: 3 × R$ 166,67). Soma R$ 1.000,01, diferença R$ 0,00.
+2. `desktop-dark-sim-custom-p1.png`: Divisão customizada com Pessoa 1 = R$ 400,00 e Pessoa 2 = R$ 600,01. Parcelas perfeitamente decompostas.
+3. `desktop-dark-sim-error-p1-gt-total.png`: Mensagem de validação amigável em vermelho suave quando Pessoa 1 excede o total, sem números negativos nos cards.
+4. `desktop-dark-sim-empty.png`: Estado vazio exibindo aviso e traços de invariante limpos.
+5. `desktop-dark-timeline-coerente.png`: Ribbon de 5 meses com contagem de lançamentos e detalhamento explícito (parcelas + assinaturas + avulsas).
+- **Achados e Observações Críticas de Layout:**
+  - *Viewport Mobile (390x844):* Ao rolar a página até a timeline ou o simulador, a barra de navegação superior fixa (`position: fixed`) sobrepõe sutilmente a primeira linha de texto do cabeçalho da seção quando o scroll é ancorado no topo exato do elemento. No uso interativo real do usuário (com scroll contínuo), o comportamento é natural, mas na captura estática de elemento (`element.screenshot()`), a barra fixa aparece sobreposta.
+  - *Card Estreito no Mobile:* No primeiro card da timeline (Novembro 2026), o texto de detalhamento `"4 parcelas + 2 assinaturas + 1 avulsa"` é truncado com reticências (`truncate`) devido à largura reduzida da coluna dupla no mobile, mantendo o layout limpo sem quebrar a altura dos cards vizinhos.

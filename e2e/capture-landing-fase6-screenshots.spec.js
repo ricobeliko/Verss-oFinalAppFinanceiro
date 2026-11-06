@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const outDir = path.resolve('screenshots');
 
-test.describe('Captura Oficial de Provas Visuais — Fase 6.1', () => {
+test.describe('Captura Oficial de Provas Visuais — Fase 6.2 (Somente em screenshots/)', () => {
   test.beforeEach(() => {
     test.setTimeout(60000);
     test.skip(
@@ -28,12 +28,12 @@ test.describe('Captura Oficial de Provas Visuais — Fase 6.1', () => {
 
   for (const vp of viewports) {
     for (const th of themes) {
-      test(`Captura Landing ${vp.name} - ${th}`, async ({ page }) => {
+      test(`Captura Timeline e Simulador ${vp.name} - ${th}`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/');
         await page.waitForTimeout(600);
 
-        // Alterna tema se necessário usando o botão visível
+        // Alterna tema se necessário
         const currentTheme = await page.locator('html').getAttribute('data-theme');
         if (currentTheme !== th) {
           const toggleBtn = page.locator('header button[aria-label*="Alternar"]:visible').first();
@@ -41,70 +41,63 @@ test.describe('Captura Oficial de Provas Visuais — Fase 6.1', () => {
           await page.waitForTimeout(600);
         }
 
-        // 1. Header com logo animada
-        const header = page.locator('header');
-        await header.screenshot({ path: path.join(outDir, `${vp.name}-${th}-header.png`) });
-
-        // 2. Living Ledger
-        const hero = page.locator('#hero');
-        await hero.screenshot({ path: path.join(outDir, `${vp.name}-${th}-living-ledger.png`) });
-
-        // 3. Financial Control - Faturas
-        const finControl = page.locator('section:has-text("Visão Panorâmica")');
-        await finControl.scrollIntoViewIfNeeded();
-        await finControl.getByRole('button', { name: 'Faturas por Cartão' }).click();
-        await page.waitForTimeout(300);
-        await finControl.screenshot({ path: path.join(outDir, `${vp.name}-${th}-fincontrol-invoices.png`) });
-
-        // 4. Financial Control - Parcelamentos
-        await finControl.getByRole('button', { name: 'Parcelamentos' }).click();
-        await page.waitForTimeout(300);
-        await finControl.screenshot({ path: path.join(outDir, `${vp.name}-${th}-fincontrol-installments.png`) });
-
-        // 5. Financial Control - Assinaturas
-        await finControl.getByRole('button', { name: 'Assinaturas' }).click();
-        await page.waitForTimeout(300);
-        await finControl.screenshot({ path: path.join(outDir, `${vp.name}-${th}-fincontrol-subscriptions.png`) });
-
-        // 6. Timeline de Faturas & Princípio R$ 0,01
+        // 1. Timeline de Faturas Coerente & Princípio R$ 0,01
         const timeline = page.locator('#invoices-timeline');
         await timeline.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await timeline.screenshot({ path: path.join(outDir, `${vp.name}-${th}-timeline-coerente.png`) });
+
+        // 2. Simulador Fiel ao App - Estado Padrão (Meio a meio 1.000,01 e 3x)
+        const shared = page.locator('#shared-purchases');
+        await shared.scrollIntoViewIfNeeded();
+        const totalInput = shared.locator('input[type="text"]').first();
+
+        await totalInput.click();
+        await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
+        await totalInput.pressSequentially('1000,01', { delay: 30 });
+        await page.locator('body').click();
+
+        const btn3x = shared.getByRole('button', { name: '3 parcelas' });
+        await btn3x.click();
         await page.waitForTimeout(300);
-        await timeline.screenshot({ path: path.join(outDir, `${vp.name}-${th}-timeline.png`) });
+        await shared.screenshot({ path: path.join(outDir, `${vp.name}-${th}-sim-half-1000-01-3x.png`) });
+
+        // 3. Simulador - Valor Personalizado da Pessoa 1
+        const btnCustom = shared.getByRole('button', { name: 'Definir Pessoa 1' });
+        await btnCustom.click();
+        await page.waitForTimeout(300);
+
+        const p1Input = shared.locator('input[type="text"]').nth(1);
+        if (await p1Input.isVisible()) {
+          await p1Input.click();
+          await page.keyboard.press('Control+A');
+          await page.keyboard.press('Backspace');
+          await p1Input.pressSequentially('400,00', { delay: 30 });
+          await page.locator('body').click();
+          await page.waitForTimeout(300);
+          await shared.screenshot({ path: path.join(outDir, `${vp.name}-${th}-sim-custom-p1.png`) });
+        }
+
+        // 4. Simulador - Erro quando Pessoa 1 > total
+        if (await p1Input.isVisible()) {
+          await p1Input.click();
+          await page.keyboard.press('Control+A');
+          await page.keyboard.press('Backspace');
+          await p1Input.pressSequentially('1200,00', { delay: 30 });
+          await page.locator('body').click();
+          await page.waitForTimeout(300);
+          await shared.screenshot({ path: path.join(outDir, `${vp.name}-${th}-sim-error-p1-gt-total.png`) });
+        }
+
+        // 5. Simulador - Campo vazio
+        await totalInput.click();
+        await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
+        await page.locator('body').click();
+        await page.waitForTimeout(300);
+        await shared.screenshot({ path: path.join(outDir, `${vp.name}-${th}-sim-empty.png`) });
       });
     }
   }
-
-  test('Captura Estados Específicos do Simulador de Divisão', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/');
-
-    const shared = page.locator('#shared-purchases');
-    await shared.scrollIntoViewIfNeeded();
-    const input = shared.locator('input[type="text"]');
-
-    // Estado A: 3 pessoas, 1.000,00
-    await shared.screenshot({ path: path.join(outDir, 'sim-3p-1000.png') });
-
-    // Estado B: 2 pessoas, 1.000,00
-    await shared.getByRole('button', { name: '2 pessoas' }).click();
-    await page.waitForTimeout(300);
-    await shared.screenshot({ path: path.join(outDir, 'sim-2p-1000.png') });
-
-    // Estado C: Valor vazio
-    await input.click();
-    await page.keyboard.press('Control+A');
-    await page.keyboard.press('Backspace');
-    await page.locator('body').click();
-    await page.waitForTimeout(300);
-    await shared.screenshot({ path: path.join(outDir, 'sim-empty.png') });
-
-    // Estado D: 5 pessoas, 1.234,56
-    await input.click();
-    await input.pressSequentially('1234,56', { delay: 40 });
-    await page.locator('body').click();
-    await shared.getByRole('button', { name: '5 pessoas' }).click();
-    await page.waitForTimeout(300);
-    await shared.screenshot({ path: path.join(outDir, 'sim-5p-1234-56.png') });
-  });
 });
