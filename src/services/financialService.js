@@ -2554,3 +2554,126 @@ export function calculateClientFinancialReportSummary({
         totalDebt: fromCents(totalDebtCents)
     };
 }
+
+/**
+ * Agrupa os compromissos da fatura por pessoa/titular com precisão matemática em centavos inteiros
+ * e distribuição de percentuais com soma exata de 100% via Método do Maior Resto (Largest Remainder).
+ *
+ * @param {Object} params
+ * @param {Array} [params.loans] - Itens de compras/parcelas da fatura
+ * @param {Array} [params.expenses] - Despesas avulsas da fatura
+ * @param {Array} [params.subscriptions] - Assinaturas da fatura
+ * @param {Array} [params.clients] - Lista de clientes/pessoas cadastradas
+ * @returns {{ total: number, totalCents: number, persons: Array<{ id: string, name: string, value: number, cents: number, percent: number }> }}
+ */
+export function calculatePersonSpendingBreakdown({
+    loans = [],
+    expenses = [],
+    subscriptions = [],
+    clients = []
+} = {}) {
+    const personMap = new Map();
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubscriptions = asArray(subscriptions);
+    const safeClients = asArray(clients);
+
+    const clientNameMap = new Map();
+    safeClients.forEach(c => {
+        if (c && c.id) {
+            clientNameMap.set(c.id, c.name || 'Sem nome');
+        }
+    });
+
+    const registerItem = (item) => {
+        if (!item || item.value === undefined || item.value === null) return;
+        const valCents = toCents(item.value);
+        if (valCents <= 0) return;
+
+        let personId = 'self';
+        let personName = 'Minhas despesas';
+
+        if (!item.isMyDebt && item.clientId && clientNameMap.has(item.clientId)) {
+            personId = item.clientId;
+            personName = clientNameMap.get(item.clientId);
+        }
+
+        const existing = personMap.get(personId);
+        if (existing) {
+            existing.cents += valCents;
+        } else {
+            personMap.set(personId, {
+                id: personId,
+                name: personName,
+                cents: valCents
+            });
+        }
+    };
+
+    safeLoans.forEach(registerItem);
+    safeExpenses.forEach(registerItem);
+    safeSubscriptions.forEach(registerItem);
+
+    let totalCents = 0;
+    personMap.forEach(p => {
+        totalCents += p.cents;
+    });
+
+    if (totalCents === 0 || personMap.size === 0) {
+        return {
+            total: 0,
+            totalCents: 0,
+            persons: []
+        };
+    }
+
+    const rawPersons = Array.from(personMap.values()).map(p => ({
+        id: p.id,
+        name: p.name,
+        cents: p.cents,
+        value: fromCents(p.cents)
+    }));
+
+    // Ordena por valor decrescente, desempata por nome
+    rawPersons.sort((a, b) => {
+        if (b.cents !== a.cents) return b.cents - a.cents;
+        return a.name.localeCompare(b.name);
+    });
+
+    // Método do Maior Resto (Largest Remainder / Hamilton) para soma exata de 100%
+    let sumBase = 0;
+    const candidates = rawPersons.map((p, idx) => {
+        const raw = (p.cents * 100) / totalCents;
+        const floor = Math.floor(raw);
+        const rem = raw - floor;
+        sumBase += floor;
+        return { idx, floor, rem, cents: p.cents };
+    });
+
+    const deficit = Math.max(0, 100 - sumBase);
+    candidates.sort((a, b) => {
+        if (Math.abs(b.rem - a.rem) > 1e-9) return b.rem - a.rem;
+        if (b.cents !== a.cents) return b.cents - a.cents;
+        return a.idx - b.idx;
+    });
+
+    const additions = new Set();
+    for (let i = 0; i < deficit && i < candidates.length; i++) {
+        additions.add(candidates[i].idx);
+    }
+
+    const persons = rawPersons.map((p, idx) => {
+        const cand = candidates.find(c => c.idx === idx);
+        const percent = (cand ? cand.floor : 0) + (additions.has(idx) ? 1 : 0);
+        return {
+            ...p,
+            percent
+        };
+    });
+
+    return {
+        total: fromCents(totalCents),
+        totalCents,
+        persons
+    };
+}

@@ -28,6 +28,7 @@ import {
     calculateInvoiceDueDate,
     mapDomainStatusToLoanStatus,
     calculateCardInvoiceDetails,
+    calculatePersonSpendingBreakdown,
     calculateClientFinancialReportSummary
 } from '../src/services/financialService';
 import { generateAnnualReportCsv, generateTransactionsCsv } from '../src/services/csvExportService';
@@ -1270,6 +1271,97 @@ describe('Financial Service - Funções Canônicas Harmonizadas (Fase 8.3 CS4)',
             expect(result).toHaveProperty('openLoans');
             expect(result).toHaveProperty('totalDebt');
             expect(result.totalDebt).toBe(0);
+        });
+    });
+
+    describe('calculatePersonSpendingBreakdown — Integridade Matemática e Regra do Maior Resto', () => {
+        const clients = [
+            { id: 'c1', name: 'Ana Costa' },
+            { id: 'c2', name: 'Bruno Lima' },
+            { id: 'c3', name: 'Carla Rocha' },
+        ];
+
+        it('invariante 1: a soma das fatias em centavos e reais bate exatamente com o total no centro', () => {
+            const loans = [
+                { id: 'l1', clientId: 'c1', value: 125.40 },
+                { id: 'l2', clientId: 'c2', value: 250.80 },
+                { id: 'l3', clientId: 'c3', value: 73.80 },
+                { id: 'l4', isMyDebt: true, value: 50.00 }
+            ];
+            const expenses = [
+                { id: 'e1', clientId: 'c1', value: 34.60 },
+                { id: 'e2', value: 15.40 } // sem clientId -> Minhas despesas
+            ];
+            const subscriptions = [
+                { id: 's1', clientId: 'c2', value: 49.90 }
+            ];
+
+            const result = calculatePersonSpendingBreakdown({ loans, expenses, subscriptions, clients });
+
+            const expectedTotalCents = 12540 + 25080 + 7380 + 5000 + 3460 + 1540 + 4990;
+            expect(result.totalCents).toBe(expectedTotalCents);
+            expect(result.total).toBe(fromCents(expectedTotalCents));
+
+            const sumPersonCents = result.persons.reduce((acc, p) => acc + p.cents, 0);
+            expect(sumPersonCents).toBe(result.totalCents);
+
+            const sumPersonValuesCents = result.persons.reduce((acc, p) => acc + toCents(p.value), 0);
+            expect(sumPersonValuesCents).toBe(result.totalCents);
+        });
+
+        it('invariante 2: a soma dos percentuais fecha rigorosamente em 100% via Maior Resto (3 pessoas com divisão 1/3)', () => {
+            // R$ 10,00 divididos em 3 pessoas (R$ 3,33, R$ 3,33, R$ 3,34)
+            const loans = [
+                { id: 'l1', clientId: 'c1', value: 3.33 },
+                { id: 'l2', clientId: 'c2', value: 3.33 },
+                { id: 'l3', clientId: 'c3', value: 3.34 }
+            ];
+
+            const result = calculatePersonSpendingBreakdown({ loans, clients });
+            expect(result.totalCents).toBe(1000);
+
+            const sumPercent = result.persons.reduce((acc, p) => acc + p.percent, 0);
+            expect(sumPercent).toBe(100);
+
+            // c3 tem a maior sobra e deve receber 34%, c1 e c2 33%
+            const c3 = result.persons.find(p => p.id === 'c3');
+            expect(c3.percent).toBe(34);
+        });
+
+        it('invariante 3: fatura zerada ou sem lançamentos retorna total 0 e array vazio (empty state gracioso)', () => {
+            const emptyResult = calculatePersonSpendingBreakdown({ loans: [], expenses: [], subscriptions: [], clients });
+            expect(emptyResult.total).toBe(0);
+            expect(emptyResult.totalCents).toBe(0);
+            expect(emptyResult.persons).toEqual([]);
+        });
+
+        it('invariante 4: exatamente 1 pessoa fica com 100% cravado', () => {
+            const singleResult = calculatePersonSpendingBreakdown({
+                loans: [{ id: 'l1', clientId: 'c1', value: 500 }],
+                clients
+            });
+            expect(singleResult.total).toBe(500);
+            expect(singleResult.persons).toHaveLength(1);
+            expect(singleResult.persons[0].percent).toBe(100);
+            expect(singleResult.persons[0].name).toBe('Ana Costa');
+        });
+
+        it('invariante 5: itens sem cliente ou com isMyDebt são agrupados em "Minhas despesas"', () => {
+            const result = calculatePersonSpendingBreakdown({
+                loans: [
+                    { id: 'l1', isMyDebt: true, value: 100 },
+                    { id: 'l2', clientId: 'inexistente', value: 150 },
+                ],
+                expenses: [
+                    { id: 'e1', value: 50 }
+                ],
+                clients
+            });
+            expect(result.persons).toHaveLength(1);
+            expect(result.persons[0].id).toBe('self');
+            expect(result.persons[0].name).toBe('Minhas despesas');
+            expect(result.persons[0].value).toBe(300);
+            expect(result.persons[0].percent).toBe(100);
         });
     });
 });
