@@ -2,8 +2,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import MonthPicker from '../src/components/MonthPicker';
-import DatePicker from '../src/components/DatePicker';
+import MonthPicker, { CalendarIcon as MonthCalendarIcon } from '../src/components/MonthPicker';
+import DatePicker, { CalendarIcon as DateCalendarIcon } from '../src/components/DatePicker';
 
 describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso, Integridade e Acessibilidade (Commit 2)', () => {
   describe('1. Parsing e Formatação de Datas sem Dependência de Fuso (Zero Offset Bug)', () => {
@@ -156,6 +156,72 @@ describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso
 
       expect(html).toContain('disabled=""');
       expect(html).toContain('disabled:opacity-50 disabled:cursor-not-allowed');
+    });
+  });
+
+  describe('4. Tamanho Fixo e Imutabilidade de Classes do Ícone de Calendário (Regressão Fase 9.1)', () => {
+    it('garante que CalendarIcon do MonthPicker possui width=16, height=16 e w-4 h-4 tanto fechado quanto aberto', () => {
+      // 1. Fechado (isOpen = false: className="text-[var(--fc-text-muted)]")
+      const closedHtml = renderToString(
+        React.createElement(MonthCalendarIcon, { className: 'text-[var(--fc-text-muted)]' })
+      );
+      expect(closedHtml).toContain('width="16"');
+      expect(closedHtml).toContain('height="16"');
+      expect(closedHtml).toContain('w-4');
+      expect(closedHtml).toContain('h-4');
+      expect(closedHtml).toContain('shrink-0');
+      expect(closedHtml).toContain('text-[var(--fc-text-muted)]');
+
+      // 2. Aberto (isOpen = true: className="text-[var(--fc-accent)]")
+      const openHtml = renderToString(
+        React.createElement(MonthCalendarIcon, { className: 'text-[var(--fc-accent)]' })
+      );
+      expect(openHtml).toContain('width="16"');
+      expect(openHtml).toContain('height="16"');
+      expect(openHtml).toContain('w-4');
+      expect(openHtml).toContain('h-4');
+      expect(openHtml).toContain('shrink-0');
+      expect(openHtml).toContain('text-[var(--fc-accent)]');
+
+      // 3. Renderização completa de MonthPicker no DOM
+      const pickerHtml = renderToString(
+        React.createElement(MonthPicker, { value: '2026-11' })
+      );
+      expect(pickerHtml).toContain('width="16"');
+      expect(pickerHtml).toContain('height="16"');
+      expect(pickerHtml).toContain('w-4 h-4 shrink-0 text-[var(--fc-text-muted)]');
+    });
+
+    it('garante que CalendarIcon do DatePicker possui width=16, height=16 e w-4 h-4 tanto fechado quanto aberto', () => {
+      // 1. Fechado (isOpen = false)
+      const closedHtml = renderToString(
+        React.createElement(DateCalendarIcon, { className: 'text-[var(--fc-text-muted)]' })
+      );
+      expect(closedHtml).toContain('width="16"');
+      expect(closedHtml).toContain('height="16"');
+      expect(closedHtml).toContain('w-4');
+      expect(closedHtml).toContain('h-4');
+      expect(closedHtml).toContain('shrink-0');
+      expect(closedHtml).toContain('text-[var(--fc-text-muted)]');
+
+      // 2. Aberto (isOpen = true)
+      const openHtml = renderToString(
+        React.createElement(DateCalendarIcon, { className: 'text-[var(--fc-accent)]' })
+      );
+      expect(openHtml).toContain('width="16"');
+      expect(openHtml).toContain('height="16"');
+      expect(openHtml).toContain('w-4');
+      expect(openHtml).toContain('h-4');
+      expect(openHtml).toContain('shrink-0');
+      expect(openHtml).toContain('text-[var(--fc-accent)]');
+
+      // 3. Renderização completa de DatePicker no DOM
+      const pickerHtml = renderToString(
+        React.createElement(DatePicker, { value: '2026-11-05' })
+      );
+      expect(pickerHtml).toContain('width="16"');
+      expect(pickerHtml).toContain('height="16"');
+      expect(pickerHtml).toContain('w-4 h-4 shrink-0 text-[var(--fc-text-muted)]');
     });
   });
 });

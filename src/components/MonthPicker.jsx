@@ -21,7 +21,7 @@ const MONTH_NAMES_ABBR = [
   'jul', 'ago', 'set', 'out', 'nov', 'dez'
 ];
 
-const CalendarIcon = ({ className = '' }) => (
+export const CalendarIcon = ({ className = '' }) => (
   <svg
     width={16}
     height={16}

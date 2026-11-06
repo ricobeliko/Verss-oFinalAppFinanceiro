@@ -23,7 +23,7 @@ const MONTH_NAMES_ABBR = [
 
 const WEEKDAY_NAMES = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-const CalendarIcon = ({ className = '' }) => (
+export const CalendarIcon = ({ className = '' }) => (
   <svg
     width={16}
     height={16}
