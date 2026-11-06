@@ -114,7 +114,7 @@ test.describe('FinControl — Full App Light Mode Sweep & Dark Regression Check 
     await assertNotDarkIsland(filterHeader, 'Header de Filtros do Dashboard');
 
     // Valida tabela de faturas
-    const tableContainer = page.locator('table').locator('..').locator('..');
+    const tableContainer = page.locator('table').last().locator('..').locator('..');
     await assertNotDarkIsland(tableContainer, 'Container da Tabela do Dashboard');
   });
 
