@@ -30,39 +30,45 @@ export default function InvoiceTimelineSection() {
         </div>
 
         {/* 5-Month Timeline Ribbon */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-16">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-16">
           {months.map((m, idx) => (
             <div
               key={idx}
-              className={`p-5 rounded-2xl border transition-all duration-300 ${
+              className={`p-3.5 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
                 idx === 0
-                  ? 'bg-[var(--fc-surface-2)] border-[var(--fc-accent)] shadow-[var(--fc-shadow-md)] scale-[1.02]'
+                  ? 'bg-[var(--fc-surface-2)] border-[var(--fc-accent)] shadow-[var(--fc-shadow-md)] sm:scale-[1.02]'
                   : 'bg-[var(--fc-surface-1)] border-[var(--fc-border-subtle)] hover:border-[var(--fc-border-strong)]'
               }`}
             >
-              <div className="flex items-center justify-between text-xs mb-3">
-                <span className="text-[var(--fc-text-secondary)] font-medium">{m.month} {m.year}</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    idx === 0
-                      ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)]'
-                      : 'bg-[var(--fc-surface-3)] text-[var(--fc-text-secondary)]'
-                  }`}
-                >
-                  {m.status}
-                </span>
+              <div>
+                <div className="flex items-center justify-between text-xs mb-3 gap-1">
+                  <span className="text-[var(--fc-text-secondary)] font-medium text-[11px] sm:text-xs truncate">
+                    {m.month} {m.year}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${
+                      idx === 0
+                        ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)]'
+                        : 'bg-[var(--fc-surface-3)] text-[var(--fc-text-secondary)]'
+                    }`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+
+                <div className="text-lg sm:text-xl font-extrabold text-[var(--fc-text-primary)] mb-2 tracking-tight">
+                  {m.total}
+                </div>
               </div>
 
-              <div className="text-xl font-extrabold text-[var(--fc-text-primary)] mb-2 tracking-tight">
-                {m.total}
-              </div>
-
-              <div className="text-xs text-[var(--fc-text-secondary)] flex items-center gap-1.5">
-                <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)] shrink-0" />
-                <span>{m.entriesCount} {m.entriesCount === 1 ? 'lançamento' : 'lançamentos'}</span>
-              </div>
-              <div className="text-[10px] text-[var(--fc-text-muted)] mt-1 truncate" title={m.entriesDetail}>
-                {m.entriesDetail}
+              <div>
+                <div className="text-xs text-[var(--fc-text-secondary)] flex items-center gap-1.5">
+                  <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)] shrink-0" />
+                  <span>{m.entriesCount} {m.entriesCount === 1 ? 'lançamento' : 'lançamentos'}</span>
+                </div>
+                <div className="text-[10px] text-[var(--fc-text-muted)] mt-1.5 leading-snug break-words">
+                  {m.entriesDetail}
+                </div>
               </div>
             </div>
           ))}

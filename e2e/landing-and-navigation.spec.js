@@ -393,4 +393,31 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     expect(perfMetrics.longTasksCount).toBe(0);
     expect(perfMetrics.clsScore).toBe(0);
   });
+
+  const timelineBreakpoints = [320, 360, 390, 768];
+  for (const width of timelineBreakpoints) {
+    test(`Responsividade e Timeline: viewport ${width}px exibe legenda completa sem truncar e sem scroll horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/');
+
+      const timelineSection = page.locator('#invoices-timeline');
+      await expect(timelineSection).toBeVisible();
+      await timelineSection.scrollIntoViewIfNeeded();
+
+      // Legenda completa do primeiro card deve estar visível
+      const fullLegend = timelineSection.locator('text=4 parcelas + 2 assinaturas + 1 avulsa');
+      await expect(fullLegend).toBeVisible();
+
+      // Garante que o texto renderizado não contém reticências
+      const legendText = await fullLegend.textContent();
+      expect(legendText).not.toContain('...');
+      expect(legendText).not.toContain('…');
+
+      // Verifica ausência de scroll horizontal na página
+      const hasHorizontalScroll = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+      expect(hasHorizontalScroll).toBe(false);
+    });
+  }
 });
