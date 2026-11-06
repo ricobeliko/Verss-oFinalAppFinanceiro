@@ -219,7 +219,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                         </div>
 
                         {personBreakdown.persons.length > 0 ? (
-                            <div className="flex flex-col sm:flex-row items-center gap-6">
+                            <div className="flex flex-col items-center gap-6 w-full">
                                 {/* Rosca Central com Total em Destaque */}
                                 <div className="relative w-[210px] h-[210px] shrink-0 mx-auto" aria-hidden="true">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -268,25 +268,31 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                     >
                                         {activePerson ? (
                                             <>
-                                                <span className="text-[11px] font-semibold text-[var(--fc-accent)] truncate max-w-[125px] leading-tight">
+                                                <span
+                                                    title={activePerson.name}
+                                                    className="text-[11px] font-semibold text-[var(--fc-accent)] truncate max-w-[115px] leading-tight px-1"
+                                                >
                                                     {activePerson.name}
                                                 </span>
-                                                <span className="text-base sm:text-lg font-bold font-mono text-[var(--fc-text-primary)] leading-tight my-0.5">
+                                                <span className="text-base sm:text-lg font-bold font-mono text-[var(--fc-text-primary)] leading-tight my-0.5 whitespace-nowrap">
                                                     {formatCurrencyDisplay(activePerson.value)}
                                                 </span>
-                                                <span className="text-[11px] font-medium text-[var(--fc-text-muted)] leading-tight">
+                                                <span className="text-[11px] font-medium text-[var(--fc-text-muted)] leading-tight whitespace-nowrap">
                                                     {activePerson.percent}% da fatura
                                                 </span>
                                             </>
                                         ) : (
                                             <>
-                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] leading-tight">
+                                                <span
+                                                    title="Total da Fatura"
+                                                    className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fc-text-muted)] leading-tight truncate max-w-[115px] px-1"
+                                                >
                                                     Total da Fatura
                                                 </span>
-                                                <span className="text-base sm:text-lg font-bold font-mono text-[var(--fc-text-primary)] leading-tight my-0.5">
+                                                <span className="text-base sm:text-lg font-bold font-mono text-[var(--fc-text-primary)] leading-tight my-0.5 whitespace-nowrap">
                                                     {formatCurrencyDisplay(personBreakdown.total)}
                                                 </span>
-                                                <span className="text-[11px] font-medium text-[var(--fc-text-secondary)] leading-tight">
+                                                <span className="text-[11px] font-medium text-[var(--fc-text-secondary)] leading-tight whitespace-nowrap">
                                                     {personBreakdown.persons.length === 1 ? '100%' : '100% total'}
                                                 </span>
                                             </>
@@ -298,7 +304,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                 <div
                                     role="list"
                                     aria-label="Detalhamento de gastos por pessoa na fatura"
-                                    className="flex-1 w-full max-h-[220px] overflow-y-auto space-y-1 pr-1 focus-visible:outline-none"
+                                    className="w-full min-w-0 max-h-[240px] overflow-y-auto overflow-x-hidden p-1 space-y-1 focus-visible:outline-none"
                                 >
                                     {personBreakdown.persons.map((person) => {
                                         const isCurrent = activePersonId === person.id;
@@ -311,6 +317,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                                 tabIndex={0}
                                                 aria-label={`${person.name}: ${formatCurrencyDisplay(person.value)}, ${person.percent}% do total`}
                                                 aria-pressed={isCurrent}
+                                                title={person.name}
                                                 onMouseEnter={() => setActivePersonId(person.id)}
                                                 onMouseLeave={() => setActivePersonId(null)}
                                                 onFocus={() => setActivePersonId(person.id)}
@@ -322,7 +329,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                                         setActivePersonId(prev => prev === person.id ? null : person.id);
                                                     }
                                                 }}
-                                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer border ${
+                                                className={`w-full min-w-0 flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer border ${
                                                     isCurrent
                                                         ? 'bg-[var(--fc-surface-2)] border-[var(--fc-border-hover)] text-[var(--fc-text-primary)] shadow-sm'
                                                         : isDimmed
@@ -330,7 +337,7 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                                         : 'bg-transparent border-transparent text-[var(--fc-text-secondary)] hover:bg-[var(--fc-surface-1)] hover:text-[var(--fc-text-primary)]'
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-2.5 truncate min-w-0">
+                                                <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
                                                     <span
                                                         className="w-3 h-3 rounded-full shrink-0 transition-transform duration-200"
                                                         style={{
@@ -339,13 +346,15 @@ const ProAnalyticsCharts = ({ loans, clients, expenses, subscriptions, theme }) 
                                                         }}
                                                         aria-hidden="true"
                                                     />
-                                                    <span className="truncate font-medium">{person.name}</span>
+                                                    <span className="truncate font-medium min-w-0" title={person.name}>
+                                                        {person.name}
+                                                    </span>
                                                 </div>
-                                                <div className="flex items-center gap-2.5 font-mono shrink-0">
-                                                    <span className="text-[var(--fc-text-primary)] font-semibold">
+                                                <div className="flex items-center gap-2 font-mono shrink-0 whitespace-nowrap">
+                                                    <span className="text-[var(--fc-text-primary)] font-semibold whitespace-nowrap">
                                                         {formatCurrencyDisplay(person.value)}
                                                     </span>
-                                                    <span className="text-[var(--fc-text-muted)] text-[11px] w-9 text-right font-medium">
+                                                    <span className="text-[var(--fc-text-muted)] text-[11px] min-w-[38px] text-right font-medium whitespace-nowrap">
                                                         {person.percent}%
                                                     </span>
                                                 </div>
