@@ -6,6 +6,7 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useCards } from '../../hooks/useCards';
@@ -239,7 +240,7 @@ function ExpenseManagement() {
                     </div>
                     <div>
                         <label htmlFor="expenseDate" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Data</label>
-                        <input id="expenseDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                        <DatePicker id="expenseDate" value={date} onChange={(e) => setDate(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="expenseCategory" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Categoria</label>

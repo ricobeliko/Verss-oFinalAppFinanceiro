@@ -8,6 +8,7 @@ import { hasPaymentHistory, isStructuralFinancialEdit, buildLoanSavePayload } fr
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { useLoans } from '../../hooks/useLoans';
 import { useClients } from '../../hooks/useClients';
 import { useCards } from '../../hooks/useCards';
@@ -580,12 +581,10 @@ function LoanManagement() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="w-full">
                             <label htmlFor="purchaseDate" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Data da Compra</label>
-                            <input
+                            <DatePicker
                                 id="purchaseDate"
-                                type="date"
                                 value={purchaseDate}
                                 onChange={(evento) => setPurchaseDate(evento.target.value)}
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
                                 required
                             />
                         </div>

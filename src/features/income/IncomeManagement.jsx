@@ -5,6 +5,7 @@ import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
 import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { isValidFinancialValue } from '../../services/financialService';
 import { useIncomes } from '../../hooks/useIncomes';
@@ -216,7 +217,7 @@ function IncomeManagement() {
                     </div>
                     <div>
                         <label htmlFor="incomeDate" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Data</label>
-                        <input id="incomeDate" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                        <DatePicker id="incomeDate" value={date} onChange={(e) => setDate(e.target.value)} required />
                     </div>
                     <div>
                         <label htmlFor="incomeClient" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Pessoa</label>

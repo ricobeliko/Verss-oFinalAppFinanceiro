@@ -28,6 +28,7 @@ import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
 import Select from '../../components/Select';
+import MonthPicker from '../../components/MonthPicker';
 import { SkeletonPage } from '../../design-system';
 import Surface from '../../design-system/primitives/Surface';
 import Badge from '../../design-system/primitives/Badge';
@@ -643,12 +644,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         >
                             ◀
                         </button>
-                        <input
-                            type="month"
+                        <MonthPicker
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(e.target.value)}
                             aria-label="Selecionar mês e ano de competência"
-                            className="w-full min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
+                            className="w-full sm:w-auto min-w-[210px]"
                         />
                         <button
                             type="button"
