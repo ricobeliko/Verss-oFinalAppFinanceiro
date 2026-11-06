@@ -76,4 +76,64 @@ describe('Auditoria de Copy e Promessas Honestos: Landing Page e Upsell', () => 
     expect(content).toMatch(/at[ée] 3 pessoas/i);
     expect(content).toMatch(/at[ée] 2 cart[õo]es/i);
   });
+
+  it('não deve conter jargão técnico ou nomes internos de arquivos/funções nos textos visíveis da landing', () => {
+    const componentsDir = path.resolve(__dirname, '../src/features/landing/components');
+    const componentFiles = fs.readdirSync(componentsDir)
+      .filter(f => f.endsWith('.jsx'))
+      .map(f => path.join(componentsDir, f));
+
+    const technicalTerms = [
+      'LoanManagement',
+      'financialService',
+      'calculateInstallments',
+      'sampleData',
+      'planEntitlements',
+      'Firestore',
+      'Firebase',
+      'hook',
+      'componente',
+      'mock',
+    ];
+
+    const violations = [];
+
+    componentFiles.forEach(filePath => {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const relPath = path.relative(path.resolve(__dirname, '..'), filePath);
+
+      const lines = content.split('\n');
+      lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        if (
+          trimmed.startsWith('import ') ||
+          trimmed.startsWith('//') ||
+          trimmed.startsWith('/*') ||
+          trimmed.startsWith('*')
+        ) {
+          return;
+        }
+
+        technicalTerms.forEach(term => {
+          const regex = new RegExp(`\\b${term}\\b`, 'i');
+          if (regex.test(line)) {
+            // Ignora a desestruturação do identificador de import JS sampleData
+            if (trimmed.startsWith('const ') && trimmed.includes('sampleData')) return;
+
+            violations.push({
+              file: relPath,
+              line: idx + 1,
+              term,
+              text: trimmed,
+            });
+          }
+        });
+      });
+    });
+
+    expect(
+      violations,
+      `Jargão técnico encontrado em texto da landing: ${JSON.stringify(violations, null, 2)}`
+    ).toHaveLength(0);
+  });
 });

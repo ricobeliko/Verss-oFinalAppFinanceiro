@@ -109,7 +109,7 @@ export default function SharedPurchaseSection() {
 
             <div className="inline-flex items-center gap-2 p-3 rounded-xl bg-[var(--fc-surface-1)] border border-[var(--fc-border-subtle)] text-xs text-[var(--fc-text-secondary)]">
               <FiShield className="text-[var(--fc-accent)] w-4 h-4 shrink-0" />
-              <span>Regra idêntica ao código do FinControl (LoanManagement e financialService).</span>
+              <span>Mesma regra de divisão usada no FinControl: a segunda pessoa fica sempre com o valor restante exato, e o centavo residual vai para a última parcela.</span>
             </div>
           </div>
 
