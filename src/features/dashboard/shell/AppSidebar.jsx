@@ -1,16 +1,12 @@
 // src/features/dashboard/shell/AppSidebar.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import Badge from '../../../design-system/primitives/Badge';
+import usePrefersReducedMotion from '../../../hooks/usePrefersReducedMotion';
+import FinControlMark from '../../../components/FinControlMark';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 // --- Ícones Consistentes FinControl ---
-const FinControlLogo = ({ className = 'w-6 h-6' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const HomeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -46,12 +42,6 @@ const RepeatIcon = () => (
     <path d="M3 11V9a4 4 0 0 1 4-4h14" />
     <polyline points="7 23 3 19 7 15" />
     <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-  </svg>
-);
-
-const ZapIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
   </svg>
 );
 
@@ -116,7 +106,6 @@ const DEFAULT_NAV_LINKS = [
   { id: 'cards', label: 'Cartões', icon: <CreditCardIcon /> },
   { id: 'transactions', label: 'Movimentações', icon: <ActivityIcon /> },
   { id: 'subscriptions', label: 'Assinaturas', icon: <RepeatIcon /> },
-  { id: 'crisis', label: 'Modo Crise', icon: <ZapIcon />, proOnly: true },
 ];
 
 export default function AppSidebar({
@@ -132,10 +121,87 @@ export default function AppSidebar({
   onOpenDeleteModal,
   onLogout,
   onLockedFeatureClick,
+  onPrefetch = () => {},
   navLinks = DEFAULT_NAV_LINKS,
 }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const asideRef = useRef(null);
+  const navRef = useRef(null);
+  const itemRefs = useRef({});
   const profileRef = useRef(null);
+
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [indicatorStyle, setIndicatorStyle] = useState({ y: 0, x: 0, width: 0, height: 0 });
+  const [indicatorReady, setIndicatorReady] = useState(false);
+
+  // Mensuração do indicador deslizante com base no item ativo
+  const updateIndicator = useCallback(() => {
+    const activeEl = itemRefs.current[activePage];
+    const navEl = navRef.current;
+    if (!activeEl || !navEl) return;
+
+    const navRect = navEl.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+
+    const y = Math.round(activeRect.top - navRect.top);
+    const x = Math.round(activeRect.left - navRect.left);
+    const width = Math.round(activeRect.width);
+    const height = Math.round(activeRect.height);
+
+    setIndicatorStyle({ y, x, width, height });
+    setIndicatorReady(true);
+  }, [activePage]);
+
+  useIsomorphicLayoutEffect(() => {
+    updateIndicator();
+  }, [updateIndicator, isCollapsed]);
+
+  useEffect(() => {
+    const handleResize = () => updateIndicator();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateIndicator]);
+
+  // Recalcula o indicador após a transição de largura da sidebar (200ms)
+  useEffect(() => {
+    const asideEl = asideRef.current;
+    if (!asideEl) return;
+    const handleTransitionEnd = (e) => {
+      if (e.propertyName === 'width') {
+        updateIndicator();
+      }
+    };
+    asideEl.addEventListener('transitionend', handleTransitionEnd);
+    return () => asideEl.removeEventListener('transitionend', handleTransitionEnd);
+  }, [updateIndicator]);
+
+  // Navegação por teclado acessível entre itens (ArrowUp, ArrowDown, Home, End)
+  const handleKeyDownNav = (e, currentIndex) => {
+    const total = navLinks.length;
+    let targetIndex = -1;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      targetIndex = (currentIndex + 1) % total;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      targetIndex = (currentIndex - 1 + total) % total;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      targetIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      targetIndex = total - 1;
+    }
+
+    if (targetIndex >= 0) {
+      const targetLink = navLinks[targetIndex];
+      if (targetLink) {
+        itemRefs.current[targetLink.id]?.focus();
+        onSelectPage(targetLink.id);
+      }
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -168,18 +234,23 @@ export default function AppSidebar({
 
   return (
     <aside
+      ref={asideRef}
       aria-label="Navegação principal"
-      className={`hidden lg:flex flex-col justify-between shrink-0 bg-[var(--fc-bg-subtle)] border-r border-[var(--fc-border-subtle)] h-screen sticky top-0 transition-[width] duration-200 z-30 ${
+      className={`hidden lg:flex flex-col justify-between shrink-0 fc-glass-sidebar border-r border-[var(--fc-border-subtle)] h-screen sticky top-0 transition-[width] duration-200 z-30 ${
         isCollapsed ? 'w-[72px]' : 'w-64'
       }`}
     >
       {/* Topo da Sidebar: Marca e Toggle de Recolhimento */}
       <div>
         <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--fc-border-subtle)]">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl bg-[var(--fc-surface-2)] text-[var(--fc-accent)] border border-[var(--fc-border-subtle)] flex items-center justify-center shrink-0">
-              <FinControlLogo />
-            </div>
+          <div className="flex items-center gap-3 overflow-hidden group/brand cursor-default">
+            <FinControlMark
+              size={36}
+              animated={true}
+              ariaHidden={!isCollapsed}
+              ariaLabel={isCollapsed ? 'FinControl' : undefined}
+              className="transition-transform duration-200 group-hover/brand:scale-105"
+            />
             {!isCollapsed && (
               <span className="font-semibold tracking-tight text-[var(--fc-text-primary)] text-base select-none truncate">
                 FinControl
@@ -192,21 +263,47 @@ export default function AppSidebar({
             onClick={onToggleCollapse}
             aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
             aria-expanded={!isCollapsed}
-            className="p-2 rounded-xl text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-1)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] cursor-pointer"
+            className="min-w-[44px] min-h-[44px] p-2 rounded-xl text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-1)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] cursor-pointer flex items-center justify-center"
           >
             {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </button>
         </div>
 
-        {/* Links de Navegação */}
-        <nav className="p-3 space-y-1">
-          {navLinks.map((link) => {
+        {/* Links de Navegação com Indicador Deslizante Vertical */}
+        <nav
+          ref={navRef}
+          aria-label="Navegação principal"
+          className="p-3 space-y-1 relative"
+        >
+          {/* Indicador Deslizante do Item Ativo (GPU via transform translate3d) */}
+          <div
+            aria-hidden="true"
+            className={`absolute rounded-xl bg-[var(--fc-accent-soft)] border-l-2 border-[var(--fc-accent)] pointer-events-none z-0 ${
+              indicatorReady
+                ? prefersReducedMotion
+                  ? ''
+                  : 'transition-transform duration-200 ease-out'
+                : 'opacity-0'
+            }`}
+            style={{
+              top: 0,
+              left: 0,
+              width: `${indicatorStyle.width}px`,
+              height: `${indicatorStyle.height}px`,
+              transform: `translate3d(${indicatorStyle.x}px, ${indicatorStyle.y}px, 0)`,
+            }}
+          />
+
+          {navLinks.map((link, idx) => {
             const isLocked = link.proOnly && !isPro && !isTrialActive;
             const isActive = activePage === link.id;
 
             return (
               <button
                 key={link.id}
+                ref={(el) => {
+                  itemRefs.current[link.id] = el;
+                }}
                 type="button"
                 onClick={() => {
                   if (isLocked) {
@@ -215,16 +312,22 @@ export default function AppSidebar({
                     onSelectPage(link.id);
                   }
                 }}
+                onKeyDown={(e) => handleKeyDownNav(e, idx)}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={link.label}
+                onMouseEnter={() => onPrefetch(link.id)}
+                onFocus={() => onPrefetch(link.id)}
+                onTouchStart={() => onPrefetch(link.id)}
                 title={isCollapsed ? `${link.label}${isLocked ? ' (Disponível no plano Pro)' : ''}` : undefined}
-                className={`w-full group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
+                className={`w-full group relative z-10 min-h-[44px] flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                   isActive
-                    ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-text-primary)] border-[var(--fc-accent)] font-semibold'
-                    : 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-1)] border-transparent'
+                    ? indicatorReady
+                      ? 'text-[var(--fc-text-primary)] font-semibold border-transparent'
+                      : 'bg-[var(--fc-accent-soft)] text-[var(--fc-text-primary)] border-[var(--fc-accent)] font-semibold'
+                    : 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-1)]/50 border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-3 overflow-hidden">
+                <div className={`flex items-center gap-3 overflow-hidden ${isCollapsed ? 'mx-auto' : ''}`}>
                   <span
                     className={`shrink-0 transition-colors ${
                       isActive ? 'text-[var(--fc-accent)]' : 'text-[var(--fc-text-muted)] group-hover:text-[var(--fc-text-primary)]'
@@ -264,7 +367,7 @@ export default function AppSidebar({
             aria-label="Abrir menu de perfil do usuário"
             aria-expanded={isProfileOpen}
             aria-haspopup="true"
-            className={`w-full flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--fc-surface-1)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
+            className={`w-full min-h-[44px] flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--fc-surface-1)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
               isCollapsed ? 'justify-center' : 'justify-between'
             }`}
           >
@@ -301,10 +404,10 @@ export default function AppSidebar({
               <div className="py-1 space-y-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    onToggleTheme();
+                  onClick={(e) => {
+                    onToggleTheme(e);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
+                  className="w-full min-h-[44px] flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
                 >
                   <span className="flex items-center gap-2.5">
                     {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
@@ -318,7 +421,7 @@ export default function AppSidebar({
                     setIsProfileOpen(false);
                     onOpenDeleteModal();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-danger)] hover:bg-[var(--fc-danger-soft)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
+                  className="w-full min-h-[44px] flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-danger)] hover:bg-[var(--fc-danger-soft)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
                 >
                   <TrashIcon />
                   <span>Excluir conta</span>
@@ -330,7 +433,7 @@ export default function AppSidebar({
                     setIsProfileOpen(false);
                     onLogout();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
+                  className="w-full min-h-[44px] flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)]"
                 >
                   <LogoutIcon />
                   <span>Sair da conta</span>

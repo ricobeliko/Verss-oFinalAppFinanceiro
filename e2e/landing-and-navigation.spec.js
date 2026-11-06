@@ -64,7 +64,7 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
 
     // 3. Living Ledger como protagonista visual
     await expect(page.locator('text=Cartão Principal').first()).toBeVisible();
-    await expect(page.locator('text=4.280,50').first()).toBeVisible();
+    await expect(page.locator('text=3.840,25').first()).toBeVisible();
     await expect(page.locator('text=Notebook de Trabalho').first()).toBeVisible();
     await expect(page.locator('text=Lucas deve R$ 575,00').first()).toBeVisible();
 
@@ -97,11 +97,13 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(pricing.locator('text=Desbloquear FinControl Pro').first()).toBeVisible();
     await expect(pricing.locator('text=Pagamento único. Acesso vitalício.').first()).toBeVisible();
 
-    // Features oficiais do plano Pro
-    await expect(pricing.locator('text=Cadastro de pessoas e divisão de compras')).toBeVisible();
+    // Features oficiais do plano Pro e Free
+    await expect(pricing.locator('text=Até 3 pessoas e até 2 cartões de crédito')).toBeVisible();
     await expect(pricing.locator('text=Gestão de cartões de crédito e faturas')).toBeVisible();
     await expect(pricing.locator('text=Registro de receitas e balanço mensal')).toBeVisible();
-    await expect(pricing.locator('text=Modo Crise para auditoria e corte de gastos')).toBeVisible();
+    await expect(pricing.locator('text=Pessoas e cartões de crédito ilimitados')).toBeVisible();
+    await expect(pricing.locator('text=Projeção de parcelas futuras por pessoa')).toBeVisible();
+    await expect(pricing.locator('text=Modo Crise')).toHaveCount(0);
 
     // Ausência de modelos de assinatura não canônicos
     await expect(page.locator('button:has-text("Anual")')).toHaveCount(0);
@@ -162,4 +164,260 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(menuBtn).toHaveAttribute('aria-expanded', 'false');
     await expect(drawer).toHaveCount(0);
   });
+
+  test('deve alternar tema dark <-> light via botão do header e aplicar tokens corretamente', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Inicialmente no tema escuro (padrão)
+    const root = page.locator('html');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+
+    // Botão de alternância de tema no header
+    const toggleBtn = page.locator('header button[aria-label*="Alternar"]').first();
+    await expect(toggleBtn).toBeVisible();
+
+    // Clica para alternar para claro
+    await toggleBtn.click();
+    await page.waitForTimeout(600);
+    await expect(root).toHaveAttribute('data-theme', 'light');
+
+    // Verifica que o fundo do hero aplicou o token claro (#E6F4F7 / rgb(230, 244, 247))
+    const hero = page.locator('#hero');
+    const heroBg = await hero.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+    expect(heroBg).toBe('rgb(230, 244, 247)');
+
+    // Clica novamente para voltar para escuro
+    await toggleBtn.click();
+    await page.waitForTimeout(600);
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+
+    const heroBgDark = await hero.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+    expect(heroBgDark).toBe('rgb(4, 23, 31)');
+  });
+
+  test('todos os CTAs principais devem apontar para rotas canônicas (/login e /login?mode=register)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // 1. Hero Primary CTA
+    const heroCta = page.locator('#hero a:has-text("Criar conta gratuita")');
+    await expect(heroCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 2. Pricing Free CTA
+    const freeCta = page.locator('#pricing a:has-text("Começar gratuitamente")');
+    await expect(freeCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 3. Pricing Pro CTA
+    const proCta = page.locator('#pricing a:has-text("Desbloquear FinControl Pro")');
+    await expect(proCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 4. Final CTA
+    const finalCta = page.locator('#final-cta a:has-text("Criar Conta Gratuita")');
+    await expect(finalCta).toHaveAttribute('href', '/login?mode=register');
+
+    // 5. Header Login
+    const headerLogin = page.locator('header a:has-text("Entrar")').first();
+    await expect(headerLogin).toHaveAttribute('href', '/login');
+  });
+
+  test('não deve conter estilos inline com cores hex fixas residuais na Landing', async ({ page }) => {
+    await page.goto('/');
+
+    const inlineHexColors = await page.evaluate(() => {
+      const allElements = document.querySelectorAll('main *, header *, footer *');
+      const hexPattern = /#[0-9a-fA-F]{3,8}/;
+      const offenders = [];
+      allElements.forEach(el => {
+        const style = el.getAttribute('style') || '';
+        // Ignora radial-gradient dinâmico com rgba gerado pelo sheen de movimento se houver
+        if (hexPattern.test(style) && !style.includes('var(')) {
+          offenders.push({ tag: el.tagName, style, text: el.textContent?.slice(0, 30) });
+        }
+      });
+      return offenders;
+    });
+
+    expect(inlineHexColors).toHaveLength(0);
+  });
+
+  test('prefers-reduced-motion: reduce deve desativar animações contínuas e tracking do cursor', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Move mouse over hero
+    await page.mouse.move(700, 450);
+    await page.waitForTimeout(300);
+
+    // Em reduced-motion, as ondas devem ter animação cancelada via CSS
+    const waveLayer = page.locator('.fc-wave-layer-1').first();
+    if (await waveLayer.count() > 0) {
+      const animName = await waveLayer.evaluate((el) => window.getComputedStyle(el).animationName);
+      expect(animName).toBe('none');
+    }
+  });
+
+  test('Simulador de Compra Compartilhada Fiel ao App: 2 pessoas, modo meio a meio e parcelas com centavo residual', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    const sharedSection = page.locator('#shared-purchases');
+    await expect(sharedSection).toBeVisible();
+    await sharedSection.scrollIntoViewIfNeeded();
+
+    const input = sharedSection.locator('input[type="text"]').first();
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue('1.000,00');
+
+    // 1. Apagar tudo e digitar "1000" caractere a caractere não vira "11000"
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await input.pressSequentially('1000', { delay: 50 });
+    await page.locator('body').click(); // dispara onBlur
+    await expect(input).toHaveValue('1.000,00');
+
+    // Estado inicial: meio a meio, 1 parcela de R$ 1.000,00 -> Você R$ 500,00 e Lucas R$ 500,00
+    await expect(sharedSection.locator('text=R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=1 × R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible(); // Soma das Partes
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible(); // Diferença Residual
+
+    // 2. Meio a meio com R$ 1.000,01 dá R$ 500,00 e R$ 500,01
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await input.pressSequentially('1000,01', { delay: 50 });
+    await page.locator('body').click(); // onBlur
+    await expect(input).toHaveValue('1.000,01');
+
+    await expect(sharedSection.locator('text=R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 500,01').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,01').first()).toBeVisible(); // Soma das Partes
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible(); // Diferença Residual
+
+    // 3. Com 3 parcelas, a última parcela absorve o resíduo
+    // Para R$ 500,00 em 3x: 166,66, 166,66, 166,68 -> "2 × R$ 166,66 + última R$ 166,68"
+    // Para R$ 500,01 em 3x: 166,67, 166,67, 166,67 -> "3 × R$ 166,67"
+    const btn3x = sharedSection.getByRole('button', { name: '3 parcelas' });
+    await btn3x.click();
+    await expect(btn3x).toHaveAttribute('aria-pressed', 'true');
+
+    await expect(sharedSection.locator('text=2 × R$ 166,66 + última R$ 166,68')).toBeVisible();
+    await expect(sharedSection.locator('text=3 × R$ 166,67')).toBeVisible();
+
+    // 4. Valores aparecem com ponto de milhar, a soma bate e a diferença é R$ 0,00
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await input.pressSequentially('1234,56', { delay: 50 });
+    await page.locator('body').click();
+    await expect(input).toHaveValue('1.234,56');
+
+    // 1.234,56 / 2 = 617,28 cada um. Em 3x: 617,28 / 3 = 205,76 (3 parcelas iguais)
+    await expect(sharedSection.locator('text=R$ 617,28').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.234,56').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+
+    // 5. Estado vazio: apagar tudo
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.locator('body').click();
+    await expect(sharedSection.locator('text=Informe um valor para simular a divisão')).toBeVisible();
+    await expect(sharedSection.locator('text=—').first()).toBeVisible();
+  });
+
+  test('Performance e Motion: FinControlMark sempre animada não gera Long Tasks nem CLS em repouso', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Verifica que as ondas possuem classes de animação contínua ativas no header e no footer
+    const headerMark = page.locator('header svg.fc-mark');
+    await expect(headerMark).toBeVisible();
+    const animatedWaveHeader = headerMark.locator('.fc-mark-wave-anim-1');
+    await expect(animatedWaveHeader).toHaveCount(1);
+
+    const footerMark = page.locator('footer svg.fc-mark');
+    await expect(footerMark).toBeVisible();
+    const animatedWaveFooter = footerMark.locator('.fc-mark-wave-anim-1');
+    await expect(animatedWaveFooter).toHaveCount(1);
+
+    // Aguarda hidratação inicial e estabilização de entrada
+    await page.waitForTimeout(6500);
+
+    // Instala observer para medir estritamente o período de repouso (3 segundos)
+    await page.evaluate(() => {
+      window.__restLongTasks = [];
+      window.__restClsScore = 0;
+
+      try {
+        const restObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            window.__restLongTasks.push({
+              duration: entry.duration,
+              startTime: entry.startTime,
+            });
+          }
+        });
+        restObserver.observe({ entryTypes: ['longtask'] });
+      } catch (e) {
+        // longtask
+      }
+
+      try {
+        const restClsObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              window.__restClsScore += entry.value;
+            }
+          }
+        });
+        restClsObserver.observe({ type: 'layout-shift', buffered: false });
+      } catch (e) {
+        // layout-shift
+      }
+    });
+
+    await page.waitForTimeout(3000);
+
+    const perfMetrics = await page.evaluate(() => {
+      return {
+        longTasksCount: window.__restLongTasks?.length || 0,
+        clsScore: window.__restClsScore || 0,
+      };
+    });
+
+    // Em repouso não há Long Tasks nem CLS provocados pela animação GPU das ondas
+    expect(perfMetrics.longTasksCount).toBe(0);
+    expect(perfMetrics.clsScore).toBe(0);
+  });
+
+  const timelineBreakpoints = [320, 360, 390, 768];
+  for (const width of timelineBreakpoints) {
+    test(`Responsividade e Timeline: viewport ${width}px exibe legenda completa sem truncar e sem scroll horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/');
+
+      const timelineSection = page.locator('#invoices-timeline');
+      await expect(timelineSection).toBeVisible();
+      await timelineSection.scrollIntoViewIfNeeded();
+
+      // Legenda completa do primeiro card deve estar visível
+      const fullLegend = timelineSection.locator('text=4 parcelas + 2 assinaturas + 1 avulsa');
+      await expect(fullLegend).toBeVisible();
+
+      // Garante que o texto renderizado não contém reticências
+      const legendText = await fullLegend.textContent();
+      expect(legendText).not.toContain('...');
+      expect(legendText).not.toContain('…');
+
+      // Verifica ausência de scroll horizontal na página
+      const hasHorizontalScroll = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+      expect(hasHorizontalScroll).toBe(false);
+    });
+  }
 });

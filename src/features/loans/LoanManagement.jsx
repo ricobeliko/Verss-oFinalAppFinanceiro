@@ -7,6 +7,8 @@ import { calculateInstallments, calculateRemainingAmount, calculatePaymentStatus
 import { hasPaymentHistory, isStructuralFinancialEdit, buildLoanSavePayload } from './loanIntegrityHelpers';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import Select from '../../components/Select';
+import DatePicker from '../../components/DatePicker';
 import { useLoans } from '../../hooks/useLoans';
 import { useClients } from '../../hooks/useClients';
 import { useCards } from '../../hooks/useCards';
@@ -46,7 +48,7 @@ function LoanManagement() {
     const [selectedClient2Id, setSelectedClient2Id] = useState('');
     const [person1ShareInput, setPerson1ShareInput] = useState('');
     const [person2ShareDisplay, setPerson2ShareDisplay] = useState('R$ 0,00');
-    
+
     useEffect(() => {
         if (purchaseDate && selectedCardId && allCards.length > 0) {
             const selectedCard = allCards.find(card => card.id === selectedCardId);
@@ -122,7 +124,7 @@ function LoanManagement() {
         }
         setIsModalOpen(true);
     };
-    
+
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingLoan(null);
@@ -235,7 +237,7 @@ function LoanManagement() {
             setIsLoading(false);
         }
     };
-    
+
     const confirmDeleteLoan = (loanId) => {
         setLoanIdToDelete(loanId);
         setIsConfirmationModalOpen(true);
@@ -266,7 +268,7 @@ function LoanManagement() {
         }
 
         const updatedLoanData = JSON.parse(JSON.stringify(loanToUpdate));
-        
+
         let installmentsList;
         let originalAmount;
 
@@ -277,9 +279,9 @@ function LoanManagement() {
             installmentsList = updatedLoanData.installments;
             originalAmount = updatedLoanData.totalValue;
         }
-        
-        const installmentIndex = Array.isArray(installmentsList) 
-            ? installmentsList.findIndex(installment => installment.number === installmentNumber) 
+
+        const installmentIndex = Array.isArray(installmentsList)
+            ? installmentsList.findIndex(installment => installment.number === installmentNumber)
             : -1;
 
         if (installmentIndex === -1) {
@@ -289,7 +291,7 @@ function LoanManagement() {
 
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
-        
+
         const paidCents = installmentsList
             .filter(installment => installment.status === 'Paga')
             .reduce((sum, installment) => sum + toCents(installment.value || 0), 0);
@@ -329,8 +331,8 @@ function LoanManagement() {
 
     const toggleInstallmentsVisibility = (loanId) => setVisibleInstallments(previousState => ({ ...previousState, [loanId]: !previousState[loanId] }));
     const getClientNameById = (clientId) => allClients.find(client => client.id === clientId)?.name || 'N/A';
-    
-    const filteredLoans = useMemo(() => 
+
+    const filteredLoans = useMemo(() =>
         allLoans.filter(loan => {
             if (shouldShowPaidLoans) return true;
             if (loan.isShared) {
@@ -368,15 +370,15 @@ function LoanManagement() {
                             </div>
                             <div className="flex items-center gap-2">
                                 {installment.status === 'Pendente' && (
-                                    <button 
-                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Paga')} 
+                                    <button
+                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Paga')}
                                         className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
                                         Marcar Paga
                                     </button>
                                 )}
                                 {installment.status === 'Paga' && (
-                                    <button 
-                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Pendente')} 
+                                    <button
+                                        onClick={() => updateInstallmentStatus(loanId, personKey, installment.number, 'Pendente')}
                                         className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] px-3 py-1 rounded-xl text-xs font-semibold transition cursor-pointer">
                                         Desmarcar
                                     </button>
@@ -388,7 +390,7 @@ function LoanManagement() {
             </div>
         );
     };
-    
+
     return (
         <div className="space-y-8 animate-fadeIn">
              <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -396,11 +398,11 @@ function LoanManagement() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Compras</h1>
                     <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione e acompanhe suas compras parceladas ou compartilhadas.</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                     {/* Botão PRO Bloqueado com efeito visual "Em breve" */}
                     <div className="relative inline-flex flex-1 sm:flex-none">
-                        <button 
+                        <button
                             disabled
                             className="w-full flex items-center justify-center gap-2 bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border border-[var(--fc-border-default)] font-bold py-3 px-4 rounded-2xl cursor-not-allowed opacity-40 select-none text-xs uppercase tracking-wider"
                         >
@@ -413,17 +415,17 @@ function LoanManagement() {
                         </div>
                     </div>
 
-                    <Button 
-                        variant="primary" 
+                    <Button
+                        variant="primary"
                         icon={<PlusIcon />}
-                        onClick={() => handleOpenModal()} 
+                        onClick={() => handleOpenModal()}
                         className="flex-1 sm:flex-none"
                     >
                         Adicionar Compra
                     </Button>
                 </div>
             </div>
-            
+
             <div className="flex justify-end items-center px-2">
                 <label className="flex items-center text-sm text-[var(--fc-text-muted)] cursor-pointer font-medium hover:text-[var(--fc-text-primary)] transition">
                     <input type="checkbox" checked={shouldShowPaidLoans} onChange={() => setShouldShowPaidLoans(!shouldShowPaidLoans)} className="h-4 w-4 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded mr-2.5 accent-[var(--fc-accent)] cursor-pointer" />
@@ -479,7 +481,7 @@ function LoanManagement() {
                                    <div className="text-xs text-[var(--fc-text-muted)] mt-0.5 truncate">{loan.isShared ? `${getClientNameById(loan.sharedDetails.person1.clientId)} / ${getClientNameById(loan.sharedDetails.person2.clientId)}` : getClientNameById(loan.clientId)}</div>
                                </div>
                                <div className="hidden md:flex items-center text-sm text-[var(--fc-text-secondary)]">
-                                   <span className="w-3.5 h-3.5 rounded-md mr-2.5 border border-white/20 shadow-sm" style={{ backgroundColor: card ? card.color : '#F2B705' }}></span>
+                                   <span className="w-3.5 h-3.5 rounded-md mr-2.5 border border-white/20 shadow-sm" style={{ backgroundColor: card ? card.color : '#5CCCCC' }}></span>
                                    <span className="truncate">{card ? card.name : 'N/A'}</span>
                                </div>
                                <div className="hidden md:block text-sm font-mono text-[var(--fc-text-secondary)]">{formatCurrencyDisplay(loan.installments?.[0]?.value || 0)}</div>
@@ -496,27 +498,27 @@ function LoanManagement() {
                                    )}
                                </div>
                                <div className="flex items-center justify-end gap-4">
-                                    <button 
+                                    <button
                                         type="button"
-                                        onClick={() => handleOpenModal(loan)} 
+                                        onClick={() => handleOpenModal(loan)}
                                         aria-label={`Editar compra ${loan.description || ''}`.trim()}
-                                        className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer" 
+                                        className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer"
                                         title="Editar"
                                     >
                                         <EditIcon />
                                     </button>
-                                    <button 
+                                    <button
                                         type="button"
-                                        onClick={() => confirmDeleteLoan(loan.id)} 
+                                        onClick={() => confirmDeleteLoan(loan.id)}
                                         aria-label={`Excluir compra ${loan.description || ''}`.trim()}
-                                        className="text-rose-500 hover:text-rose-400 transition cursor-pointer" 
+                                        className="text-rose-500 hover:text-rose-400 transition cursor-pointer"
                                         title="Deletar"
                                     >
                                         <DeleteIcon />
                                     </button>
-                                    <button 
+                                    <button
                                         type="button"
-                                        onClick={() => toggleInstallmentsVisibility(loan.id)} 
+                                        onClick={() => toggleInstallmentsVisibility(loan.id)}
                                         aria-label={visibleInstallments[loan.id] ? "Ocultar parcelas" : "Ver parcelas"}
                                         className="text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] transition p-1.5 rounded-xl bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] cursor-pointer"
                                     >
@@ -550,71 +552,69 @@ function LoanManagement() {
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingLoan ? 'Editar Compra' : 'Adicionar Nova Compra'} maxWidth="max-w-4xl">
                 <div className="space-y-6">
                     <div className="flex justify-center p-1.5 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-2xl max-w-sm mx-auto">
-                        <button 
+                        <button
                             type="button"
-                            onClick={() => setPurchaseType('normal')} 
-                            disabled={!!editingLoan} 
+                            onClick={() => setPurchaseType('normal')}
+                            disabled={!!editingLoan}
                             className={`w-1/2 py-2.5 text-xs font-bold tracking-wider uppercase rounded-xl transition-all cursor-pointer ${
-                                purchaseType === 'normal' 
-                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold' 
+                                purchaseType === 'normal'
+                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold'
                                     : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             Compra Normal
                         </button>
-                        <button 
+                        <button
                             type="button"
-                            onClick={() => setPurchaseType('shared')} 
-                            disabled={!!editingLoan} 
+                            onClick={() => setPurchaseType('shared')}
+                            disabled={!!editingLoan}
                             className={`w-1/2 py-2.5 text-xs font-bold tracking-wider uppercase rounded-xl transition-all cursor-pointer ${
-                                purchaseType === 'shared' 
-                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold' 
+                                purchaseType === 'shared'
+                                    ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md font-extrabold'
                                     : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                             } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                             Compartilhada
                         </button>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="w-full">
                             <label htmlFor="purchaseDate" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Data da Compra</label>
-                            <input 
-                                id="purchaseDate" 
-                                type="date" 
-                                value={purchaseDate} 
-                                onChange={(evento) => setPurchaseDate(evento.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
-                                required 
+                            <DatePicker
+                                id="purchaseDate"
+                                value={purchaseDate}
+                                onChange={(evento) => setPurchaseDate(evento.target.value)}
+                                required
                             />
                         </div>
                         <div className="w-full">
                             <label htmlFor="selectedCardId" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Cartão</label>
-                            <select 
-                                id="selectedCardId" 
-                                value={selectedCardId} 
-                                onChange={(evento) => setSelectedCardId(evento.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                            <Select
+                                id="selectedCardId"
+                                value={selectedCardId}
+                                onChange={(evento) => setSelectedCardId(evento.target.value)}
                                 required
+                                placeholder="Selecione o Cartão"
                             >
                                 <option value="">Selecione o Cartão</option>
                                 {allCards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
                         <div className="w-full">
                             <label htmlFor="description" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Descrição</label>
-                            <input 
-                                id="description" 
-                                type="text" 
-                                placeholder="Descrição da Compra" 
-                                value={description} 
-                                onChange={(evento) => setDescription(evento.target.value)} 
+                            <input
+                                id="description"
+                                type="text"
+                                placeholder="Descrição da Compra"
+                                value={description}
+                                onChange={(evento) => setDescription(evento.target.value)}
                                 className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm"
-                                required 
+                                required
                             />
                         </div>
                     </div>
-                    
+
                     {firstDueDate && (
                         <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl text-xs text-[var(--fc-text-secondary)] text-center font-medium">
                             Primeira parcela em: <span className="font-bold text-[var(--fc-accent)] font-mono">{new Date(firstDueDate + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</span>
@@ -625,44 +625,44 @@ function LoanManagement() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-[var(--fc-border-subtle)]">
                             <div className="w-full">
                                 <label htmlFor="selectedClientId" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa</label>
-                                <select 
-                                    id="selectedClientId" 
-                                    value={selectedClientId} 
-                                    onChange={(evento) => setSelectedClientId(evento.target.value)} 
-                                    className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                <Select
+                                    id="selectedClientId"
+                                    value={selectedClientId}
+                                    onChange={(evento) => setSelectedClientId(evento.target.value)}
                                     required
+                                    placeholder="Selecione a Pessoa"
                                 >
                                     <option value="">Selecione a Pessoa</option>
                                     {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                                </select>
+                                </Select>
                             </div>
                             <div className="w-full">
                                 <label htmlFor="totalValueInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor Total</label>
                                 <div className="relative w-full">
                                     <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
-                                    <input 
-                                        id="totalValueInput" 
-                                        type="text" 
-                                        placeholder="0,00" 
-                                        value={totalValueInput} 
-                                        onChange={handleCurrencyInputChange(setTotalValueInput)} 
-                                        className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
-                                        required 
-                                        inputMode="decimal" 
+                                    <input
+                                        id="totalValueInput"
+                                        type="text"
+                                        placeholder="0,00"
+                                        value={totalValueInput}
+                                        onChange={handleCurrencyInputChange(setTotalValueInput)}
+                                        className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium"
+                                        required
+                                        inputMode="decimal"
                                     />
                                 </div>
                             </div>
                             <div className="w-full">
                                 <label htmlFor="installmentsCount" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Número de Parcelas</label>
-                                <input 
-                                    id="installmentsCount" 
-                                    type="number" 
-                                    placeholder="1" 
-                                    value={installmentsCount} 
-                                    onChange={(evento) => setInstallmentsCount(evento.target.value)} 
-                                    min="1" 
+                                <input
+                                    id="installmentsCount"
+                                    type="number"
+                                    placeholder="1"
+                                    value={installmentsCount}
+                                    onChange={(evento) => setInstallmentsCount(evento.target.value)}
+                                    min="1"
                                     className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
-                                    required 
+                                    required
                                 />
                             </div>
                         </div>
@@ -673,59 +673,59 @@ function LoanManagement() {
                                     <label htmlFor="totalValueShared" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor Total</label>
                                     <div className="relative w-full">
                                         <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
-                                        <input 
-                                            id="totalValueShared" 
-                                            type="text" 
-                                            placeholder="0,00" 
-                                            value={totalValueInput} 
-                                            onChange={handleCurrencyInputChange(setTotalValueInput)} 
-                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
-                                            required 
-                                            inputMode="decimal" 
+                                        <input
+                                            id="totalValueShared"
+                                            type="text"
+                                            placeholder="0,00"
+                                            value={totalValueInput}
+                                            onChange={handleCurrencyInputChange(setTotalValueInput)}
+                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium"
+                                            required
+                                            inputMode="decimal"
                                         />
                                     </div>
                                 </div>
                                 <div className="w-full">
                                     <label htmlFor="installmentsCountShared" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Número de Parcelas</label>
-                                    <input 
-                                        id="installmentsCountShared" 
-                                        type="number" 
-                                        placeholder="1" 
-                                        value={installmentsCount} 
-                                        onChange={(evento) => setInstallmentsCount(evento.target.value)} 
-                                        min="1" 
+                                    <input
+                                        id="installmentsCountShared"
+                                        type="number"
+                                        placeholder="1"
+                                        value={installmentsCount}
+                                        onChange={(evento) => setInstallmentsCount(evento.target.value)}
+                                        min="1"
                                         className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
-                                        required 
+                                        required
                                     />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                                 <div className="w-full">
                                     <label htmlFor="selectedClient1Id" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa 1</label>
-                                    <select 
-                                        id="selectedClient1Id" 
-                                        value={selectedClient1Id} 
-                                        onChange={(evento) => setSelectedClient1Id(evento.target.value)} 
-                                        className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                    <Select
+                                        id="selectedClient1Id"
+                                        value={selectedClient1Id}
+                                        onChange={(evento) => setSelectedClient1Id(evento.target.value)}
                                         required
+                                        placeholder="Selecione a Pessoa 1"
                                     >
                                         <option value="">Selecione a Pessoa 1</option>
                                         {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                                    </select>
+                                    </Select>
                                 </div>
                                 <div className="w-full">
                                     <label htmlFor="person1ShareInput" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Valor da Pessoa 1</label>
                                     <div className="relative w-full">
                                         <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">R$</span>
-                                        <input 
-                                            id="person1ShareInput" 
-                                            type="text" 
-                                            placeholder="0,00" 
-                                            value={person1ShareInput} 
-                                            onChange={handleCurrencyInputChange(setPerson1ShareInput)} 
-                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
-                                            required 
-                                            inputMode="decimal" 
+                                        <input
+                                            id="person1ShareInput"
+                                            type="text"
+                                            placeholder="0,00"
+                                            value={person1ShareInput}
+                                            onChange={handleCurrencyInputChange(setPerson1ShareInput)}
+                                            className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium"
+                                            required
+                                            inputMode="decimal"
                                         />
                                     </div>
                                 </div>
@@ -735,30 +735,30 @@ function LoanManagement() {
                                 </div>
                                 <div className="w-full">
                                     <label htmlFor="selectedClient2Id" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">Pessoa 2</label>
-                                    <select 
-                                        id="selectedClient2Id" 
-                                        value={selectedClient2Id} 
-                                        onChange={(evento) => setSelectedClient2Id(evento.target.value)} 
-                                        className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                                    <Select
+                                        id="selectedClient2Id"
+                                        value={selectedClient2Id}
+                                        onChange={(evento) => setSelectedClient2Id(evento.target.value)}
                                         required
+                                        placeholder="Selecione a Pessoa 2"
                                     >
                                         <option value="">Selecione a Pessoa 2</option>
                                         {allClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                                    </select>
+                                    </Select>
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
-                    <Button 
-                        variant="secondary" 
+                    <Button
+                        variant="secondary"
                         onClick={handleCloseModal}
                     >
                         Cancelar
                     </Button>
-                    <Button 
-                        variant="primary" 
+                    <Button
+                        variant="primary"
                         type="submit"
                         isLoading={isLoading}
                         onClick={handleSaveLoan}

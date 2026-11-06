@@ -1,5 +1,6 @@
 // src/features/dashboard/shell/MobileNavigation.jsx
 import React, { useEffect, useRef } from 'react';
+import FinControlMark from '../../../components/FinControlMark';
 import Badge from '../../../design-system/primitives/Badge';
 
 const HomeIcon = () => (
@@ -52,7 +53,6 @@ const DEFAULT_MOBILE_NAV_LINKS = [
   { id: 'cards', label: 'Cartões', icon: <CreditCardIcon /> },
   { id: 'transactions', label: 'Movimentações', icon: <ActivityIcon /> },
   { id: 'subscriptions', label: 'Assinaturas', icon: <RepeatIcon /> },
-  { id: 'crisis', label: 'Modo Crise', icon: <ZapIcon />, proOnly: true },
 ];
 
 const CloseIcon = () => (
@@ -105,14 +105,6 @@ const LogoutIcon = () => (
   </svg>
 );
 
-const FinControlLogo = ({ className = 'w-5 h-5' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 export default function MobileNavigation({
   isOpen,
   onClose,
@@ -126,6 +118,7 @@ export default function MobileNavigation({
   onOpenDeleteModal,
   onLogout,
   onLockedFeatureClick,
+  onPrefetch = () => {},
   triggerRef,
   navLinks = DEFAULT_MOBILE_NAV_LINKS,
 }) {
@@ -206,10 +199,13 @@ export default function MobileNavigation({
         {/* Topo do Drawer */}
         <div>
           <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--fc-border-subtle)]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[var(--fc-surface-2)] text-[var(--fc-accent)] border border-[var(--fc-border-subtle)] flex items-center justify-center shrink-0">
-                <FinControlLogo />
-              </div>
+            <div className="flex items-center gap-2.5 group/brand">
+              <FinControlMark
+                size={32}
+                animated={true}
+                ariaHidden={true}
+                className="transition-transform duration-200 group-hover/brand:scale-105"
+              />
               <span className="font-semibold text-base text-[var(--fc-text-primary)]">
                 FinControl
               </span>
@@ -244,6 +240,9 @@ export default function MobileNavigation({
                     }
                   }}
                   aria-current={isActive ? 'page' : undefined}
+                  onMouseEnter={() => onPrefetch(link.id)}
+                  onFocus={() => onPrefetch(link.id)}
+                  onTouchStart={() => onPrefetch(link.id)}
                   className={`w-full group min-h-[44px] flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer border-l-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                     isActive
                       ? 'bg-[var(--fc-accent-soft)] text-[var(--fc-text-primary)] border-[var(--fc-accent)] font-semibold'

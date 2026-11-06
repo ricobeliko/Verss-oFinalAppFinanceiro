@@ -18,7 +18,7 @@ Este documento define os princípios fundamentais e permanentes que regem o dese
 10. **Preferir mudanças pequenas e verificáveis:** Trabalhar sempre em lotes controlados com commits e diffs limpos.
 11. **Testar mudanças financeiras:** Toda alteração de cálculo exige teste correspondente em `tests/financialService.test.js`.
 12. **Medir mudanças de performance:** Medir bundle e tempo de render antes e depois de alterações.
-13. **Reutilizar componentes antes de criar novos:** Fortalecer o Design System existente (*Carbon Black & Gold*).
+13. **Reutilizar componentes antes de criar novos:** Fortalecer o Design System existente (*Abyss Teal*).
 14. **Não transformar o projeto em overengineering:** Manter a stack simples (React, Vite, Tailwind, Firebase). Não adicionar Redux, CQRS ou padrões desnecessários.
 15. **Executar validações após mudanças significativas:** Sempre validar o ciclo `npm test` -> `npm run lint` -> `npm run build`.
 16. **Product Proof antes de Social Proof (Tolerância Zero para Métricas Falsas):** Proibido criar ou exibir prova social fictícia (avaliações falsas, contagem de usuários inflada, 4.9/5, 50 mil+, depoimentos fictícios, "100% seguro", "100% privado", empresas/clientes fictícios, selos ou prêmios não comprovados). Toda comunicação deve basear-se exclusivamente em Product Proof factual (precisão em centavos, compras compartilhadas, controle de faturas, parcelas e assinaturas organizadas, sem conexão bancária necessária, dados registrados no FinControl, acesso autenticado). Válido para Landing, Auth, Dashboard, Marketing, SEO e Social Preview.

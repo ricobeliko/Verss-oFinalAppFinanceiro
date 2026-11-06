@@ -18,8 +18,8 @@ export function useExpenses() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.expenses) {
-            setExpenses(window.__FINCONTROL_E2E_MOCK_DATA__.expenses);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setExpenses(window.__FINCONTROL_E2E_MOCK_DATA__.expenses || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -62,5 +62,5 @@ export function useExpenses() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { expenses, loading, error, isStale };
+    return { expenses, loading, isLoading: loading, error, isStale };
 }

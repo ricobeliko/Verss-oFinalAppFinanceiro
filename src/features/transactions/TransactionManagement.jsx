@@ -1,4 +1,5 @@
-import React, { useState, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useMemo, lazy, Suspense, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import LoanManagement from '../loans/LoanManagement';
 import IncomeManagement from '../income/IncomeManagement';
 import ExpenseManagement from '../expenses/ExpenseManagement';
@@ -9,26 +10,34 @@ import { useLoans } from '../../hooks/useLoans';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import GenericModal from '../../components/GenericModal';
 import UpgradePrompt from '../../components/UpgradePrompt';
+import { SkeletonPage } from '../../design-system';
 
 const PdfImportModal = lazy(() => import('../../components/PdfImportModal'));
 
 function UnifiedTransactionManagement() {
     const [transactionType, setTransactionType] = useState('loan');
+    const scopeRef = useRef(null);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     
     const { isPro, isTrialActive, db, userId, getUserCollectionPathSegments, showToast, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
-    const { cards } = useCards();
-    const { clients } = useClients();
-    const { loans: existingLoans } = useLoans();
+    const { cards, loading: loadingCards } = useCards();
+    const { clients, loading: loadingClients } = useClients();
+    const { loans: existingLoans, loading: loadingLoans } = useLoans();
+    const isLoading = loadingCards || loadingClients || loadingLoans;
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
     const IncomeFormComponent = useMemo(() => <IncomeManagement />, []);
     const ExpenseFormComponent = useMemo(() => <ExpenseManagement />, []);
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Modal de Importação de Fatura PDF (Carregamento Sob Demanda) */}
             {isPdfModalOpen && (
                 <Suspense fallback={null}>
@@ -48,7 +57,7 @@ function UnifiedTransactionManagement() {
             )}
 
             {/* Header Harmonizado */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md space-y-6">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md space-y-6">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Adicionar Movimentações</h1>
                     <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Registre suas compras no cartão, receitas e despesas avulsas com precisão.</p>

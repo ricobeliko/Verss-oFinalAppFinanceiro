@@ -29,16 +29,16 @@ test.describe('E2E Real Browser — Design System 2.0 Lab (Stage A)', () => {
     await expect(page.locator('h2#sec-modal')).toBeVisible();
 
     // 4. Toggle de Tema: Dark -> Light -> Dark
-    const lightThemeBtn = page.getByRole('button', { name: /Claro \(Warm White\)/i });
+    const lightThemeBtn = page.getByRole('button', { name: /Claro \((Crisp Teal|Warm White)\)/i });
     await lightThemeBtn.click();
     await expect(labRoot).toHaveAttribute('data-theme', 'light');
 
-    const darkThemeBtn = page.getByRole('button', { name: /Escuro \(Obsidian\)/i });
+    const darkThemeBtn = page.getByRole('button', { name: /Escuro \((Abyss Teal|Obsidian)\)/i });
     await darkThemeBtn.click();
     await expect(labRoot).toHaveAttribute('data-theme', 'dark');
 
     // 5. Verificação de números financeiros canônicos
-    await expect(page.locator('text=R$ 0,00')).toBeVisible();
+    await expect(page.locator('text=R$ 0,00').first()).toBeVisible();
     await expect(page.locator('text=R$ 29,99')).toBeVisible();
     await expect(page.locator('text=+R$ 1.234,56')).toBeVisible();
     await expect(page.locator('text=R$ 12.480,75')).toBeVisible();

@@ -5,7 +5,7 @@ import React from 'react';
  * Componente de Botão Padronizado do Design System FinControl (Carbon Black & Gold).
  * 
  * @param {Object} props
- * @param {'primary'|'secondary'|'danger'|'ghost'|'outline-gold'} [props.variant='primary'] - Estilo visual
+ * @param {'primary'|'secondary'|'danger'|'ghost'|'outline-accent'|'outline-gold'} [props.variant='primary'] - Estilo visual
  * @param {'sm'|'md'|'lg'} [props.size='md'] - Tamanho do botão
  * @param {boolean} [props.isLoading=false] - Exibe spinner de carregamento
  * @param {boolean} [props.disabled=false] - Estado desabilitado
@@ -32,6 +32,7 @@ export default function Button({
         secondary: 'bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] font-medium active:scale-[0.98]',
         danger: 'bg-[var(--fc-danger)] hover:opacity-90 text-white shadow-lg shadow-[var(--fc-danger)]/20 active:scale-[0.98]',
         ghost: 'text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] hover:bg-[var(--fc-surface-2)] font-medium',
+        'outline-accent': 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 hover:bg-[var(--fc-accent)]/20 font-bold active:scale-[0.98]',
         'outline-gold': 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 hover:bg-[var(--fc-accent)]/20 font-bold active:scale-[0.98]'
     };
 

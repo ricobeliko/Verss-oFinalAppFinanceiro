@@ -17,6 +17,15 @@ export function usePaidSubscriptions() {
             return;
         }
 
+        // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setPaidSubscriptions(window.__FINCONTROL_E2E_MOCK_DATA__.paidSubscriptions || []);
+            setLoading(false);
+            setError(null);
+            setIsStale(false);
+            return;
+        }
+
         const basePath = [...getUserCollectionPathSegments(), userId];
         const paidSubsRef = collection(db, ...basePath, 'paidSubscriptions');
         const canonicalKey = buildCanonicalQueryKey({
@@ -48,5 +57,5 @@ export function usePaidSubscriptions() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { paidSubscriptions, loading, error, isStale };
+    return { paidSubscriptions, loading, isLoading: loading, error, isStale };
 }

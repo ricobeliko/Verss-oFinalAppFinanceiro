@@ -1,5 +1,5 @@
 // src/design-system/lab/DesignSystemLab.jsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   FiSun, 
   FiMoon, 
@@ -11,7 +11,8 @@ import {
   FiSearch, 
   FiTrash2, 
   FiPlus,
-  FiExternalLink
+  FiExternalLink,
+  FiRefreshCw
 } from 'react-icons/fi';
 import Button from '../primitives/Button';
 import IconButton from '../primitives/IconButton';
@@ -19,6 +20,11 @@ import Surface from '../primitives/Surface';
 import TextField from '../primitives/TextField';
 import Badge from '../primitives/Badge';
 import Modal from '../primitives/Modal';
+import Skeleton, { SkeletonPage } from '../primitives/Skeleton';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
+import useEnterStagger from '../../hooks/useEnterStagger';
+import { toggleThemeWithTransition } from '../../utils/themeTransition';
+import { applyTheme } from '../../utils/theme';
 
 /**
  * FinControl Design System 2.0 — Local Visual Lab (Dev-Only)
@@ -26,12 +32,86 @@ import Modal from '../primitives/Modal';
  * Allows the owner to inspect, toggle themes, and interact with all DS2 foundations
  * in an isolated environment without affecting production pages.
  */
+function StaggerScopeContainer() {
+  const scopeRef = useRef(null);
+  useEnterStagger(scopeRef, { ready: true });
+
+  return (
+    <div
+      ref={scopeRef}
+      className="space-y-4 p-4 rounded-xl border border-[var(--fc-border-subtle)] bg-[var(--fc-surface-1)]"
+    >
+      <div data-enter="title" className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-bold text-[var(--fc-text-primary)]">
+            Painel Orquestrado (Entra Primeiro)
+          </h4>
+          <p className="text-xs text-[var(--fc-text-secondary)]">
+            Marcado com data-enter="title", animado com translateY e opacity via GSAP.
+          </p>
+        </div>
+        <Badge variant="accent">data-enter="title"</Badge>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            data-enter="item"
+            className="p-3.5 rounded-lg border border-[var(--fc-border-default)] bg-[var(--fc-surface-2)] space-y-1.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--fc-text-muted)] font-mono">Card #{i}</span>
+              <Badge variant="neutral">item</Badge>
+            </div>
+            <p className="text-sm font-semibold text-[var(--fc-text-primary)]">Card Escalonado</p>
+            <p className="text-xs text-[var(--fc-text-secondary)]">
+              Entra em cascata sequencial (stagger 0.07s).
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StaggerDemo() {
+  const [mountKey, setMountKey] = useState(0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <p className="text-base font-semibold text-[var(--fc-text-primary)]">
+            Demonstração Interativa de Entrada Escalonada
+          </p>
+          <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+            Clique no botão ao lado para remontar a área e observar a entrada em cascata com título e cards.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setMountKey((k) => k + 1)}
+          className="flex items-center gap-2 self-start sm:self-auto"
+        >
+          <FiRefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>Repetir animação</span>
+        </Button>
+      </div>
+      <StaggerScopeContainer key={mountKey} />
+    </div>
+  );
+}
+
 export default function DesignSystemLab() {
   const [theme, setTheme] = useState('dark');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [textValue, setTextValue] = useState('Exemplo preenchido');
   const [currencyValue, setCurrencyValue] = useState('1250,50');
   const [errorInputValue, setErrorInputValue] = useState('inválido@');
+  const [showSkeletonPage, setShowSkeletonPage] = useState(false);
+  const [counterKey, setCounterKey] = useState(0);
 
   return (
     <div
@@ -61,7 +141,16 @@ export default function DesignSystemLab() {
           <div className="flex items-center gap-2 bg-[var(--fc-surface-2)] p-1 rounded-xl border border-[var(--fc-border-default)]">
             <button
               type="button"
-              onClick={() => setTheme('dark')}
+              onClick={(e) => {
+                if (theme !== 'dark') {
+                  toggleThemeWithTransition({
+                    nextTheme: 'dark',
+                    originElement: e.currentTarget,
+                    applyTheme,
+                    setTheme,
+                  });
+                }
+              }}
               aria-pressed={theme === 'dark'}
               className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                 theme === 'dark'
@@ -70,12 +159,21 @@ export default function DesignSystemLab() {
               }`}
             >
               <FiMoon className="w-4 h-4" aria-hidden="true" />
-              <span>Escuro (Obsidian)</span>
+              <span>Escuro (Abyss Teal)</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setTheme('light')}
+              onClick={(e) => {
+                if (theme !== 'light') {
+                  toggleThemeWithTransition({
+                    nextTheme: 'light',
+                    originElement: e.currentTarget,
+                    applyTheme,
+                    setTheme,
+                  });
+                }
+              }}
               aria-pressed={theme === 'light'}
               className={`min-h-[44px] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fc-focus-ring)] ${
                 theme === 'light'
@@ -84,7 +182,7 @@ export default function DesignSystemLab() {
               }`}
             >
               <FiSun className="w-4 h-4" aria-hidden="true" />
-              <span>Claro (Warm White)</span>
+              <span>Claro (Crisp Teal)</span>
             </button>
           </div>
         </div>
@@ -103,7 +201,7 @@ export default function DesignSystemLab() {
                 Stage A — Prova de Conceito Arquitetural
               </span>
               <p className="text-sm text-[var(--fc-text-secondary)] mt-1">
-                Este laboratório valida os tokens semânticos e os 6 componentes primitivos fundamentais com conformidade estrita de acessibilidade (touch targets &ge; 44px, contraste, focus rings Champagne Gold e safe motion).
+                Este laboratório valida os tokens semânticos e os 6 componentes primitivos fundamentais com conformidade estrita de acessibilidade (touch targets &ge; 44px, contraste, focus rings Abyss Teal e safe motion).
               </p>
             </div>
             <Badge variant="accent" icon={<FiCheck />}>
@@ -147,7 +245,7 @@ export default function DesignSystemLab() {
             </div>
 
             <div className="p-3.5 rounded-xl border border-[var(--fc-accent)] bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] flex flex-col justify-between h-24 shadow-md">
-              <span className="text-xs font-bold">Accent Gold</span>
+              <span className="text-xs font-bold">Accent Teal</span>
               <span className="text-[11px] font-mono opacity-90">--fc-accent</span>
             </div>
 
@@ -578,6 +676,161 @@ export default function DesignSystemLab() {
             >
               Abrir Modal DS2
             </Button>
+          </Surface>
+        </section>
+        {/* =======================================================================
+            SECTION H: SKELETON E ENTRADA ESCALONADA (MOTION & SKELETONS)
+            ======================================================================= */}
+        <section aria-labelledby="sec-skeletons" className="space-y-6">
+          <div className="border-b border-[var(--fc-border-subtle)] pb-2">
+            <h2 id="sec-skeletons" className="text-xl font-bold tracking-tight text-[var(--fc-text-primary)]">
+              H. Skeleton e Entrada Escalonada (Motion & Skeletons)
+            </h2>
+            <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+              Esqueletos de carregamento com shimmer suave em CSS puro e orquestração de entrada escalonada (useEnterStagger).
+            </p>
+          </div>
+
+          {/* Variantes de Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Bloco</span>
+              <Skeleton variant="block" className="h-28 w-full" />
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Texto (Linhas)</span>
+              <div className="space-y-2 pt-2">
+                <Skeleton variant="text" className="w-full" />
+                <Skeleton variant="text" className="w-4/5" />
+                <Skeleton variant="text" className="w-2/3" />
+              </div>
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Círculos</span>
+              <div className="flex items-center gap-3 pt-2">
+                <Skeleton variant="circle" className="w-12 h-12" />
+                <Skeleton variant="circle" className="w-10 h-10" />
+                <Skeleton variant="circle" className="w-8 h-8" />
+              </div>
+            </Surface>
+
+            <Surface variant="default" className="space-y-3">
+              <span className="text-xs font-semibold text-[var(--fc-text-secondary)]">Variante: Card</span>
+              <Skeleton variant="card" />
+            </Surface>
+          </div>
+
+          {/* Demo Interativa de Entrada Escalonada */}
+          <Surface variant="elevated" className="space-y-4">
+            <StaggerDemo />
+          </Surface>
+
+          {/* Preview de SkeletonPage */}
+          <Surface variant="default" className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold text-[var(--fc-text-primary)]">
+                  SkeletonPage (Layout Estrutural de Tela)
+                </p>
+                <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+                  Substitui spinners centrais e renderiza a antecipação da tela com acessibilidade (role="status", aria-busy="true").
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowSkeletonPage((v) => !v)}
+              >
+                {showSkeletonPage ? 'Ocultar SkeletonPage' : 'Exibir SkeletonPage'}
+              </Button>
+            </div>
+
+            {showSkeletonPage && (
+              <div className="p-4 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-bg)]">
+                <SkeletonPage />
+              </div>
+            )}
+          </Surface>
+        </section>
+
+        {/* =========================================================================
+            SECTION I: ANIMATED CURRENCY (CONTADORES VIVOS ZERO-DRIFT)
+            ========================================================================= */}
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[var(--fc-accent)] font-bold">
+                Seção I
+              </span>
+              <h2 className="text-xl font-bold text-[var(--fc-text-primary)]">
+                AnimatedCurrency (Contadores Vivos Zero-Drift)
+              </h2>
+              <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+                Contagem animada fluida em centavos inteiros sem drift matemático, com fallback estático para reduced-motion.
+              </p>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCounterKey((k) => k + 1)}
+            >
+              <FiRefreshCw className="mr-1.5" /> Repetir Contagem
+            </Button>
+          </div>
+
+          <Surface variant="default" className="space-y-6">
+            <div key={counterKey} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Caso 1: Zero */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Valor Zero (0)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={0} />
+                </p>
+              </div>
+
+              {/* Caso 2: Ponto Flutuante (0.1 + 0.2) */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Ponto Flutuante (0.1 + 0.2)</span>
+                <p className="text-2xl font-bold text-[var(--fc-accent)]">
+                  <AnimatedCurrency value={0.1 + 0.2} />
+                </p>
+              </div>
+
+              {/* Caso 3: Valor Comum */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Valor Decimal (1.234.567,89)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={1234567.89} />
+                </p>
+              </div>
+
+              {/* Caso 4: Negativo */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Negativo (-450,50)</span>
+                <p className="text-2xl font-bold text-[var(--fc-danger)]">
+                  <AnimatedCurrency value={-450.5} />
+                </p>
+              </div>
+
+              {/* Caso 5: Muito Grande */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Muito Grande (999.999.999,99)</span>
+                <p className="text-2xl font-bold text-[var(--fc-success)]">
+                  <AnimatedCurrency value={999999999.99} />
+                </p>
+              </div>
+
+              {/* Caso 6: Centavos Fracionários (0.005) */}
+              <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] space-y-1">
+                <span className="text-xs font-semibold text-[var(--fc-text-muted)] uppercase">Arredondamento Seguro (0.005)</span>
+                <p className="text-2xl font-bold text-[var(--fc-text-primary)]">
+                  <AnimatedCurrency value={0.005} />
+                </p>
+              </div>
+            </div>
           </Surface>
         </section>
       </main>

@@ -55,15 +55,6 @@
   }
 }
 
-@keyframes fcPageEnter {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 @keyframes fcDrawerOverlayEnter {
   from {
     opacity: 0;
@@ -97,10 +88,6 @@
   animation: fcShellEnter var(--fc-motion-normal) forwards;
 }
 
-.fc-page-enter {
-  animation: fcPageEnter var(--fc-motion-fast) forwards;
-}
-
 .fc-drawer-overlay {
   animation: fcDrawerOverlayEnter var(--fc-motion-fast) forwards;
 }
@@ -113,6 +100,113 @@
   animation: fcPopoverEnter var(--fc-motion-fast) forwards;
 }
 
+/* =========================================================================
+   LIVING BACKGROUND WAVES MOTION
+   Translates periodic wave SVGs with zero-seam loop
+   ========================================================================= */
+@keyframes fcWaveTranslate1 {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes fcWaveTranslate2 {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fcWaveTranslate3 {
+  0% {
+    transform: translate3d(-25%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-75%, 0, 0);
+  }
+}
+
+.fc-wave-layer-1 {
+  animation: fcWaveTranslate1 70s linear infinite alternate;
+  will-change: transform;
+}
+
+.fc-wave-layer-2 {
+  animation: fcWaveTranslate2 95s linear infinite alternate;
+  will-change: transform;
+}
+
+.fc-wave-layer-3 {
+  animation: fcWaveTranslate3 120s linear infinite alternate;
+  will-change: transform;
+}
+
+/* Sparkline reveal motion */
+@media (prefers-reduced-motion: no-preference) {
+  .fc-sparkline-path {
+    stroke-dasharray: 200;
+    stroke-dashoffset: 200;
+    animation: fcSparklineDraw 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes fcSparklineDraw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}
+
+/* Deactivate wave motion under reduced-motion, coarse pointer, or mobile */
+@media (prefers-reduced-motion: reduce), (pointer: coarse), (max-width: 767px) {
+  .fc-wave-layer-1,
+  .fc-wave-layer-2,
+  .fc-wave-layer-3,
+  .fc-sparkline-path {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+}
+
+/* =========================================================================
+   SKELETON SHIMMER MOTION
+   Pure CSS hardware-accelerated transform shimmer sweep
+   ========================================================================= */
+@keyframes fcShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.fc-skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.fc-skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--fc-accent-soft) 50%,
+    transparent 100%
+  );
+  animation: fcShimmer 1.4s infinite ease-in-out;
+  will-change: transform;
+  pointer-events: none;
+}
+
 /* Reduced Motion Safety */
 @media (prefers-reduced-motion: reduce) {
   .fc-transition-fast,
@@ -121,12 +215,125 @@
   .fc-animate-fade-in,
   .fc-animate-scale-up,
   .fc-shell-enter,
-  .fc-page-enter,
   .fc-drawer-overlay,
   .fc-drawer-slide,
-  .fc-popover-enter {
+  .fc-popover-enter,
+  .fc-wave-layer-1,
+  .fc-wave-layer-2,
+  .fc-wave-layer-3,
+  .fc-sparkline-path {
     animation: none !important;
     transition: none !important;
     transform: none !important;
+  }
+
+  .fc-skeleton-shimmer::after {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+/* =========================================================================
+   THEME SWITCH CIRCULAR REVEAL (View Transition API)
+   ========================================================================= */
+
+/* Desliga transitions e pausa animations durante a captura e snapshot do tema sem resetar tempo */
+html.fc-theme-switching,
+html.fc-theme-switching * {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+/* Pseudo-elementos da View Transition API para revelação circular */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+/* =========================================================================
+   TAB PAGE TRANSITION (fc-transitioning)
+   ========================================================================= */
+
+/* As ondas CSS do LivingBackground rodam exclusivamente no compositor de GPU;
+   não pausamos via CSS para evitar a invalidação síncrona de estilos e Long Tasks
+   no frame em que fc-transitioning é alternado. */
+
+/* Oculta aura do cursor durante a transição de abas para poupar processamento */
+html.fc-transitioning [data-fc-aura] {
+  opacity: 0 !important;
+  will-change: auto !important;
+}
+
+/* =========================================================================
+   FINCONTROL BRAND MARK MOTION (Fase Ícone)
+   Pure GPU translate3d wave sliding motion, phased and seamless
+   ========================================================================= */
+@keyframes fcMarkWaveSlide {
+  0% {
+    transform: translate3d(-352px, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.fc-mark-wave {
+  transform: translate3d(0, 0, 0);
+}
+
+.fc-mark-wave-anim-1 {
+  animation: fcMarkWaveSlide 8.5s linear infinite;
+  will-change: transform;
+}
+
+.fc-mark-wave-anim-2 {
+  animation: fcMarkWaveSlide 10.5s linear infinite;
+  will-change: transform;
+}
+
+.fc-mark-wave-anim-3 {
+  animation: fcMarkWaveSlide 12.5s linear infinite;
+  will-change: transform;
+}
+
+/* Hover-triggered wave animation */
+.group:hover .fc-mark-wave-hover-1,
+.fc-mark:hover .fc-mark-wave-hover-1 {
+  animation: fcMarkWaveSlide 8.5s linear infinite;
+  will-change: transform;
+}
+
+.group:hover .fc-mark-wave-hover-2,
+.fc-mark:hover .fc-mark-wave-hover-2 {
+  animation: fcMarkWaveSlide 10.5s linear infinite;
+  will-change: transform;
+}
+
+.group:hover .fc-mark-wave-hover-3,
+.fc-mark:hover .fc-mark-wave-hover-3 {
+  animation: fcMarkWaveSlide 12.5s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-mark-wave,
+  .fc-mark-wave-anim-1,
+  .fc-mark-wave-anim-2,
+  .fc-mark-wave-anim-3,
+  .fc-mark-wave-hover-1,
+  .fc-mark-wave-hover-2,
+  .fc-mark-wave-hover-3 {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto !important;
   }
 }

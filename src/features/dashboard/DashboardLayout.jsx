@@ -1,25 +1,41 @@
 // src/features/dashboard/DashboardLayout.jsx
 
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { flushSync } from 'react-dom';
+import gsap from 'gsap';
 import { useAppContext } from '../../context/AppContext';
 import GlobalSearchModal from '../../components/GlobalSearchModal';
 import AccountDeletionModal from '../../components/AccountDeletionModal';
-import Spinner from '../../components/Spinner';
+import { getInitialTheme, applyTheme } from '../../utils/theme';
+import { toggleThemeWithTransition } from '../../utils/themeTransition';
+import { SkeletonPage } from '../../design-system';
+import { MOTION } from '../../design-system/motion';
+import usePrefersReducedMotion from '../../hooks/usePrefersReducedMotion';
 
 // Shell Desacoplado DS2
 import AppSidebar from './shell/AppSidebar';
 import AppTopbar from './shell/AppTopbar';
 import MobileNavigation from './shell/MobileNavigation';
+import LivingBackground from './shell/LivingBackground';
+import PageWaveSweep from './shell/PageWaveSweep';
+
+const PAGE_NAMES = {
+  resumo: 'Resumo financeiro',
+  pessoas: 'Gerenciamento de Pessoas',
+  cards: 'Gerenciamento de Cartões',
+  transactions: 'Adicionar Movimentações',
+  subscriptions: 'Gerenciamento de Assinaturas',
+};
 
 // Página principal do painel (carregada no primeiro paint)
 import Dashboard from './Dashboard';
+import { loadTabModule, prefetchTab, prefetchAllTabs } from './tabPrefetch';
 
-// Páginas secundárias carregadas sob demanda (tab-level code splitting)
-const ClientManagement = lazy(() => import('../clients/ClientManagement'));
-const CardManagement = lazy(() => import('../cards/CardManagement'));
-const UnifiedTransactionManagement = lazy(() => import('../transactions/TransactionManagement'));
-const SubscriptionManagement = lazy(() => import('../subscriptions/SubscriptionManagement'));
-const CrisisMode = lazy(() => import('../crisis/CrisisMode'));
+// Páginas secundárias carregadas sob demanda (tab-level code splitting com promessa memoizada)
+const ClientManagement = lazy(() => loadTabModule('pessoas'));
+const CardManagement = lazy(() => loadTabModule('cards'));
+const UnifiedTransactionManagement = lazy(() => loadTabModule('transactions'));
+const SubscriptionManagement = lazy(() => loadTabModule('subscriptions'));
 
 export default function DashboardLayout() {
   const { currentUser, isPro, isTrialActive, logout, showToast } = useAppContext();
@@ -31,23 +47,96 @@ export default function DashboardLayout() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const mobileMenuTriggerRef = useRef(null);
+  const waveSweepRef = useRef(null);
+  const contentWrapperRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [pageAnnouncement, setPageAnnouncement] = useState('');
 
-  // Tema Dark / Light sincronizado com localStorage e data-theme
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const navigateTo = (targetPage) => {
+    if (!targetPage || targetPage === activePage) {
+      return;
+    }
+
+    const isReduced = prefersReducedMotion;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+    if (isReduced || isMobile) {
+      waveSweepRef.current?.cancel();
+      setActivePage(targetPage);
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+      if (typeof window !== 'undefined') {
+        window.scrollTo(0, 0);
+      }
+      setPageAnnouncement(`Navegou para ${PAGE_NAMES[targetPage] || targetPage}`);
+      return;
+    }
+
+    const contentEl = contentWrapperRef.current;
+    const coverDuration = MOTION?.pageTransition?.coverIn ?? 0.45;
+
+    // Dispara saída suave do conteúdo atual enquanto a onda sobe
+    if (contentEl) {
+      gsap.to(contentEl, {
+        opacity: 0,
+        y: MOTION?.pageExit?.y ?? -6,
+        duration: coverDuration,
+        ease: 'power2.in',
+      });
+    }
+
+    // Carrega o chunk da aba em paralelo ao cover-in para que esteja 100% pronto no ápice
+    const modulePromise = loadTabModule(targetPage);
+
+    waveSweepRef.current?.sweep({
+      waitFor: modulePromise,
+      onPeak: () => {
+        if (typeof window !== 'undefined' && window.__fincontrol_simulate_peak_error__) {
+          window.__fincontrol_simulate_peak_error__ = false;
+          throw new Error('Simulated onPeak crash in DashboardLayout');
+        }
+        flushSync(() => {
+          setActivePage(targetPage);
+        });
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = 0;
+        }
+        if (typeof window !== 'undefined') {
+          window.scrollTo(0, 0);
+        }
+        setPageAnnouncement(`Navegou para ${PAGE_NAMES[targetPage] || targetPage}`);
+
+        // Prepara container para a revelação da nova tela
+        if (contentEl) {
+          gsap.set(contentEl, { opacity: 1, y: 0, clearProps: 'transform,opacity' });
+        }
+      },
+      onComplete: () => {
+        if (contentEl) {
+          gsap.set(contentEl, { clearProps: 'transform,opacity' });
+        }
+      },
+    });
+  };
+
+  // Tema Dark / Light sincronizado via utilitário canônico
+  const [theme, setTheme] = useState(getInitialTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', theme);
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
+    applyTheme(theme);
   }, [theme]);
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  const handleToggleTheme = (event) => {
+    const originElement = event?.currentTarget || event?.target || null;
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    toggleThemeWithTransition({
+      nextTheme,
+      originElement,
+      applyTheme,
+      setTheme,
+    });
   };
 
   // Filtros Globais do Painel
@@ -67,6 +156,32 @@ export default function DashboardLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Prefetch de abas secundárias em background idle após o primeiro paint
+  useEffect(() => {
+    let idleId;
+    let timeoutId;
+    const doPrefetch = () => {
+      prefetchAllTabs();
+    };
+
+    if (typeof window !== 'undefined') {
+      if (typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(doPrefetch, { timeout: 3000 });
+      } else {
+        timeoutId = window.setTimeout(doPrefetch, 1500);
+      }
+    }
+
+    return () => {
+      if (idleId && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
   const handleLockedFeatureClick = () => {
     showToast('Disponível no plano Pro.', 'info');
   };
@@ -82,27 +197,19 @@ export default function DashboardLayout() {
 
   const renderActivePage = () => {
     return (
-      <Suspense
-        fallback={
-          <div className="flex justify-center items-center py-24 min-h-[300px]">
-            <Spinner />
-          </div>
-        }
-      >
+      <Suspense fallback={<SkeletonPage />}>
         {(() => {
           switch (activePage) {
             case 'resumo':
               return <Dashboard {...pageProps} />;
             case 'pessoas':
-              return <ClientManagement />;
+              return <ClientManagement {...pageProps} />;
             case 'cards':
               return <CardManagement />;
             case 'transactions':
               return <UnifiedTransactionManagement />;
             case 'subscriptions':
               return <SubscriptionManagement {...pageProps} />;
-            case 'crisis':
-              return <CrisisMode selectedMonth={selectedMonth} />;
             default:
               return <Dashboard {...pageProps} />;
           }
@@ -114,12 +221,16 @@ export default function DashboardLayout() {
   return (
     <div
       data-theme={theme}
-      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors"
+      className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors relative"
     >
+      {/* Camada Atmosférica Viva (Fixed Background) */}
+      <LivingBackground />
+
       {/* Sidebar Desktop (>= 1024px) */}
       <AppSidebar
         activePage={activePage}
-        onSelectPage={setActivePage}
+        onSelectPage={navigateTo}
+        onPrefetch={prefetchTab}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         currentUser={currentUser}
@@ -137,7 +248,8 @@ export default function DashboardLayout() {
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
         activePage={activePage}
-        onSelectPage={setActivePage}
+        onSelectPage={navigateTo}
+        onPrefetch={prefetchTab}
         currentUser={currentUser}
         isPro={isPro}
         isTrialActive={isTrialActive}
@@ -150,7 +262,10 @@ export default function DashboardLayout() {
       />
 
       {/* Canvas Principal: Topbar + Conteúdo */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto relative z-10"
+      >
         <AppTopbar
           onOpenSearch={() => setIsSearchOpen(true)}
           theme={theme}
@@ -159,9 +274,22 @@ export default function DashboardLayout() {
           mobileMenuTriggerRef={mobileMenuTriggerRef}
         />
 
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 fc-page-enter">
-          {renderActivePage()}
+        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 relative z-10">
+          <PageWaveSweep ref={waveSweepRef} />
+          <div ref={contentWrapperRef} className="w-full">
+            {renderActivePage()}
+          </div>
         </main>
+      </div>
+
+      {/* Anúncio acessível de troca de tela para leitores de tela */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {pageAnnouncement}
       </div>
 
       {/* Modal de Busca Global */}
@@ -170,7 +298,7 @@ export default function DashboardLayout() {
         onClose={() => setIsSearchOpen(false)}
       />
 
-      {/* Modal de Exclusão de Conta (Fase 8.6 - Frozen) */}
+      {/* Modal de Exclusão de Conta */}
       <AccountDeletionModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}

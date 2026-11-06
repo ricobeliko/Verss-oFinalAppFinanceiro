@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import FinancialReportModal from './FinancialReportModal';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay } from '../../utils/currency';
 import { calculateConsolidatedClientReceivables } from '../../services/financialService';
 import { canAddPerson } from '../../config/planEntitlements';
@@ -19,12 +21,15 @@ const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" heig
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
 // --- Componente Principal ---
-export default function ClientManagement() {
+export default function ClientManagement({ selectedMonth }) {
     const { userId, db, isPro, isTrialActive, showToast, getUserCollectionPathSegments, handleUpgradeClick, activateFreeTrial } = useAppContext();
-    const { clients } = useClients();
-    const { loans: allLoans } = useLoans();
-    const { expenses: allExpenses } = useExpenses();
-    const { subscriptions: allSubscriptions } = useSubscriptions();
+    const scopeRef = useRef(null);
+    const { clients, loading: loadingClients } = useClients();
+    const { loans: allLoans, loading: loadingLoans } = useLoans();
+    const { expenses: allExpenses, loading: loadingExpenses } = useExpenses();
+    const { subscriptions: allSubscriptions, loading: loadingSubs } = useSubscriptions();
+    const isLoading = loadingClients || loadingLoans || loadingExpenses || loadingSubs;
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
     const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
@@ -169,10 +174,14 @@ export default function ClientManagement() {
         setIsReportModalOpen(true);
     };
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header DS2 */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-2xl space-y-6">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Pessoas</h1>
                     <p className="text-sm text-[var(--fc-text-muted)] mt-1">Adicione e gerencie as pessoas associadas aos seus lançamentos e faturas compartilhadas.</p>
@@ -194,7 +203,7 @@ export default function ClientManagement() {
                         type="submit" 
                         disabled={isSubmitting}
                         aria-label="Adicionar pessoa"
-                        className="flex-shrink-0 flex items-center gap-2 bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-bold py-3 px-6 rounded-2xl shadow-lg hover:opacity-90 transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
+                        className="flex-shrink-0 flex items-center gap-2 bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] font-bold py-3 px-6 rounded-2xl shadow-lg hover:bg-[var(--fc-accent-hover)] transition cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
                     >
                         {isSubmitting ? <Spinner /> : <PlusIcon />}
                         <span className="hidden sm:inline">{isSubmitting ? 'Salvando...' : 'Adicionar Pessoa'}</span>
@@ -203,7 +212,7 @@ export default function ClientManagement() {
             </div>
 
             {/* Central Consolidada de Repasses de Terceiros */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-2xl space-y-4">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-2xl space-y-4">
                 <div className="flex items-center gap-2.5">
                     <span className="text-xl" aria-hidden="true">👥</span>
                     <h2 className="text-base font-bold text-[var(--fc-text-primary)] tracking-tight">
@@ -232,7 +241,7 @@ export default function ClientManagement() {
             </div>
 
             {/* Tabela de Pessoas com Detalhamento de Repasses */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse">
                         <thead>
@@ -331,7 +340,7 @@ export default function ClientManagement() {
                 </div>
                 <div className="mt-6 flex justify-end gap-4">
                     <button onClick={handleCloseEditModal} className="py-2.5 px-5 bg-[var(--fc-surface-2)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] rounded-2xl text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] transition cursor-pointer font-medium">Cancelar</button>
-                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-gradient-to-r from-gold-light to-gold hover:opacity-90 rounded-2xl text-carbon-900 font-bold transition cursor-pointer shadow-lg disabled:opacity-50">
+                    <button onClick={handleUpdateClient} disabled={isSubmitting} className="py-2.5 px-5 bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] rounded-2xl text-[var(--fc-accent-contrast)] font-bold transition cursor-pointer shadow-lg disabled:opacity-50">
                         {isSubmitting ? 'Salvando...' : 'Salvar'}
                     </button>
                 </div>
@@ -379,6 +388,7 @@ export default function ClientManagement() {
                 isOpen={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
                 client={reportClient}
+                selectedMonth={selectedMonth || currentMonth}
             />
 
             {/* Modal de Upgrade Pro (Disparado ao atingir o limite de 3 pessoas do Free) */}

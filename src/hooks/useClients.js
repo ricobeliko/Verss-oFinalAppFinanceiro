@@ -18,8 +18,8 @@ export function useClients() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.clients) {
-            setClients(window.__FINCONTROL_E2E_MOCK_DATA__.clients);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setClients(window.__FINCONTROL_E2E_MOCK_DATA__.clients || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -57,5 +57,5 @@ export function useClients() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { clients, loading, error, isStale };
+    return { clients, loading, isLoading: loading, error, isStale };
 }

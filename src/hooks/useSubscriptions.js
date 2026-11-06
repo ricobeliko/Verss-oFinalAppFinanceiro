@@ -18,8 +18,8 @@ export function useSubscriptions() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.subscriptions) {
-            setSubscriptions(window.__FINCONTROL_E2E_MOCK_DATA__.subscriptions);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setSubscriptions(window.__FINCONTROL_E2E_MOCK_DATA__.subscriptions || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -57,5 +57,5 @@ export function useSubscriptions() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { subscriptions, loading, error, isStale };
+    return { subscriptions, loading, isLoading: loading, error, isStale };
 }

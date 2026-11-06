@@ -18,8 +18,8 @@ export function useCards() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.cards) {
-            setCards(window.__FINCONTROL_E2E_MOCK_DATA__.cards);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setCards(window.__FINCONTROL_E2E_MOCK_DATA__.cards || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -57,5 +57,5 @@ export function useCards() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { cards, loading, error, isStale };
+    return { cards, loading, isLoading: loading, error, isStale };
 }

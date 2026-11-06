@@ -415,6 +415,635 @@ export function calculateDebtReliefTimeline({ loans = [], startMonth, monthsCoun
 }
 
 /**
+ * Filtra compras e assinaturas atribuídas a uma pessoa específica para projeção futura,
+ * preservando integridade de centavos e desmembrando parcelas de compras compartilhadas.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.loans - Lista de compras
+ * @param {Array<Object>} params.subscriptions - Lista de assinaturas
+ * @param {string} [params.personId='all'] - ID da pessoa, 'all' para todos ou 'unassigned' para sem vínculo
+ * @returns {{ loans: Array<Object>, subscriptions: Array<Object> }}
+ */
+export function filterCommitmentsForPerson({ loans = [], subscriptions = [], personId = 'all', knownClientIds = null }) {
+    const safeLoans = asArray(loans);
+    const safeSubs = asArray(subscriptions);
+
+    if (!personId || personId === 'all') {
+        return { loans: safeLoans, subscriptions: safeSubs };
+    }
+
+    const isUnassigned = personId === 'unassigned';
+    const validClientIds = knownClientIds ? new Set(asArray(knownClientIds).map(c => typeof c === 'object' ? c?.id : c).filter(Boolean)) : null;
+
+    const isClientUnassigned = (cid) => {
+        if (!cid || cid === 'unassigned') return true;
+        if (validClientIds && !validClientIds.has(cid)) return true;
+        return false;
+    };
+
+    const filteredLoans = [];
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+
+        if (loan.isShared && loan.sharedDetails) {
+            const p1 = loan.sharedDetails.person1;
+            const p2 = loan.sharedDetails.person2;
+
+            if (isUnassigned) {
+                // Compras compartilhadas em que person1 ou person2 NÃO tem clientId entram em 'Sem atribuição'
+                if (p1 && isClientUnassigned(p1.clientId)) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p1`,
+                        clientId: null,
+                        isShared: false,
+                        installments: asArray(p1.installments)
+                    });
+                }
+                if (p2 && isClientUnassigned(p2.clientId)) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p2`,
+                        clientId: null,
+                        isShared: false,
+                        installments: asArray(p2.installments)
+                    });
+                }
+            } else {
+                if (p1 && p1.clientId === personId) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p1`,
+                        clientId: personId,
+                        isShared: false,
+                        installments: asArray(p1.installments)
+                    });
+                }
+                if (p2 && p2.clientId === personId) {
+                    filteredLoans.push({
+                        ...loan,
+                        id: `${loan.id}-p2`,
+                        clientId: personId,
+                        isShared: false,
+                        installments: asArray(p2.installments)
+                    });
+                }
+            }
+        } else if (isUnassigned) {
+            if (isClientUnassigned(loan.clientId)) {
+                filteredLoans.push(loan);
+            }
+        } else if (loan.clientId === personId) {
+            filteredLoans.push(loan);
+        }
+    });
+
+    const filteredSubs = safeSubs.filter(s => {
+        if (!s) return false;
+        if (isUnassigned) {
+            return isClientUnassigned(s.clientId);
+        }
+        return s.clientId === personId;
+    });
+
+    return { loans: filteredLoans, subscriptions: filteredSubs };
+}
+
+/**
+ * Calcula compromissos futuros filtrados por pessoa com garantia de centavos inteiros.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} params.loans - Lista de compras
+ * @param {Array<Object>} params.subscriptions - Lista de assinaturas
+ * @param {string} params.startMonth - Mês inicial 'YYYY-MM'
+ * @param {number} [params.monthsCount=4] - Quantidade de meses
+ * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
+ * @returns {Array<Object>}
+ */
+export function calculateFutureCommitmentsForPerson({ loans = [], subscriptions = [], startMonth, monthsCount = 4, personId = 'all', knownClientIds = null }) {
+    const { loans: filteredLoans, subscriptions: filteredSubs } = filterCommitmentsForPerson({
+        loans,
+        subscriptions,
+        personId,
+        knownClientIds
+    });
+
+    return calculateFutureCommitments({
+        loans: filteredLoans,
+        subscriptions: filteredSubs,
+        startMonth,
+        monthsCount
+    });
+}
+
+/**
+/**
+ * Desloca um mês 'YYYY-MM' por uma quantidade de meses (positiva ou negativa).
+ *
+ * @param {string} monthStr - 'YYYY-MM'
+ * @param {number} delta - Quantidade de meses para somar ou subtrair
+ * @returns {string} Novo mês no formato 'YYYY-MM'
+ */
+export function shiftMonth(monthStr, delta = 0) {
+    if (!monthStr || typeof monthStr !== 'string' || !monthStr.includes('-')) return '';
+    const [y, m] = monthStr.split('-').map(Number);
+    if (isNaN(y) || isNaN(m)) return '';
+    const date = new Date(Date.UTC(y, m - 1 + delta, 1));
+    const newY = date.getUTCFullYear();
+    const newM = String(date.getUTCMonth() + 1).padStart(2, '0');
+    return `${newY}-${newM}`;
+}
+
+/**
+ * Calcula a série mensal histórica e projetada de compromissos financeiros (parcelas e assinaturas).
+ * Garante fidelidade ao centavo inteiro e cálculo consistente de variação (MoM).
+ *
+ * NOTA DE HONESTIDADE:
+ * O modelo do FinControl armazena assinaturas recorrentes sem histórico de data de início/término.
+ * Portanto, para competências passadas, as assinaturas ativas refletem o valor contratual vigente HOJE.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} [params.loans=[]] - Lista de compras parceladas
+ * @param {Array<Object>} [params.subscriptions=[]] - Lista de assinaturas
+ * @param {string} [params.endMonth] - Mês de referência (ex: '2026-08')
+ * @param {string} [params.selectedMonth] - Alias de compatibilidade para endMonth
+ * @param {string} [params.startMonth] - Mês inicial explícito 'YYYY-MM' (opcional)
+ * @param {number} [params.monthsBack=5] - Quantidade de meses passados em relação a endMonth
+ * @param {number} [params.monthsForward=0] - Quantidade de meses futuros em relação a endMonth
+ * @param {number} [params.monthsCount] - Quantidade total explícita de meses (opcional)
+ * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
+ * @param {Array<Object>} [params.knownClientIds=null] - Clientes válidos para mapear órfãos
+ * @returns {Array<{
+ *   month: string,
+ *   label: string,
+ *   installmentsTotal: number,
+ *   subscriptionsTotal: number,
+ *   totalCommitted: number,
+ *   installmentsCents: number,
+ *   subscriptionsCents: number,
+ *   totalCommittedCents: number,
+ *   isProjected: boolean,
+ *   isCurrent: boolean,
+ *   delta: {
+ *     value: number,
+ *     deltaCents: number,
+ *     percentage: number | null,
+ *     direction: 'up' | 'down' | 'neutral',
+ *     label: string
+ *   }
+ * }>}
+ */
+/**
+ * Calcula a fatura consolidada e o detalhamento de itens para um mês específico,
+ * respeitando regras de competência de faturas de cartão de crédito (calculateInvoiceDueDate),
+ * compras compartilhadas, despesas avulsas e filtros de pessoa e cartão.
+ *
+ * É a ÚNICA FONTE DA VERDADE tanto para o KPI "Fatura Total do Mês" do Dashboard
+ * quanto para os pontos da série temporal do MonthlyEvolutionChart.
+ *
+ * @param {Object} params
+ * @param {string} params.targetMonth - Mês no formato 'YYYY-MM'
+ * @param {Array<Object>} [params.loans=[]] - Compras parceladas e compartilhadas
+ * @param {Array<Object>} [params.subscriptions=[]] - Assinaturas recorrentes ativas
+ * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
+ * @param {Array<Object>} [params.cards=[]] - Cartões de crédito com closingDay e dueDay
+ * @param {string} [params.personId='all'] - Filtro de pessoa ('all', 'unassigned' ou clientId)
+ * @param {string} [params.cardId='all'] - Filtro de cartão ('all' ou cardId)
+ * @param {Array<Object|string>} [params.knownClientIds=null] - Clientes válidos conhecidos
+ * @param {Array<Object>} [params.paidSubscriptions=[]] - Assinaturas pagas no mês
+ * @returns {{
+ *   month: string,
+ *   installmentsTotal: number,
+ *   subscriptionsTotal: number,
+ *   expensesTotal: number,
+ *   totalCommitted: number,
+ *   installmentsCents: number,
+ *   subscriptionsCents: number,
+ *   expensesCents: number,
+ *   totalCommittedCents: number,
+ *   totalRecebido: number,
+ *   totalPendente: number,
+ *   recebidoCents: number,
+ *   pendenteCents: number,
+ *   items: Array<Object>,
+ *   filteredLoansForChart: Array<Object>,
+ *   filteredSubscriptionsForChart: Array<Object>,
+ *   filteredExpensesForChart: Array<Object>
+ * }}
+ */
+export function calculateInvoiceBreakdownForMonth({
+    targetMonth,
+    loans = [],
+    subscriptions = [],
+    expenses = [],
+    cards = [],
+    personId = 'all',
+    cardId = 'all',
+    knownClientIds = null,
+    paidSubscriptions = []
+}) {
+    if (!targetMonth || typeof targetMonth !== 'string' || !targetMonth.includes('-')) {
+        return {
+            month: '',
+            installmentsTotal: 0,
+            subscriptionsTotal: 0,
+            expensesTotal: 0,
+            totalCommitted: 0,
+            installmentsCents: 0,
+            subscriptionsCents: 0,
+            expensesCents: 0,
+            totalCommittedCents: 0,
+            totalRecebido: 0,
+            totalPendente: 0,
+            recebidoCents: 0,
+            pendenteCents: 0,
+            items: [],
+            filteredLoansForChart: [],
+            filteredSubscriptionsForChart: [],
+            filteredExpensesForChart: []
+        };
+    }
+
+    const [filterYear, filterMonth] = targetMonth.split('-').map(Number);
+    const safeLoans = asArray(loans);
+    const safeSubs = asArray(subscriptions);
+    const safeExpenses = asArray(expenses);
+    const safeCards = asArray(cards);
+    const safeClients = asArray(knownClientIds);
+    const safePaidSubs = asArray(paidSubscriptions);
+
+    const isUnassigned = personId === 'unassigned';
+    const isAllPersons = !personId || personId === 'all';
+    const validClientIds = knownClientIds
+        ? new Set(safeClients.map(c => typeof c === 'object' ? c?.id : c).filter(Boolean))
+        : null;
+
+    const isClientUnassigned = (cid) => {
+        if (!cid || cid === 'unassigned') return true;
+        if (validClientIds && !validClientIds.has(cid)) return true;
+        return false;
+    };
+
+    const matchesPerson = (itemClientId) => {
+        if (isAllPersons) return true;
+        if (isUnassigned) return isClientUnassigned(itemClientId);
+        return itemClientId === personId;
+    };
+
+    const matchesCard = (itemCardId) => {
+        if (!cardId || cardId === 'all') return true;
+        return itemCardId === cardId;
+    };
+
+    let installmentsCents = 0;
+    const displayableLoans = [];
+
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+        if (!matchesCard(loan.cardId)) return;
+
+        const processInstallments = (installments, personDetails) => {
+            const safeInsts = asArray(installments);
+            safeInsts.forEach(inst => {
+                if (!inst || !inst.dueDate) return;
+                const [instYear, instMonth] = inst.dueDate.split('-').map(Number);
+                if (instYear === filterYear && instMonth === filterMonth) {
+                    if (matchesPerson(personDetails.clientId)) {
+                        const valCents = toCents(inst.value !== undefined ? inst.value : 0);
+                        installmentsCents += valCents;
+                        displayableLoans.push({
+                            ...loan,
+                            ...inst,
+                            value: fromCents(valCents),
+                            id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`,
+                            type: 'Parcela',
+                            loanId: loan.id,
+                            personKey: personDetails.key,
+                            clientId: personDetails.clientId,
+                            description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'),
+                            currentStatus: inst.status || 'Pendente'
+                        });
+                    }
+                }
+            });
+        };
+
+        if (loan.isShared && loan.sharedDetails) {
+            if (loan.sharedDetails.person1) {
+                processInstallments(loan.sharedDetails.person1.installments, {
+                    key: 'person1',
+                    clientId: loan.sharedDetails.person1.clientId,
+                    label: 'P1'
+                });
+            }
+            if (loan.sharedDetails.person2 && (loan.sharedDetails.person2.shareAmount > 0 || (loan.sharedDetails.person2.installments && loan.sharedDetails.person2.installments.length > 0))) {
+                processInstallments(loan.sharedDetails.person2.installments, {
+                    key: 'person2',
+                    clientId: loan.sharedDetails.person2.clientId,
+                    label: 'P2'
+                });
+            }
+        } else {
+            processInstallments(loan.installments, { key: null, clientId: loan.clientId });
+        }
+    });
+
+    let subscriptionsCents = 0;
+    const displayableSubs = [];
+    const addedSubKeys = new Set();
+
+    safeSubs.forEach(sub => {
+        if (!sub) return;
+        const isActive = sub.isActive !== false && sub.status !== 'Inativa';
+        if (!isActive) return;
+        if (!matchesCard(sub.cardId)) return;
+        if (!matchesPerson(sub.clientId)) return;
+
+        const card = safeCards.find(c => c && c.id === sub.cardId);
+        const subDay = parseInt(sub.dueDate, 10) || 1;
+
+        if (card && card.closingDay && card.dueDay) {
+            [-1, 0].forEach(monthOffset => {
+                const targetOffsetMonth = filterMonth - 1 + monthOffset;
+                const maxDays = new Date(Date.UTC(filterYear, targetOffsetMonth + 1, 0)).getUTCDate();
+                const clampedDay = Math.min(subDay, maxDays);
+                const chargeDate = new Date(Date.UTC(filterYear, targetOffsetMonth, clampedDay, 12, 0, 0));
+                const invoiceDueDate = calculateInvoiceDueDate(chargeDate, card);
+
+                if (invoiceDueDate && invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
+                    const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
+                    if (!addedSubKeys.has(uniqueKey)) {
+                        addedSubKeys.add(uniqueKey);
+                        const val = sub.amount !== undefined ? sub.amount : (sub.value || 0);
+                        const valCents = toCents(val);
+                        subscriptionsCents += valCents;
+                        const isPaid = safePaidSubs.some(ps => ps && ps.subscriptionId === sub.id && ps.month === targetMonth);
+                        displayableSubs.push({
+                            ...sub,
+                            type: 'Assinatura',
+                            id: uniqueKey,
+                            originalId: sub.id,
+                            description: sub.name,
+                            dueDate: chargeDate.toISOString().split('T')[0],
+                            currentStatus: isPaid ? 'Paga' : 'Pendente',
+                            value: fromCents(valCents)
+                        });
+                    }
+                }
+            });
+        } else {
+            const maxDays = new Date(Date.UTC(filterYear, filterMonth, 0)).getUTCDate();
+            const clampedDay = Math.min(subDay, maxDays);
+            const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1, clampedDay, 12, 0, 0));
+            const val = sub.amount !== undefined ? sub.amount : (sub.value || 0);
+            const valCents = toCents(val);
+            subscriptionsCents += valCents;
+            const isPaid = safePaidSubs.some(ps => ps && ps.subscriptionId === sub.id && ps.month === targetMonth);
+            displayableSubs.push({
+                ...sub,
+                type: 'Assinatura',
+                id: `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`,
+                originalId: sub.id,
+                description: sub.name,
+                dueDate: chargeDate.toISOString().split('T')[0],
+                currentStatus: isPaid ? 'Paga' : 'Pendente',
+                value: fromCents(valCents)
+            });
+        }
+    });
+
+    let expensesCents = 0;
+    const displayableExpenses = [];
+
+    safeExpenses.forEach(expense => {
+        if (!expense) return;
+        if (!matchesCard(expense.cardId)) return;
+        if (!matchesPerson(expense.clientId)) return;
+
+        let expenseDate;
+        if (expense.date instanceof Date) {
+            expenseDate = expense.date;
+        } else if (typeof expense.date === 'string') {
+            expenseDate = new Date(expense.date.includes('T') ? expense.date : `${expense.date}T12:00:00Z`);
+        } else {
+            return;
+        }
+        if (isNaN(expenseDate.getTime())) return;
+
+        const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
+        const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
+
+        if (relevantDate && relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
+            const valCents = toCents(expense.value || 0);
+            expensesCents += valCents;
+            displayableExpenses.push({
+                ...expense,
+                type: 'Despesa',
+                dueDate: expenseDate.toISOString().split('T')[0],
+                currentStatus: expense.status || 'Pendente',
+                value: fromCents(valCents)
+            });
+        }
+    });
+
+    const totalCommittedCents = installmentsCents + subscriptionsCents + expensesCents;
+    const allItems = [...displayableLoans, ...displayableSubs, ...displayableExpenses];
+
+    const recebidoCents = allItems
+        .filter(item => item.currentStatus === 'Paga')
+        .reduce((sum, item) => sum + toCents(item.value || 0), 0);
+    const pendenteCents = Math.max(0, totalCommittedCents - recebidoCents);
+
+    return {
+        month: targetMonth,
+        installmentsTotal: fromCents(installmentsCents),
+        subscriptionsTotal: fromCents(subscriptionsCents),
+        expensesTotal: fromCents(expensesCents),
+        totalCommitted: fromCents(totalCommittedCents),
+        installmentsCents,
+        subscriptionsCents,
+        expensesCents,
+        totalCommittedCents,
+        totalRecebido: fromCents(recebidoCents),
+        totalPendente: fromCents(pendenteCents),
+        recebidoCents,
+        pendenteCents,
+        items: allItems,
+        filteredLoansForChart: displayableLoans,
+        filteredSubscriptionsForChart: displayableSubs,
+        filteredExpensesForChart: displayableExpenses
+    };
+}
+
+/**
+ * Constrói uma série cronológica mensal contínua (passada e futura) com histórico e projeção.
+ *
+ * Utiliza calculateInvoiceBreakdownForMonth para garantir que CADA ponto da série
+ * use a MESMA base de cálculo que o KPI do Dashboard (parcelas, assinaturas e despesas avulsas,
+ * com filtros de cartão e pessoa e regras de cartão de crédito).
+ *
+ * @param {Object} params
+ * @param {Array<Object>} [params.loans=[]] - Compras/parcelas
+ * @param {Array<Object>} [params.subscriptions=[]] - Assinaturas
+ * @param {Array<Object>} [params.expenses=[]] - Despesas avulsas
+ * @param {Array<Object>} [params.cards=[]] - Cartões de crédito
+ * @param {string} [params.endMonth] - Mês de referência final do histórico
+ * @param {string} [params.selectedMonth] - Alias para endMonth
+ * @param {string} [params.startMonth] - Mês inicial explícito 'YYYY-MM'
+ * @param {number} [params.monthsBack=5] - Meses para trás do mês base
+ * @param {number} [params.monthsForward=0] - Meses para frente do mês base
+ * @param {number} [params.monthsCount] - Quantidade total de meses
+ * @param {string} [params.personId='all'] - ID da pessoa ('all', 'unassigned' ou clientId)
+ * @param {string} [params.cardId='all'] - ID do cartão ('all' ou cardId)
+ * @param {Array<Object|string>} [params.knownClientIds=null] - Clientes válidos conhecidos
+ * @returns {Array<{
+ *   month: string,
+ *   label: string,
+ *   installmentsTotal: number,
+ *   subscriptionsTotal: number,
+ *   expensesTotal: number,
+ *   totalCommitted: number,
+ *   installmentsCents: number,
+ *   subscriptionsCents: number,
+ *   expensesCents: number,
+ *   totalCommittedCents: number,
+ *   isProjected: boolean,
+ *   isCurrent: boolean,
+ *   delta: {
+ *     value: number,
+ *     deltaCents: number,
+ *     percentage: number | null,
+ *     direction: 'up' | 'down' | 'neutral',
+ *     label: string,
+ *     absoluteText: string
+ *   }
+ * }>}
+ */
+export function calculateMonthlySeries({
+    loans = [],
+    subscriptions = [],
+    expenses = [],
+    cards = [],
+    endMonth,
+    selectedMonth,
+    startMonth: explicitStartMonth,
+    monthsBack = 5,
+    monthsForward = 0,
+    monthsCount: explicitMonthsCount,
+    personId = 'all',
+    cardId = 'all',
+    knownClientIds = null
+}) {
+    const baseMonth = endMonth || selectedMonth || new Date().toISOString().slice(0, 7);
+
+    let actualStartMonth;
+    let actualMonthsCount;
+
+    if (explicitStartMonth && explicitMonthsCount) {
+        actualStartMonth = explicitStartMonth;
+        actualMonthsCount = explicitMonthsCount;
+    } else {
+        const back = Math.max(0, parseInt(monthsBack, 10) || 0);
+        const forward = Math.max(0, parseInt(monthsForward, 10) || 0);
+        actualStartMonth = shiftMonth(baseMonth, -back);
+        actualMonthsCount = back + 1 + forward;
+    }
+
+    if (!actualStartMonth || actualMonthsCount <= 0) {
+        return [];
+    }
+
+    // Calcula 1 mês antes para obter a linha de base de variação do primeiro mês
+    const queryStart = shiftMonth(actualStartMonth, -1);
+    const queryCount = actualMonthsCount + 1;
+
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const rawBreakdowns = [];
+
+    for (let i = 0; i < queryCount; i++) {
+        const m = shiftMonth(queryStart, i);
+        const [yStr, mStr] = m.split('-');
+        const monthLabel = `${monthNames[parseInt(mStr, 10) - 1]}/${yStr.slice(2)}`;
+        const breakdown = calculateInvoiceBreakdownForMonth({
+            targetMonth: m,
+            loans,
+            subscriptions,
+            expenses,
+            cards,
+            personId,
+            cardId,
+            knownClientIds
+        });
+        rawBreakdowns.push({
+            ...breakdown,
+            label: monthLabel
+        });
+    }
+
+    const series = [];
+
+    for (let i = 1; i < rawBreakdowns.length; i++) {
+        const cur = rawBreakdowns[i];
+        const prev = rawBreakdowns[i - 1];
+
+        const deltaCents = cur.totalCommittedCents - prev.totalCommittedCents;
+        const deltaValue = fromCents(deltaCents);
+
+        let percentage = null;
+        let direction = 'neutral';
+        let label = '—';
+        let absoluteText = '';
+
+        if (prev.totalCommittedCents === 0) {
+            if (cur.totalCommittedCents === 0) {
+                percentage = null;
+                direction = 'neutral';
+                label = 'Sem variação';
+                absoluteText = 'Sem variação';
+            } else {
+                percentage = null;
+                direction = 'neutral';
+                label = '—';
+                const sign = deltaValue > 0 ? '+' : '';
+                absoluteText = `${sign} ${formatCurrencyDisplay(deltaValue)}`;
+            }
+        } else {
+            const rawPct = (deltaCents / prev.totalCommittedCents) * 100;
+            percentage = Number(rawPct.toFixed(1));
+            direction = percentage > 0 ? 'up' : (percentage < 0 ? 'down' : 'neutral');
+            label = `${percentage > 0 ? '+' : ''}${percentage.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+            const sign = deltaValue > 0 ? '+' : '';
+            absoluteText = `${sign} ${formatCurrencyDisplay(deltaValue)}`;
+        }
+
+        series.push({
+            month: cur.month,
+            label: cur.label,
+            installmentsTotal: cur.installmentsTotal,
+            subscriptionsTotal: cur.subscriptionsTotal,
+            expensesTotal: cur.expensesTotal,
+            totalCommitted: cur.totalCommitted,
+            installmentsCents: cur.installmentsCents,
+            subscriptionsCents: cur.subscriptionsCents,
+            expensesCents: cur.expensesCents,
+            totalCommittedCents: cur.totalCommittedCents,
+            isProjected: cur.month > baseMonth,
+            isCurrent: cur.month === baseMonth,
+            delta: {
+                value: deltaValue,
+                deltaCents,
+                percentage,
+                direction,
+                label,
+                absoluteText
+            }
+        });
+    }
+
+    return series;
+}
+
+/**
  * Consolida os repasses de terceiros (valores que amigos/familiares devem ao titular)
  * para um mês específico e projeta o saldo devedor futuro total por pessoa.
  *
@@ -1923,5 +2552,128 @@ export function calculateClientFinancialReportSummary({
         futureInstallments,
         openLoans,
         totalDebt: fromCents(totalDebtCents)
+    };
+}
+
+/**
+ * Agrupa os compromissos da fatura por pessoa/titular com precisão matemática em centavos inteiros
+ * e distribuição de percentuais com soma exata de 100% via Método do Maior Resto (Largest Remainder).
+ *
+ * @param {Object} params
+ * @param {Array} [params.loans] - Itens de compras/parcelas da fatura
+ * @param {Array} [params.expenses] - Despesas avulsas da fatura
+ * @param {Array} [params.subscriptions] - Assinaturas da fatura
+ * @param {Array} [params.clients] - Lista de clientes/pessoas cadastradas
+ * @returns {{ total: number, totalCents: number, persons: Array<{ id: string, name: string, value: number, cents: number, percent: number }> }}
+ */
+export function calculatePersonSpendingBreakdown({
+    loans = [],
+    expenses = [],
+    subscriptions = [],
+    clients = []
+} = {}) {
+    const personMap = new Map();
+    const safeLoans = asArray(loans);
+    const safeExpenses = asArray(expenses);
+    const safeSubscriptions = asArray(subscriptions);
+    const safeClients = asArray(clients);
+
+    const clientNameMap = new Map();
+    safeClients.forEach(c => {
+        if (c && c.id) {
+            clientNameMap.set(c.id, c.name || 'Sem nome');
+        }
+    });
+
+    const registerItem = (item) => {
+        if (!item || item.value === undefined || item.value === null) return;
+        const valCents = toCents(item.value);
+        if (valCents <= 0) return;
+
+        let personId = 'self';
+        let personName = 'Minhas despesas';
+
+        if (!item.isMyDebt && item.clientId && clientNameMap.has(item.clientId)) {
+            personId = item.clientId;
+            personName = clientNameMap.get(item.clientId);
+        }
+
+        const existing = personMap.get(personId);
+        if (existing) {
+            existing.cents += valCents;
+        } else {
+            personMap.set(personId, {
+                id: personId,
+                name: personName,
+                cents: valCents
+            });
+        }
+    };
+
+    safeLoans.forEach(registerItem);
+    safeExpenses.forEach(registerItem);
+    safeSubscriptions.forEach(registerItem);
+
+    let totalCents = 0;
+    personMap.forEach(p => {
+        totalCents += p.cents;
+    });
+
+    if (totalCents === 0 || personMap.size === 0) {
+        return {
+            total: 0,
+            totalCents: 0,
+            persons: []
+        };
+    }
+
+    const rawPersons = Array.from(personMap.values()).map(p => ({
+        id: p.id,
+        name: p.name,
+        cents: p.cents,
+        value: fromCents(p.cents)
+    }));
+
+    // Ordena por valor decrescente, desempata por nome
+    rawPersons.sort((a, b) => {
+        if (b.cents !== a.cents) return b.cents - a.cents;
+        return a.name.localeCompare(b.name);
+    });
+
+    // Método do Maior Resto (Largest Remainder / Hamilton) para soma exata de 100%
+    let sumBase = 0;
+    const candidates = rawPersons.map((p, idx) => {
+        const raw = (p.cents * 100) / totalCents;
+        const floor = Math.floor(raw);
+        const rem = raw - floor;
+        sumBase += floor;
+        return { idx, floor, rem, cents: p.cents };
+    });
+
+    const deficit = Math.max(0, 100 - sumBase);
+    candidates.sort((a, b) => {
+        if (Math.abs(b.rem - a.rem) > 1e-9) return b.rem - a.rem;
+        if (b.cents !== a.cents) return b.cents - a.cents;
+        return a.idx - b.idx;
+    });
+
+    const additions = new Set();
+    for (let i = 0; i < deficit && i < candidates.length; i++) {
+        additions.add(candidates[i].idx);
+    }
+
+    const persons = rawPersons.map((p, idx) => {
+        const cand = candidates.find(c => c.idx === idx);
+        const percent = (cand ? cand.floor : 0) + (additions.has(idx) ? 1 : 0);
+        return {
+            ...p,
+            percent
+        };
+    });
+
+    return {
+        total: fromCents(totalCents),
+        totalCents,
+        persons
     };
 }

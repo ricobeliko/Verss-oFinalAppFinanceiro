@@ -19,38 +19,8 @@ import AuthProductContext from './components/AuthProductContext';
 import PasswordResetModal from './components/PasswordResetModal';
 import EmailVerificationView from './components/EmailVerificationView';
 import { mapAuthError } from './authErrorMap';
+import FinControlMark from '../../components/FinControlMark';
 
-const FinControlLogo = ({ className = 'w-8 h-8 text-[var(--fc-accent)]' }) => (
-  <svg
-    aria-hidden="true"
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M12 2L2 7L12 12L22 7L12 2Z"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M2 17L12 22L22 17"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M2 12L12 17L22 12"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 export default function AuthScreen() {
   const { auth, db, getUserCollectionPathSegments, showToast } = useAppContext();
@@ -221,8 +191,13 @@ export default function AuthScreen() {
             <div>
               {/* Header do Formulário */}
               <div className="text-center mb-6 sm:mb-8 space-y-2">
-                <div className="w-12 h-12 rounded-2xl bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/20 flex items-center justify-center mx-auto shadow-sm">
-                  <FinControlLogo />
+                <div className="flex justify-center mx-auto mb-3">
+                  <FinControlMark
+                    size={56}
+                    animated={true}
+                    ariaHidden={true}
+                    className="shadow-lg transition-transform hover:scale-105"
+                  />
                 </div>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--fc-text-primary)]">

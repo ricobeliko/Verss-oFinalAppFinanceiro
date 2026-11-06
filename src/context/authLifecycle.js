@@ -30,7 +30,7 @@ export function setupAuthLifecycle({
     clearAllSubs = clearAllSubscriptions,
     e2eSession = null,
 } = {}) {
-    if (e2eSession && import.meta.env?.DEV) {
+    if (import.meta.env.DEV && e2eSession) {
         setCurrentUser?.({
             uid: e2eSession.uid || 'e2e-user-sintetico',
             email: e2eSession.email || 'e2e-user@test.local',

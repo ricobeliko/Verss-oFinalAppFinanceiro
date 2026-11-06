@@ -6,6 +6,7 @@ import { formatCurrencyDisplay } from '../utils/currency';
 import { extractTextLinesFromPdf, parseInvoiceTransactions, matchAndDeduplicate } from '../utils/pdfParser';
 import { toCents, fromCents, calculateRemainingAmount, calculatePaymentStatus, mapDomainStatusToLoanStatus } from '../services/financialService';
 import Spinner from './Spinner';
+import Select from './Select';
 
 // --- Ícones ---
 const UploadIcon = () => (
@@ -24,17 +25,17 @@ const SparklesIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
 );
 
-export default function PdfImportModal({ 
-    isOpen, 
-    onClose, 
-    cards = [], 
-    clients = [], 
-    existingLoans = [], 
-    onSaveSuccess, 
-    db, 
-    userId, 
-    getUserCollectionPathSegments, 
-    showToast 
+export default function PdfImportModal({
+    isOpen,
+    onClose,
+    cards = [],
+    clients = [],
+    existingLoans = [],
+    onSaveSuccess,
+    db,
+    userId,
+    getUserCollectionPathSegments,
+    showToast
 }) {
     const [file, setFile] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -205,7 +206,7 @@ export default function PdfImportModal({
                 for (let index = 0; index < totalCount; index++) {
                     const instNumber = index + 1;
                     const monthOffset = index - (currentInst - 1);
-                    
+
                     const targetMonthIndex = (iMonth - 1) + monthOffset;
                     const targetYear = iYear + Math.floor(targetMonthIndex / 12);
                     const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
@@ -278,14 +279,14 @@ export default function PdfImportModal({
     if (!isOpen) return null;
 
     return (
-        <div 
+        <div
             className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-fadeIn"
             role="dialog"
             aria-modal="true"
             aria-labelledby="pdf-import-modal-title"
         >
             <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] text-[var(--fc-text-primary)]">
-                
+
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--fc-border-subtle)] flex justify-between items-center bg-[var(--fc-surface-2)]">
                     <div className="flex items-center gap-3">
@@ -297,8 +298,8 @@ export default function PdfImportModal({
                             <p className="text-xs text-[var(--fc-text-muted)] mt-0.5">Lê Nubank, Itaú, Inter, Bradesco, Santander e outros bancos com motor anti-duplicidade.</p>
                         </div>
                     </div>
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         aria-label="Fechar modal de importação PDF"
                         className="w-8 h-8 rounded-full bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] flex items-center justify-center transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-accent)]/50"
                     >
@@ -319,7 +320,7 @@ export default function PdfImportModal({
                                     O leitor identifica automaticamente compras à vista, parcelamentos (ex: 02/10), datas, valores e detecta compras já cadastradas no seu cartão.
                                 </p>
                             </div>
-                            <label className="bg-gradient-to-r from-gold-light to-gold text-carbon-900 font-extrabold py-3 px-7 rounded-2xl shadow-lg cursor-pointer hover:opacity-90 text-xs transition uppercase tracking-wider">
+                            <label className="bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] hover:bg-[var(--fc-accent-hover)] font-extrabold py-3 px-7 rounded-2xl shadow-lg cursor-pointer text-xs transition uppercase tracking-wider">
                                 Escolher Arquivo PDF
                                 <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileUpload} />
                             </label>
@@ -338,27 +339,27 @@ export default function PdfImportModal({
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--fc-surface-2)] p-4 rounded-2xl border border-[var(--fc-border-default)]">
                                 <div>
                                     <label className="text-xs text-[var(--fc-text-secondary)] block mb-1 font-semibold">Vincular a qual Cartão?</label>
-                                    <select 
-                                        value={selectedCardId} 
+                                    <Select
+                                        value={selectedCardId}
                                         onChange={(e) => setSelectedCardId(e.target.value)}
-                                        className="w-full bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-3 py-2 text-xs text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] outline-none cursor-pointer"
+                                        placeholder="Selecione o Cartão"
                                     >
                                         {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    </Select>
                                 </div>
 
                                 <div>
                                     <label className="text-xs text-[var(--fc-text-secondary)] block mb-1 font-semibold">Atribuir Pessoa em Massa</label>
                                     <div className="flex gap-2">
-                                        <select 
-                                            value={bulkClientId} 
+                                        <Select
+                                            value={bulkClientId}
                                             onChange={(e) => setBulkClientId(e.target.value)}
-                                            className="w-full bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-3 py-2 text-xs text-[var(--fc-text-primary)] focus:border-[var(--fc-accent)] outline-none cursor-pointer"
+                                            placeholder="Selecione a Pessoa..."
                                         >
                                             <option value="">Selecione a Pessoa...</option>
                                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                        <button 
+                                        </Select>
+                                        <button
                                             onClick={handleApplyBulkClient}
                                             className="px-3 py-2 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-3)] border border-[var(--fc-border-default)] text-xs font-bold text-[var(--fc-text-primary)] rounded-xl transition cursor-pointer flex-shrink-0"
                                             title="Aplica a pessoa selecionada a todos os itens marcados"
@@ -415,21 +416,21 @@ export default function PdfImportModal({
                                     </thead>
                                     <tbody className="divide-y divide-[var(--fc-border-subtle)]">
                                         {importedItems.map((item) => (
-                                            <tr 
-                                                key={item.id} 
+                                            <tr
+                                                key={item.id}
                                                 className={`transition-colors ${
-                                                    item.isDuplicate 
-                                                        ? 'bg-rose-500/5 opacity-70 hover:bg-rose-500/10' 
-                                                        : item.selected 
-                                                            ? 'hover:bg-[var(--fc-surface-2)]/60 bg-[var(--fc-surface-1)]' 
+                                                    item.isDuplicate
+                                                        ? 'bg-rose-500/5 opacity-70 hover:bg-rose-500/10'
+                                                        : item.selected
+                                                            ? 'hover:bg-[var(--fc-surface-2)]/60 bg-[var(--fc-surface-1)]'
                                                             : 'opacity-40 hover:opacity-80'
                                                 }`}
                                             >
                                                 <td className="p-3 text-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={item.selected} 
-                                                        onChange={(e) => handleItemChange(item.id, 'selected', e.target.checked)} 
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={item.selected}
+                                                        onChange={(e) => handleItemChange(item.id, 'selected', e.target.checked)}
                                                         className="w-4 h-4 rounded bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] accent-[var(--fc-accent)] cursor-pointer"
                                                     />
                                                 </td>
@@ -450,14 +451,16 @@ export default function PdfImportModal({
                                                     )}
                                                 </td>
                                                 <td className="p-3">
-                                                    <select 
-                                                        value={item.clientId} 
-                                                        onChange={(e) => handleItemChange(item.id, 'clientId', e.target.value)}
-                                                        className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl px-2.5 py-1.5 text-[var(--fc-text-primary)] outline-none focus:border-[var(--fc-accent)] cursor-pointer w-full max-w-[180px]"
-                                                    >
-                                                        <option value="">Selecione...</option>
-                                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                    </select>
+                                                    <div className="w-full min-w-[140px] max-w-[200px]">
+                                                        <Select
+                                                            value={item.clientId}
+                                                            onChange={(e) => handleItemChange(item.id, 'clientId', e.target.value)}
+                                                            placeholder="Selecione..."
+                                                        >
+                                                            <option value="">Selecione...</option>
+                                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                        </Select>
+                                                    </div>
                                                 </td>
                                                 <td className="p-3 whitespace-nowrap">
                                                     {item.isDuplicate ? (
@@ -489,11 +492,11 @@ export default function PdfImportModal({
                             Cancelar
                         </button>
                         {file && !isAnalyzing && importedItems.length > 0 && (
-                            <button 
-                                onClick={handleConfirmImport} 
+                            <button
+                                onClick={handleConfirmImport}
                                 disabled={stats.selectedToImport === 0 || isSubmitting}
-                                className={`px-6 py-2.5 rounded-2xl bg-gradient-to-r from-gold-light to-gold text-carbon-900 text-xs font-black shadow-lg transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
-                                    stats.selectedToImport === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
+                                className={`px-6 py-2.5 rounded-2xl bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] text-xs font-black shadow-lg transition cursor-pointer uppercase tracking-wider flex items-center gap-2 ${
+                                    stats.selectedToImport === 0 || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[var(--fc-accent-hover)]'
                                 }`}
                             >
                                 {isSubmitting && <Spinner />}

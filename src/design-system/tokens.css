@@ -1,117 +1,147 @@
 /* src/design-system/tokens.css */
-/* FinControl Design System 2.0 — Semantic Tokens Foundation */
+/* FinControl Design System 2.0 — Semantic Tokens Foundation (Abyss Teal) */
 
 :root,
 [data-theme="dark"] {
   /* =========================================================================
-     DARK PALETTE — Obsidian, Graphite & Champagne Gold (Canonical from Landing)
+     DARK PALETTE — Deep Abyssal Teal & Aqua Accent (Default Theme)
      ========================================================================= */
-  --fc-bg: #0D0E11;
-  --fc-bg-subtle: #13151A;
+  --fc-bg: #04171F;
+  --fc-bg-subtle: #061D26;
 
-  --fc-surface-1: #1A1D24;
-  --fc-surface-2: #222630;
-  --fc-surface-3: #2A2F3D;
+  --fc-surface-1: #0A222B;
+  --fc-surface-2: #0E2B35;
+  --fc-surface-3: #133641;
 
-  --fc-text-primary: #F9FAFB;
-  --fc-text-secondary: #9CA3AF;
-  --fc-text-muted: #6B7280;
-  --fc-text-inverse: #0D0E11;
+  --fc-text-primary: #EAF7F7;
+  --fc-text-secondary: #A9C4C7;
+  --fc-text-muted: #7E9FA3;
+  --fc-text-inverse: #04171F;
 
-  --fc-border-subtle: rgba(255, 255, 255, 0.05);
-  --fc-border-default: rgba(255, 255, 255, 0.08);
-  --fc-border-strong: rgba(255, 255, 255, 0.15);
+  --fc-border-subtle: rgba(140, 220, 225, 0.07);
+  --fc-border-default: rgba(140, 220, 225, 0.12);
+  --fc-border-strong: rgba(140, 220, 225, 0.24);
 
-  --fc-accent: #E5B842;
-  --fc-accent-hover: #F5D580;
-  --fc-accent-soft: rgba(229, 184, 66, 0.12);
-  --fc-accent-contrast: #0D0E11;
+  --fc-accent: #5CCCCC;
+  --fc-accent-hover: #7FE0DC;
+  --fc-accent-soft: rgba(92, 204, 204, 0.14);
+  --fc-accent-contrast: #04171F;
 
-  --fc-success: #34D399;
-  --fc-success-soft: rgba(52, 211, 153, 0.12);
+  --fc-success: #4ADE80;
+  --fc-success-soft: rgba(74, 222, 128, 0.12);
   --fc-warning: #FBBF24;
   --fc-warning-soft: rgba(251, 191, 36, 0.12);
   --fc-danger: #F87171;
   --fc-danger-soft: rgba(248, 113, 113, 0.12);
-  --fc-info: #38BDF8;
-  --fc-info-soft: rgba(56, 189, 248, 0.12);
+  --fc-info: #60A5FA;
+  --fc-info-soft: rgba(96, 165, 250, 0.12);
 
-  --fc-focus-ring: rgba(229, 184, 66, 0.50);
+  --fc-focus-ring: rgba(92, 204, 204, 0.50);
 
   --fc-shadow-sm: 0 2px 8px -1px rgba(0, 0, 0, 0.40);
   --fc-shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.60);
   --fc-shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.80);
-  --fc-shadow-glow: 0 0 25px -5px rgba(229, 184, 66, 0.25);
+  --fc-shadow-glow: 0 0 25px -5px rgba(92, 204, 204, 0.25);
 
-  /* Form Controls & Inputs (Dark Theme) — Cavidade/superfície interativa bem definida */
-  --fc-field-bg: #121419;
-  --fc-field-bg-hover: #161820;
-  --fc-field-bg-focus: #0F1116;
-  --fc-field-border: rgba(255, 255, 255, 0.14);
-  --fc-field-border-hover: rgba(255, 255, 255, 0.25);
+  /* Form Controls & Inputs (Dark Theme) */
+  --fc-field-bg: #041A22;
+  --fc-field-bg-hover: #07212B;
+  --fc-field-bg-focus: #03141A;
+  --fc-field-border: rgba(140, 220, 225, 0.18);
+  --fc-field-border-hover: rgba(140, 220, 225, 0.30);
   --fc-field-border-focus: var(--fc-accent);
-  --fc-field-focus-ring: rgba(229, 184, 66, 0.40);
-  --fc-field-text: #F9FAFB;
-  --fc-field-placeholder: #737B8C;
-  --fc-field-disabled-bg: rgba(255, 255, 255, 0.04);
-  --fc-field-disabled-border: rgba(255, 255, 255, 0.07);
+  --fc-field-focus-ring: rgba(92, 204, 204, 0.40);
+  --fc-field-text: #EAF7F7;
+  --fc-field-placeholder: #7E9FA3;
+  --fc-field-disabled-bg: rgba(140, 220, 225, 0.04);
+  --fc-field-disabled-border: rgba(140, 220, 225, 0.07);
   --fc-field-disabled-text: var(--fc-text-muted);
+
+  /* Ambient Glows (New Tokens) */
+  --fc-glow-cool: rgba(92, 204, 204, 0.16);
+  --fc-glow-warm: rgba(214, 150, 80, 0.12);
+
+  /* Atmosphere & Wave Layers (Living Background) */
+  --fc-wave-1: rgba(92, 204, 204, 0.12);
+  --fc-wave-2: rgba(92, 204, 204, 0.08);
+  --fc-wave-3: rgba(92, 204, 204, 0.05);
+  --fc-wave-fill: rgba(12, 52, 60, 0.35);
+  --fc-atmos-vignette: rgba(2, 14, 20, 0.55);
+
+  /* Sidebar Glass Translucency Tokens (Fase 7.2) */
+  --fc-sidebar-glass-alpha: 68%;
+  --fc-sidebar-glass-blur: 16px;
 }
 
 [data-theme="light"] {
   /* =========================================================================
-     LIGHT PALETTE — Warm Stone, Surface Depth & Deep Graphite Foundation
+     LIGHT PALETTE — Crisp Teal, Surface Depth & Deep Slate Cyan Foundation
      ========================================================================= */
-  --fc-bg: #F0EFEB;
-  --fc-bg-subtle: #EAE8E2;
+  --fc-bg: #E6F4F7;
+  --fc-bg-subtle: #EEF8FA;
 
-  --fc-surface-1: #FFFFFF;
-  --fc-surface-2: #F6F4EE;
-  --fc-surface-3: #ECE8DF;
+  --fc-surface-1: #F8FDFE;
+  --fc-surface-2: #E9F6F8;
+  --fc-surface-3: #D4EBF0;
 
-  --fc-text-primary: #121417;
-  --fc-text-secondary: #434A56;
-  --fc-text-muted: #5C6370;
+  --fc-text-primary: #0B2530;
+  --fc-text-secondary: #2F5560;
+  --fc-text-muted: #4C6F78;
   --fc-text-inverse: #FFFFFF;
 
-  --fc-border-subtle: rgba(20, 24, 30, 0.08);
-  --fc-border-default: rgba(20, 24, 30, 0.13);
-  --fc-border-strong: rgba(20, 24, 30, 0.22);
+  --fc-border-subtle: rgba(8, 60, 72, 0.08);
+  --fc-border-default: rgba(8, 60, 72, 0.14);
+  --fc-border-strong: rgba(8, 60, 72, 0.26);
 
-  --fc-accent: #8E5E00;
-  --fc-accent-hover: #784E00;
-  --fc-accent-soft: rgba(142, 94, 0, 0.10);
+  --fc-accent: #047C84;
+  --fc-accent-hover: #036A71;
+  --fc-accent-soft: rgba(4, 124, 132, 0.10);
   --fc-accent-contrast: #FFFFFF;
 
-  --fc-success: #065F46;
-  --fc-success-soft: rgba(6, 95, 70, 0.10);
+  --fc-success: #15803D;
+  --fc-success-soft: rgba(21, 128, 61, 0.10);
   --fc-warning: #9A3412;
   --fc-warning-soft: rgba(154, 52, 18, 0.10);
   --fc-danger: #B91C1C;
   --fc-danger-soft: rgba(185, 28, 28, 0.10);
-  --fc-info: #0369A1;
-  --fc-info-soft: rgba(3, 105, 161, 0.10);
+  --fc-info: #1D4ED8;
+  --fc-info-soft: rgba(29, 78, 216, 0.10);
 
-  --fc-focus-ring: rgba(142, 94, 0, 0.40);
+  --fc-focus-ring: rgba(4, 124, 132, 0.40);
 
-  --fc-shadow-sm: 0 1px 3px 0 rgba(20, 24, 30, 0.06), 0 1px 2px -1px rgba(20, 24, 30, 0.06);
-  --fc-shadow-md: 0 6px 18px -3px rgba(20, 24, 30, 0.08), 0 2px 6px -2px rgba(20, 24, 30, 0.04);
-  --fc-shadow-lg: 0 18px 36px -8px rgba(20, 24, 30, 0.12), 0 4px 12px -3px rgba(20, 24, 30, 0.05);
-  --fc-shadow-glow: 0 0 20px -4px rgba(142, 94, 0, 0.20);
+  --fc-shadow-sm: 0 1px 3px 0 rgba(8, 60, 72, 0.06), 0 1px 2px -1px rgba(8, 60, 72, 0.06);
+  --fc-shadow-md: 0 6px 18px -3px rgba(8, 60, 72, 0.08), 0 2px 6px -2px rgba(8, 60, 72, 0.04);
+  --fc-shadow-lg: 0 18px 36px -8px rgba(8, 60, 72, 0.12), 0 4px 12px -3px rgba(8, 60, 72, 0.05);
+  --fc-shadow-glow: 0 0 20px -4px rgba(4, 124, 132, 0.20);
 
-  /* Form Controls & Inputs (Light Theme) — Superfície nítida com contraste refinado */
+  /* Form Controls & Inputs (Light Theme) */
   --fc-field-bg: #FFFFFF;
   --fc-field-bg-hover: #FFFFFF;
   --fc-field-bg-focus: #FFFFFF;
-  --fc-field-border: rgba(20, 24, 30, 0.18);
-  --fc-field-border-hover: rgba(20, 24, 30, 0.32);
+  --fc-field-border: rgba(8, 60, 72, 0.22);
+  --fc-field-border-hover: rgba(8, 60, 72, 0.36);
   --fc-field-border-focus: var(--fc-accent);
-  --fc-field-focus-ring: rgba(142, 94, 0, 0.35);
-  --fc-field-text: #121417;
-  --fc-field-placeholder: #717886;
-  --fc-field-disabled-bg: rgba(20, 24, 30, 0.04);
-  --fc-field-disabled-border: rgba(20, 24, 30, 0.10);
+  --fc-field-focus-ring: rgba(4, 124, 132, 0.35);
+  --fc-field-text: #0B2530;
+  --fc-field-placeholder: #56777F;
+  --fc-field-disabled-bg: rgba(8, 60, 72, 0.04);
+  --fc-field-disabled-border: rgba(8, 60, 72, 0.10);
   --fc-field-disabled-text: var(--fc-text-muted);
+
+  /* Ambient Glows (New Tokens) */
+  --fc-glow-cool: rgba(4, 124, 132, 0.10);
+  --fc-glow-warm: rgba(246, 190, 120, 0.30);
+
+  /* Atmosphere & Wave Layers (Living Background) */
+  --fc-wave-1: rgba(60, 150, 175, 0.30);
+  --fc-wave-2: rgba(60, 150, 175, 0.20);
+  --fc-wave-3: rgba(60, 150, 175, 0.12);
+  --fc-wave-fill: rgba(140, 204, 220, 0.25);
+  --fc-atmos-vignette: rgba(230, 244, 247, 0);
+
+  /* Sidebar Glass Translucency Tokens (Fase 7.2) */
+  --fc-sidebar-glass-alpha: 80%;
+  --fc-sidebar-glass-blur: 16px;
 }
 
 :root {

@@ -130,7 +130,7 @@ export default function LandingHero({ prefersReducedMotion }) {
     <section
       id="hero"
       ref={heroRef}
-      className="relative min-h-[92vh] lg:min-h-screen pt-24 pb-12 md:pt-28 md:pb-16 flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#0D0E11] via-[#0E1015] to-[#0A0B0E]"
+      className="relative min-h-[92vh] lg:min-h-screen pt-24 pb-12 md:pt-28 md:pb-16 flex items-center justify-center overflow-hidden bg-[var(--fc-bg)] transition-colors duration-300"
     >
       {/* ========================================================================= */}
       {/* 5-PLANE DEPTH SYSTEM                                                      */}
@@ -142,10 +142,10 @@ export default function LandingHero({ prefersReducedMotion }) {
         className="absolute inset-0 pointer-events-none -z-40 overflow-hidden"
       >
         {/* Cold neutral graphite haze in upper-left */}
-        <div className="absolute -top-32 -left-32 w-[650px] h-[550px] rounded-full bg-gradient-to-br from-slate-600/[0.04] to-transparent blur-[140px]" />
+        <div className="absolute -top-32 -left-32 w-[650px] h-[550px] rounded-full bg-[var(--fc-glow-cool)] blur-[140px]" />
         
-        {/* Warm gold ambient presence in bottom center */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1100px] h-[700px] rounded-full bg-gradient-to-b from-[#E5B842]/[0.05] via-transparent to-transparent blur-[160px]" />
+        {/* Ambient glow in center */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1100px] h-[700px] rounded-full bg-[var(--fc-glow-warm)] blur-[160px]" />
       </div>
 
       {/* PLANE 2 — STRUCTURAL LINES (Subtle Procedural Architectural Vectors) */}
@@ -156,12 +156,12 @@ export default function LandingHero({ prefersReducedMotion }) {
       >
         <defs>
           <linearGradient id="plane2Grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#E5B842" stopOpacity="0.25" />
-            <stop offset="60%" stopColor="#1A1D24" stopOpacity="0.08" />
-            <stop offset="100%" stopColor="#0D0E11" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--fc-accent)" stopOpacity="0.3" />
+            <stop offset="60%" stopColor="var(--fc-surface-2)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--fc-bg)" stopOpacity="0" />
           </linearGradient>
           <pattern id="plane2Dots" width="48" height="48" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1" fill="#E5B842" fillOpacity="0.12" />
+            <circle cx="2" cy="2" r="1" fill="var(--fc-accent)" fillOpacity="0.12" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#plane2Dots)" />
@@ -184,19 +184,84 @@ export default function LandingHero({ prefersReducedMotion }) {
         ref={lightHazeRef}
         className="absolute top-1/2 right-1/4 -translate-y-1/2 w-[700px] h-[550px] pointer-events-none -z-20 overflow-hidden"
       >
-        {/* Core diffuse warm glow */}
-        <div className="w-full h-full rounded-full bg-radial from-[#E5B842]/[0.10] via-[#F5D580]/[0.04] to-transparent blur-[100px]" />
+        {/* Core diffuse glow */}
+        <div className="w-full h-full rounded-full bg-radial from-[var(--fc-accent-soft)] via-transparent to-transparent blur-[100px]" />
       </div>
 
-      {/* CURSOR AURA (Smooth Low-Opacity Gold Aura) */}
+      {/* CURSOR AURA (Smooth Low-Opacity Crisp Teal Aura) */}
       <div
         ref={auraRef}
-        className="pointer-events-none absolute -top-[160px] -left-[160px] w-[320px] h-[320px] rounded-full bg-gradient-to-tr from-[#E5B842]/14 to-[#F5D580]/6 blur-3xl -z-10 transition-opacity duration-300 hidden md:block"
+        className="pointer-events-none absolute -top-[160px] -left-[160px] w-[320px] h-[320px] rounded-full bg-[var(--fc-accent-soft)] blur-3xl -z-10 transition-opacity duration-300 hidden md:block"
         style={{ transform: 'translate3d(50vw, 40vh, 0)' }}
       />
 
       {/* PLANE 4 — FOREGROUND VIGNETTE (Gentle Edge Shading to Bring Content Forward) */}
-      <div className="absolute inset-0 pointer-events-none -z-10 bg-[radial-gradient(ellipse_at_center,transparent_60%,rgba(13,14,17,0.7)_100%)]" />
+      <div className="absolute inset-0 pointer-events-none -z-10 bg-[radial-gradient(ellipse_at_center,transparent_60%,var(--fc-bg)_100%)]" />
+
+      {/* PLANE 0 — BOTTOM PERIODIC WAVES */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-44 pointer-events-none overflow-hidden -z-20"
+        style={{
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.4) 25%, black 75%)',
+          maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.4) 25%, black 75%)',
+        }}
+        aria-hidden="true"
+      >
+        <svg
+          className="fc-wave-layer-1 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-1" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 140 C 131 95, 229 95, 360 140 C 491 185, 589 185, 720 140 C 851 95, 949 95, 1080 140 C 1211 185, 1309 185, 1440 140 C 1571 95, 1669 95, 1800 140 C 1931 185, 2029 185, 2160 140 C 2291 95, 2389 95, 2520 140 C 2651 185, 2749 185, 2880 140 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-1)"
+            stroke="var(--fc-wave-1)"
+            strokeWidth="1.5"
+          />
+        </svg>
+        <svg
+          className="fc-wave-layer-2 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-2" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 175 C 87 140, 153 140, 240 175 C 327 210, 393 210, 480 175 C 567 140, 633 140, 720 175 C 807 210, 873 210, 960 175 C 1047 140, 1113 140, 1200 175 C 1287 210, 1353 210, 1440 175 C 1527 140, 1593 140, 1680 175 C 1767 210, 1833 210, 1920 175 C 2007 140, 2073 140, 2160 175 C 2247 210, 2313 210, 2400 175 C 2487 140, 2553 140, 2640 175 C 2727 210, 2793 210, 2880 175 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-2)"
+            stroke="var(--fc-wave-2)"
+            strokeWidth="1.25"
+          />
+        </svg>
+        <svg
+          className="fc-wave-layer-3 absolute bottom-0 left-0 h-full w-[200%]"
+          viewBox="0 0 2880 320"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="hero-wave-grad-3" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="var(--fc-wave-fill)" />
+              <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0 200 C 262 145, 458 145, 720 200 C 982 255, 1178 255, 1440 200 C 1702 145, 1898 145, 2160 200 C 2422 255, 2618 255, 2880 200 L 2880 320 L 0 320 Z"
+            fill="url(#hero-wave-grad-3)"
+            stroke="var(--fc-wave-3)"
+            strokeWidth="1.25"
+          />
+        </svg>
+      </div>
 
       {/* ========================================================================= */}
       {/* MAIN CONTENT STAGE                                                        */}
@@ -210,19 +275,19 @@ export default function LandingHero({ prefersReducedMotion }) {
             {/* Badge */}
             <div
               ref={badgeRef}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#161920] border border-[#E5B842]/25 text-xs font-semibold text-[#F5D580] mb-6 shadow-md shadow-black/60"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] text-xs font-semibold text-[var(--fc-accent)] mb-6 shadow-md shadow-black/20"
             >
-              <span className="w-2 h-2 rounded-full bg-[#34D399] motion-safe:animate-ping" />
-              <span className="tracking-wide uppercase">Controle Financeiro Inteligente</span>
+              <span className="w-2 h-2 rounded-full bg-[var(--fc-success)] motion-safe:animate-ping" />
+              <span className="tracking-wide uppercase">Controle de Cartões e Compras Compartilhadas</span>
             </div>
 
             {/* Headline */}
             <h1
               ref={headlineRef}
-              className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold tracking-tight text-[#F9FAFB] leading-[1.12] mb-6"
+              className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold tracking-tight text-[var(--fc-text-primary)] leading-[1.12] mb-6"
             >
               Suas faturas sob controle.{' '}
-              <span className="bg-gradient-to-r from-[#F5D580] via-[#E5B842] to-[#C99116] bg-clip-text text-transparent block mt-1">
+              <span className="bg-gradient-to-r from-[var(--fc-accent)] to-[var(--fc-accent-hover)] bg-clip-text text-transparent block mt-1">
                 Suas compras compartilhadas resolvidas.
               </span>
             </h1>
@@ -230,7 +295,7 @@ export default function LandingHero({ prefersReducedMotion }) {
             {/* Supporting Copy (Clean Product Copy) */}
             <p
               ref={supportRef}
-              className="text-base sm:text-lg text-[#9CA3AF] max-w-xl mb-8 leading-relaxed"
+              className="text-base sm:text-lg text-[var(--fc-text-secondary)] max-w-xl mb-8 leading-relaxed"
             >
               Organize faturas, parcelas, assinaturas e compras compartilhadas com precisão em cada centavo. Sem conexão bancária necessária e sem resíduos de arredondamento.
             </p>
@@ -242,7 +307,7 @@ export default function LandingHero({ prefersReducedMotion }) {
             >
               <Link
                 to="/login?mode=register"
-                className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-gradient-to-r from-[#E5B842] via-[#F5D580] to-[#E5B842] text-[#0D0E11] font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg shadow-[#E5B842]/20 hover:shadow-[#E5B842]/40 hover:scale-[1.02] transition-all duration-300"
+                className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-[var(--fc-accent)] hover:bg-[var(--fc-accent-hover)] text-[var(--fc-accent-contrast)] font-bold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg shadow-[var(--fc-glow-warm)] hover:scale-[1.02] transition-all duration-300"
               >
                 <span>Criar conta gratuita</span>
                 <FiArrowRight className="w-4 h-4" />
@@ -250,25 +315,25 @@ export default function LandingHero({ prefersReducedMotion }) {
 
               <a
                 href="#how-it-works"
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#161920] hover:bg-[#1E232D] border border-white/10 text-[#F9FAFB] font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] text-[var(--fc-text-primary)] font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300"
               >
-                <FiPlay className="w-3.5 h-3.5 text-[#E5B842]" />
+                <FiPlay className="w-3.5 h-3.5 text-[var(--fc-accent)]" />
                 <span>Ver como funciona</span>
               </a>
             </div>
 
             {/* Micro Product Proof Tags */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs text-[#9CA3AF]">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs text-[var(--fc-text-secondary)]">
               <span className="flex items-center gap-1.5">
-                <FiCheck className="text-[#34D399] w-3.5 h-3.5" />
+                <FiCheck className="text-[var(--fc-success)] w-3.5 h-3.5" />
                 Precisão em cada centavo
               </span>
               <span className="flex items-center gap-1.5">
-                <FiShield className="text-[#E5B842] w-3.5 h-3.5" />
+                <FiShield className="text-[var(--fc-accent)] w-3.5 h-3.5" />
                 Sem senhas de banco
               </span>
               <span className="flex items-center gap-1.5">
-                <FiCheck className="text-[#34D399] w-3.5 h-3.5" />
+                <FiCheck className="text-[var(--fc-success)] w-3.5 h-3.5" />
                 Acesso gratuito disponível
               </span>
             </div>

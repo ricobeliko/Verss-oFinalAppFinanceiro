@@ -18,8 +18,8 @@ export function useIncomes() {
         }
 
         // Suporte a dados sintéticos isolados para testes E2E sem tocar na produção
-        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__?.incomes) {
-            setIncomes(window.__FINCONTROL_E2E_MOCK_DATA__.incomes);
+        if (import.meta.env.DEV && typeof window !== 'undefined' && window.__FINCONTROL_E2E_MOCK_DATA__) {
+            setIncomes(window.__FINCONTROL_E2E_MOCK_DATA__.incomes || []);
             setLoading(false);
             setError(null);
             setIsStale(false);
@@ -62,5 +62,5 @@ export function useIncomes() {
         return () => unsubscribe();
     }, [db, userId, isAuthReady, getUserCollectionPathSegments]);
 
-    return { incomes, loading, error, isStale };
+    return { incomes, loading, isLoading: loading, error, isStale };
 }

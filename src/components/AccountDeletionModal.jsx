@@ -81,7 +81,7 @@ export default function AccountDeletionModal({ isOpen, onClose }) {
     try {
       // 1. Modo E2E / Testes Mock
       if (
-        import.meta.env?.DEV &&
+        import.meta.env.DEV &&
         typeof window !== 'undefined' &&
         window.__FINCONTROL_E2E_MOCK_DATA__
       ) {

@@ -1,16 +1,15 @@
 // src/features/dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { subscribeToFirestoreQuery, buildCanonicalQueryKey } from '../../services/firestoreSubscriptionRegistry';
 import { formatCurrencyDisplay } from '../../utils/currency';
-import { generateTransactionsCsv, generateAnnualReportCsv, downloadCsvFile } from '../../services/csvExportService';
 import {
     calculateMonthlyComparisonSummary,
-    generateDeterministicFinancialInsights,
-    generateFinancialAlerts,
-    calculateInvoiceDueDate,
+    calculateMonthlySeries,
+    calculateInvoiceBreakdownForMonth,
     toCents,
     fromCents,
     calculateRemainingAmount,
@@ -18,19 +17,19 @@ import {
     mapDomainStatusToLoanStatus
 } from '../../services/financialService';
 import ProAnalyticsCharts from '../../components/ProAnalyticsCharts';
+import MonthlyEvolutionChart from '../../components/MonthlyEvolutionChart';
+import KpiCard from '../../components/KpiCard';
 import GenericModal from '../../components/GenericModal';
 import FutureCommitmentsCard from '../../components/FutureCommitmentsCard';
-import DeterministicInsightsWidget from '../../components/DeterministicInsightsWidget';
-import FinancialAlertsBanner from '../../components/FinancialAlertsBanner';
-import ExecutiveSummaryModal from '../../components/ExecutiveSummaryModal';
 import FinancialSandboxSimulatorModal from '../../components/FinancialSandboxSimulatorModal';
-import CategoryBudgetsWidget from '../../components/CategoryBudgetsWidget';
-import CategoryBudgetsModal from '../../components/CategoryBudgetsModal';
-import NotificationSettingsModal from '../../components/NotificationSettingsModal';
-import ProSummary from './ProSummary';
+import AnimatedCurrency from '../../components/AnimatedCurrency';
+import AnimatedProgressBar from '../../components/AnimatedProgressBar';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import Select from '../../components/Select';
+import MonthPicker from '../../components/MonthPicker';
+import { SkeletonPage } from '../../design-system';
 import Surface from '../../design-system/primitives/Surface';
 import Badge from '../../design-system/primitives/Badge';
 
@@ -44,16 +43,13 @@ const CreditCardKpiIcon = () => (
 
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
-    <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-gold transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-fc-accent transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         {direction === 'ascending' ? <path strokeLinecap="round" strokeWidth="2" d="M5 15l7-7 7 7"></path> : <path strokeLinecap="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>}
     </svg>
 );
 
-const ShieldAlertIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
-const TargetIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
-
 function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSelectedCardFilter, selectedClientFilter, setSelectedClientFilter }) {
-    const { db, userId, isAuthReady, theme, userProfile, getUserCollectionPathSegments, showToast, isPro, isTrialActive, handleUpgradeClick, activateFreeTrial } = useAppContext();
+    const { db, userId, isAuthReady, theme, getUserCollectionPathSegments, showToast, isPro, isTrialActive, handleUpgradeClick, activateFreeTrial } = useAppContext();
     const hasProAccess = isPro || isTrialActive;
 
     const [dashboardData, setDashboardData] = useState({
@@ -69,44 +65,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
     const [isLoading, setIsLoading] = useState(true);
     const [isMarkAllPaidConfirmationOpen, setIsMarkAllPaidConfirmationOpen] = useState(false);
-    const [isExecutiveSummaryOpen, setIsExecutiveSummaryOpen] = useState(false);
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
-    const [isBudgetsModalOpen, setIsBudgetsModalOpen] = useState(false);
-    const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
-
-
-    const handleSaveBudgets = async (newBudgets) => {
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, userId);
-            await updateDoc(userDocRef, {
-                budgets: newBudgets,
-                updatedAt: serverTimestamp()
-            });
-            showToast('Metas de orçamento salvas com sucesso!', 'success');
-        } catch (err) {
-            console.error("Erro ao salvar metas:", err);
-            showToast('Falha ao salvar metas de orçamento.', 'error');
-        }
-    };
-
-    const handleSaveNotificationSettings = async (newSettings) => {
-        try {
-            const userCollectionPath = getUserCollectionPathSegments();
-            const userDocRef = doc(db, ...userCollectionPath, userId);
-            await updateDoc(userDocRef, {
-                notificationSettings: newSettings,
-                updatedAt: serverTimestamp()
-            });
-            showToast('Preferências de alertas salvas com sucesso!', 'success');
-        } catch (err) {
-            console.error("Erro ao salvar alertas:", err);
-            showToast('Falha ao salvar preferências.', 'error');
-        }
-    };
+    const scopeRef = useRef(null);
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) {
@@ -118,7 +82,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         if (import.meta.env.DEV && (typeof window !== 'undefined' && (window.__FINCONTROL_E2E_MOCK_DATA__ || sessionStorage.getItem('fincontrol_e2e_data')))) {
             const mock = window.__FINCONTROL_E2E_MOCK_DATA__ || JSON.parse(sessionStorage.getItem('fincontrol_e2e_data'));
             setDashboardData({
-                cards: mock.cards || [{ id: 'card-1', name: 'Cartão E2E Master', limit: 5000, color: '#C5A059' }],
+                cards: mock.cards || [{ id: 'card-1', name: 'Cartão E2E Master', limit: 5000, color: '#5CCCCC' }],
                 loans: mock.loans || [{ id: 'loan-1', description: 'Compra E2E 12x', cardId: 'card-1', totalAmount: 1200, installmentsCount: 12, installmentValue: 100, currentInstallment: 1, startDate: `${selectedMonth}-05`, isMyDebt: true, category: 'Alimentação' }],
                 expenses: mock.expenses || [{ id: 'exp-1', description: 'Mercado E2E', cardId: 'card-1', value: 250, date: new Date(), category: 'Alimentação' }],
                 subscriptions: mock.subscriptions || [{ id: 'sub-1', name: 'Streaming E2E', value: 49.90, cardId: 'card-1', category: 'Lazer' }],
@@ -281,7 +245,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast('Não foi possível atualizar o item. Tente novamente.', "error");
         }
     };
-    
+
     const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
         const loanToUpdate = loans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
@@ -300,9 +264,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             installmentsList = updatedLoanData.installments;
             originalAmount = updatedLoanData.totalValue;
         }
-        
-        const installmentIndex = Array.isArray(installmentsList) 
-            ? installmentsList.findIndex(installment => installment.number === installmentNumber) 
+
+        const installmentIndex = Array.isArray(installmentsList)
+            ? installmentsList.findIndex(installment => installment.number === installmentNumber)
             : -1;
 
         if (installmentIndex === -1) {
@@ -312,7 +276,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
-        
+
         const paidCents = installmentsList
             .filter(installment => installment.status === 'Paga')
             .reduce((sum, installment) => sum + toCents(installment.value || 0), 0);
@@ -374,65 +338,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         setSelectedMonth(`${curYear}-${curMonthStr}`);
     };
 
-    const handleExportMonthCsv = () => {
-        if (!hasProAccess) {
-            showToast('Exportação de extrato CSV é exclusiva do plano Pro.', 'warning');
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-
-        if (!displayableItems || displayableItems.length === 0) {
-            showToast('Nenhuma transação disponível para exportar no mês selecionado.', 'warning');
-            return;
-        }
-
-        const transactionsToExport = displayableItems.map(item => {
-            const clientObj = clients.find(c => c.id === item.clientId);
-            const cardObj = cards.find(c => c.id === item.cardId);
-            return {
-                type: item.type,
-                date: item.dueDate,
-                description: item.description,
-                category: item.category || (item.type === 'Assinatura' ? 'Assinaturas' : 'Outros'),
-                clientName: clientObj?.name || 'Titular',
-                cardName: cardObj?.name || 'Dinheiro/Pix',
-                installment: item.number ? `${item.number}/${item.totalInstallments || item.number}` : '-',
-                value: item.value || 0,
-                status: item.currentStatus || 'Pendente'
-            };
-        });
-
-        const csvContent = generateTransactionsCsv(transactionsToExport);
-        downloadCsvFile(csvContent, `fincontrol-extrato-${selectedMonth}.csv`);
-        showToast('Extrato CSV exportado com sucesso!', 'success');
-    };
-
-    const handleExportAnnualCsv = () => {
-        if (!hasProAccess) {
-            showToast('Relatório Anual consolidado é exclusivo do plano Pro.', 'warning');
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-
-        try {
-            const currentYear = selectedMonth.slice(0, 4);
-            const csv = generateAnnualReportCsv({
-                targetYear: currentYear,
-                loans,
-                expenses,
-                subscriptions,
-                incomes,
-                cards,
-                clients
-            });
-            downloadCsvFile(csv, `fincontrol-relatorio-anual-${currentYear}.csv`);
-            showToast(`Relatório Anual ${currentYear} CSV exportado com sucesso!`, 'success');
-        } catch (error) {
-            showToast('Erro ao exportar relatório anual CSV.', 'error');
-        }
-    };
-
-
     const {
         displayableItems,
         filteredLoansForChart,
@@ -442,116 +347,31 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     } = useMemo(() => {
         try {
             if (isLoading || clients.length === 0) {
-                return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
+                return {
+                    displayableItems: [],
+                    filteredLoansForChart: [],
+                    filteredExpensesForChart: [],
+                    filteredSubscriptionsForChart: [],
+                    summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 }
+                };
             }
 
-            const [filterYear, filterMonth] = selectedMonth.split('-').map(Number);
-            const todayAtMidnight = new Date();
-            todayAtMidnight.setHours(0, 0, 0, 0);
-            let allItems = [];
+            const breakdown = calculateInvoiceBreakdownForMonth({
+                targetMonth: selectedMonth,
+                loans,
+                subscriptions,
+                expenses,
+                cards,
+                personId: selectedClientFilter || 'all',
+                cardId: selectedCardFilter || 'all',
+                knownClientIds: clients,
+                paidSubscriptions
+            });
 
-            const safeLoans = Array.isArray(loans) ? loans : [];
-            const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
-            const safeExpenses = Array.isArray(expenses) ? expenses : [];
-            const safeCards = Array.isArray(cards) ? cards : [];
             const safeClients = Array.isArray(clients) ? clients : [];
-            const safePaidSubscriptions = Array.isArray(paidSubscriptions) ? paidSubscriptions : [];
+            const safeCards = Array.isArray(cards) ? cards : [];
 
-            safeLoans.forEach(loan => {
-                if (!loan || typeof loan.totalValue !== 'number') return;
-                const processInstallments = (installments, personDetails) => {
-                    if (Array.isArray(installments)) {
-                        installments.forEach(inst => {
-                            if (!inst) return;
-                            const instDate = new Date(inst.dueDate + "T00:00:00Z");
-                            if (instDate.getUTCFullYear() === filterYear && instDate.getUTCMonth() + 1 === filterMonth &&
-                                (!selectedCardFilter || loan.cardId === selectedCardFilter) &&
-                                (!selectedClientFilter || personDetails.clientId === selectedClientFilter)) {
-                                let status = inst.status === 'Pendente' && instDate < todayAtMidnight ? 'Atrasado' : inst.status;
-                                
-                                const itemData = {
-                                    ...loan,
-                                    ...inst,
-                                    value: inst.value,
-                                    id: `${loan.id}-${personDetails.key || 'main'}-${inst.number}`,
-                                    type: 'Parcela',
-                                    loanId: loan.id,
-                                    personKey: personDetails.key,
-                                    clientId: personDetails.clientId,
-                                    description: personDetails.label ? `${loan.description || 'Compra'} (${personDetails.label})` : (loan.description || 'Compra'),
-                                    currentStatus: status
-                                };
-                                delete itemData.installments;
-                                allItems.push(itemData);
-                            }
-                        });
-                    }
-                };
-                if (loan.isShared && loan.sharedDetails) {
-                    if (loan.sharedDetails.person1) processInstallments(loan.sharedDetails.person1.installments, { key: 'person1', clientId: loan.sharedDetails.person1.clientId, label: 'P1' });
-                    if (loan.sharedDetails.person2 && loan.sharedDetails.person2?.shareAmount > 0) processInstallments(loan.sharedDetails.person2.installments, { key: 'person2', clientId: loan.sharedDetails.person2.clientId, label: 'P2' });
-                } else {
-                    processInstallments(loan.installments, { key: null, clientId: loan.clientId });
-                }
-            });
-
-            const addedSubKeys = new Set();
-            safeSubscriptions.forEach(sub => {
-                if (!sub) return;
-                if (sub.isActive && (!selectedCardFilter || sub.cardId === selectedCardFilter) && (!selectedClientFilter || sub.clientId === selectedClientFilter)) {
-                    const card = safeCards.find(c => c && c.id === sub.cardId);
-                    if (!card) return;
-
-                    [-1, 0].forEach(monthOffset => {
-                        const chargeDate = new Date(Date.UTC(filterYear, filterMonth - 1 + monthOffset, sub.dueDate));
-                        const invoiceDueDate = calculateInvoiceDueDate(chargeDate, card);
-                        
-                        if (invoiceDueDate.getUTCFullYear() === filterYear && invoiceDueDate.getUTCMonth() + 1 === filterMonth) {
-                            const uniqueKey = `${sub.id}-${chargeDate.toISOString().slice(0, 10)}`;
-                            if (!addedSubKeys.has(uniqueKey)) {
-                                const isPaid = safePaidSubscriptions.some(ps => ps && ps.subscriptionId === sub.id && ps.month === selectedMonth);
-                                allItems.push({ 
-                                    ...sub, 
-                                    type: 'Assinatura', 
-                                    id: uniqueKey,
-                                    originalId: sub.id,
-                                    description: sub.name, 
-                                    dueDate: chargeDate.toISOString().split('T')[0], 
-                                    currentStatus: isPaid ? 'Paga' : 'Pendente',
-                                    value: sub.amount 
-                                });
-                                addedSubKeys.add(uniqueKey);
-                            }
-                        }
-                    });
-                }
-            });
-            
-            safeExpenses.forEach(expense => {
-                if (!expense) return;
-                const expenseDate = expense.date;
-                if (!(expenseDate instanceof Date) || isNaN(expenseDate)) return;
-
-                if (
-                    (!selectedCardFilter || expense.cardId === selectedCardFilter) &&
-                    (!selectedClientFilter || !expense.clientId || expense.clientId === selectedClientFilter)
-                ) {
-                    const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
-                    const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
-                    
-                    if (relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
-                        allItems.push({ 
-                            ...expense, 
-                            type: 'Despesa', 
-                            dueDate: expense.date.toISOString().split('T')[0], 
-                            currentStatus: expense.status || 'Pendente',
-                            value: expense.value 
-                        });
-                    }
-                }
-            });
-
-            allItems.sort((a, b) => {
+            const sortedItems = [...breakdown.items].sort((a, b) => {
                 let aValue = a[sortConfig.key] || '';
                 let bValue = b[sortConfig.key] || '';
 
@@ -568,77 +388,33 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     return sortConfig.direction === 'ascending' ? new Date(aValue) - new Date(bValue) : new Date(bValue) - new Date(aValue);
                 }
 
-                return sortConfig.direction === 'ascending' 
+                return sortConfig.direction === 'ascending'
                     ? String(aValue).localeCompare(String(bValue))
                     : String(bValue).localeCompare(String(aValue));
             });
 
-            const faturaCents = allItems.reduce((sum, item) => sum + toCents(item.value || 0), 0);
-            const recebidoCents = allItems.filter(item => item.currentStatus === 'Paga').reduce((sum, item) => sum + toCents(item.value || 0), 0);
-            const pendenteCents = Math.max(0, faturaCents - recebidoCents);
-
             return {
-                displayableItems: allItems,
-                filteredLoansForChart: allItems.filter(item => item.type === 'Parcela'),
-                filteredExpensesForChart: allItems.filter(item => item.type === 'Despesa'),
-                filteredSubscriptionsForChart: allItems.filter(item => item.type === 'Assinatura'),
+                displayableItems: sortedItems,
+                filteredLoansForChart: breakdown.filteredLoansForChart,
+                filteredExpensesForChart: breakdown.filteredExpensesForChart,
+                filteredSubscriptionsForChart: breakdown.filteredSubscriptionsForChart,
                 summary: {
-                    totalFatura: fromCents(faturaCents),
-                    totalRecebido: fromCents(recebidoCents),
-                    totalPendente: fromCents(pendenteCents),
+                    totalFatura: breakdown.totalCommitted,
+                    totalRecebido: breakdown.totalRecebido,
+                    totalPendente: breakdown.totalPendente,
                 }
             };
         } catch (error) {
             console.error("ERRO FATAL DURANTE O CÁLCULO DO RESUMO:", error);
-            return { displayableItems: [], filteredLoansForChart: [], filteredExpensesForChart: [], filteredSubscriptionsForChart: [], summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 } };
+            return {
+                displayableItems: [],
+                filteredLoansForChart: [],
+                filteredExpensesForChart: [],
+                filteredSubscriptionsForChart: [],
+                summary: { totalFatura: 0, totalRecebido: 0, totalPendente: 0 }
+            };
         }
     }, [isLoading, loans, clients, cards, subscriptions, expenses, paidSubscriptions, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
-    
-    // Análise de Inteligência (Auditoria Relâmpago & Metas de Quitação)
-    const intelligenceData = useMemo(() => {
-        let upcomingFinishes = [];
-        const safeLoans = Array.isArray(loans) ? loans : [];
-        const safeSubs = Array.isArray(subscriptions) ? subscriptions : [];
-
-        safeLoans.forEach(loan => {
-            if (!loan) return;
-            const isFullyPaid = loan.isShared 
-                ? (loan.sharedDetails?.person1?.statusPayment === 'Pago Total' && loan.sharedDetails?.person2?.statusPayment === 'Pago Total')
-                : (loan.statusPaymentClient === 'Pago Total');
-
-            if (!isFullyPaid) {
-                let allInsts = [];
-                if (loan.isShared) {
-                    if (Array.isArray(loan.sharedDetails?.person1?.installments)) allInsts.push(...loan.sharedDetails.person1.installments);
-                    if (Array.isArray(loan.sharedDetails?.person2?.installments)) allInsts.push(...loan.sharedDetails.person2.installments);
-                } else if (Array.isArray(loan.installments)) {
-                    allInsts.push(...loan.installments);
-                }
-
-                const pendingInsts = allInsts.filter(i => i && i.status !== 'Paga');
-                if (pendingInsts.length > 0) {
-                    pendingInsts.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-                    const lastInst = pendingInsts[pendingInsts.length - 1];
-                    if (lastInst) {
-                        upcomingFinishes.push({
-                            description: loan.description || 'Compra',
-                            remaining: pendingInsts.length,
-                            finalDate: lastInst.dueDate
-                        });
-                    }
-                }
-            }
-        });
-
-        const activeSubscriptionsTotal = safeSubs
-            .filter(s => s && s.isActive)
-            .reduce((acc, s) => acc + (s.amount !== undefined ? s.amount : (s.value || 0)), 0);
-
-        return {
-            activeSubscriptionsTotal,
-            upcomingFinishes: upcomingFinishes.slice(0, 3)
-        };
-    }, [loans, subscriptions]);
 
     const monthlyComparison = useMemo(() => {
         return calculateMonthlyComparisonSummary({
@@ -650,111 +426,25 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         });
     }, [selectedMonth, loans, expenses, subscriptions, incomes]);
 
-    const deterministicInsights = useMemo(() => {
-        return generateDeterministicFinancialInsights({
-            selectedMonth,
+    const monthlySeries = useMemo(() => {
+        return calculateMonthlySeries({
             loans,
-            expenses,
             subscriptions,
-            incomes,
-            clients,
-            maxInsights: 3
-        });
-    }, [selectedMonth, loans, expenses, subscriptions, incomes, clients]);
-
-    const financialAlerts = useMemo(() => {
-        return generateFinancialAlerts({
-            selectedMonth,
-            loans,
             expenses,
-            subscriptions,
             cards,
-            clients,
-            notificationSettings: userProfile?.notificationSettings || {},
-            maxAlerts: 3
+            endMonth: selectedMonth,
+            monthsBack: 5,
+            monthsForward: 0,
+            personId: selectedClientFilter || 'all',
+            cardId: selectedCardFilter || 'all',
+            knownClientIds: clients
         });
-    }, [selectedMonth, loans, expenses, subscriptions, cards, clients, userProfile?.notificationSettings]);
+    }, [loans, subscriptions, expenses, cards, selectedMonth, selectedClientFilter, selectedCardFilter, clients]);
 
-    // Infraestrutura de dispensas de alertas individuais reutilizando a mesma chave da Central de Notificações
-    const alertsStorageKey = useMemo(() => {
-        const uid = userId || 'anonymous';
-        return `fincontrol:dismissed-alerts:${uid}`;
-    }, [userId]);
-
-    const [dismissedAlertIds, setDismissedAlertIds] = useState(() => {
-        try {
-            const raw = localStorage.getItem(alertsStorageKey);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed.map(item => item.id) : [];
-        } catch {
-            return [];
-        }
-    });
-
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem(alertsStorageKey);
-            if (!raw) {
-                setDismissedAlertIds([]);
-            } else {
-                const parsed = JSON.parse(raw);
-                setDismissedAlertIds(Array.isArray(parsed) ? parsed.map(item => item.id) : []);
-            }
-        } catch {
-            setDismissedAlertIds([]);
-        }
-    }, [alertsStorageKey]);
-
-    const handleDismissAlert = (alertId) => {
-        const updated = [...dismissedAlertIds, alertId];
-        setDismissedAlertIds(updated);
-        try {
-            const payload = updated.map(id => ({ id, dismissedAt: new Date().toISOString() }));
-            localStorage.setItem(alertsStorageKey, JSON.stringify(payload));
-        } catch {
-            // Silencioso
-        }
-    };
-
-    const activeFinancialAlerts = useMemo(() => {
-        return financialAlerts.filter(alert => !dismissedAlertIds.includes(alert.id));
-    }, [financialAlerts, dismissedAlertIds]);
-
-    // Projeção futura filtrada por pessoa (reutiliza selectedClientFilter sem alterar arrays originais)
-    const filteredLoansForProjection = useMemo(() => {
-        if (!selectedClientFilter) return loans;
-        const result = [];
-        (loans || []).forEach(loan => {
-            if (!loan) return;
-            if (loan.isShared && loan.sharedDetails) {
-                if (loan.sharedDetails.person1?.clientId === selectedClientFilter) {
-                    result.push({
-                        ...loan,
-                        id: `${loan.id}-p1`,
-                        isShared: false,
-                        installments: loan.sharedDetails.person1.installments || []
-                    });
-                }
-                if (loan.sharedDetails.person2?.clientId === selectedClientFilter) {
-                    result.push({
-                        ...loan,
-                        id: `${loan.id}-p2`,
-                        isShared: false,
-                        installments: loan.sharedDetails.person2.installments || []
-                    });
-                }
-            } else if (loan.clientId === selectedClientFilter) {
-                result.push(loan);
-            }
-        });
-        return result;
-    }, [loans, selectedClientFilter]);
-
-    const filteredSubscriptionsForProjection = useMemo(() => {
-        if (!selectedClientFilter) return subscriptions;
-        return (subscriptions || []).filter(s => s && s.clientId === selectedClientFilter);
-    }, [subscriptions, selectedClientFilter]);
+    const currentMonthPoint = useMemo(() => {
+        if (!monthlySeries || monthlySeries.length === 0) return null;
+        return monthlySeries.find(p => p.isCurrent) || monthlySeries[monthlySeries.length - 1];
+    }, [monthlySeries]);
 
     const selectedClientNameForProjection = useMemo(() => {
         if (!selectedClientFilter) return '';
@@ -814,7 +504,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             } else if (item.type === 'Despesa') {
                 const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
-                batch.update(expenseDocRef, { 
+                batch.update(expenseDocRef, {
                     status: 'Paga',
                     userId: userId,
                     updatedAt: serverTimestamp()
@@ -891,15 +581,11 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const paidPercentage = summary.totalFatura > 0 ? (summary.totalRecebido / summary.totalFatura) * 100 : 0;
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full min-h-[500px] p-6 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)]">
-                <Spinner />
-            </div>
-        );
+        return <SkeletonPage />;
     }
-    
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {isSyncStale && (
                 <div className="p-4 rounded-2xl bg-[var(--fc-warning-soft)] border border-[var(--fc-warning)]/30 flex items-center gap-3 text-[var(--fc-warning)] text-sm animate-fade-in shadow-sm" role="alert">
                     <svg className="w-5 h-5 flex-shrink-0 text-[var(--fc-warning)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -909,7 +595,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             )}
             {/* Header com Filtros em Surface DS2 */}
-            <Surface variant="elevated" padding="lg" className="space-y-6">
+            <Surface variant="elevated" padding="lg" className="space-y-6" data-enter="title">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">
@@ -931,22 +617,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             type="button"
                             onClick={() => {
                                 if (!hasProAccess) {
-                                    showToast('Resumo Executivo é exclusivo do plano Pro.', 'warning');
-                                    setIsUpgradeModalOpen(true);
-                                } else {
-                                    setIsExecutiveSummaryOpen(true);
-                                }
-                            }}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Abrir Resumo Executivo Semanal e Mensal"
-                        >
-                            <span>Resumo Executivo</span>
-                            {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (!hasProAccess) {
                                     showToast('Simulador Sandbox é exclusivo do plano Pro.', 'warning');
                                     setIsUpgradeModalOpen(true);
                                 } else {
@@ -959,144 +629,113 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             <span>Simulador</span>
                             {!hasProAccess && <span className="text-[10px] text-[var(--fc-accent)]">🔒</span>}
                         </button>
-
-                        <button
-                            type="button"
-                            onClick={() => setIsNotificationSettingsOpen(true)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Configurar Preferências de Alertas"
-                        >
-                            <span>Alertas</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleExportMonthCsv}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title="Exportar lançamentos do mês em CSV"
-                        >
-                            <span>CSV Mês</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleExportAnnualCsv}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl bg-[var(--fc-surface-1)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] hover:bg-[var(--fc-surface-2)] transition cursor-pointer"
-                            title={`Exportar Relatório Anual Consolidado (${selectedMonth.slice(0, 4)})`}
-                        >
-                            <span>Relatório Anual {selectedMonth.slice(0, 4)}</span>
-                        </button>
                     </div>
                 </div>
 
                 {/* Filtros */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                    <div className="flex items-center gap-2">
-                        <button 
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 pt-2">
+                    <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-1">
+                        <button
                             type="button"
                             onClick={handlePrevMonth}
                             aria-label="Mês anterior"
                             title="Mês anterior"
-                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
+                            className="min-w-[44px] min-h-[44px] h-[44px] p-2.5 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ◀
                         </button>
-                        <input 
-                            type="month" 
-                            value={selectedMonth} 
-                            onChange={(e) => setSelectedMonth(e.target.value)} 
+                        <MonthPicker
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
                             aria-label="Selecionar mês e ano de competência"
-                            className="w-full min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition" 
+                            className="flex-1 w-full min-w-[210px]"
                         />
-                        <button 
+                        <button
                             type="button"
                             onClick={handleNextMonth}
                             aria-label="Próximo mês"
                             title="Próximo mês"
-                            className="min-w-[44px] min-h-[44px] p-3 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
+                            className="min-w-[44px] min-h-[44px] h-[44px] p-2.5 bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] border border-[var(--fc-border-default)] rounded-xl shadow-sm transition cursor-pointer flex-shrink-0 flex items-center justify-center"
                         >
                             ▶
                         </button>
                     </div>
-                    <select 
-                        value={selectedCardFilter} 
-                        onChange={(e) => setSelectedCardFilter(e.target.value)} 
+                    <Select
+                        value={selectedCardFilter}
+                        onChange={(e) => setSelectedCardFilter(e.target.value)}
                         aria-label="Filtrar por cartão"
-                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
+                        className="w-full sm:w-auto min-w-[170px]"
                     >
                         <option value="">Todos os Cartões</option>
                         {cards.map(card => (<option key={card.id} value={card.id}>{card.name}</option>))}
-                    </select>
-                    <select 
-                        value={selectedClientFilter} 
-                        onChange={(e) => setSelectedClientFilter(e.target.value)} 
+                    </Select>
+                    <Select
+                        value={selectedClientFilter}
+                        onChange={(e) => setSelectedClientFilter(e.target.value)}
                         aria-label="Filtrar por pessoa"
-                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
+                        className="w-full sm:w-auto min-w-[170px]"
                     >
                         <option value="">Todas as Pessoas</option>
                         {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
-                    </select>
+                    </Select>
                 </div>
             </Surface>
 
-            {/* Banner de Alertas Financeiros Internos com Ação de Dispensar */}
-            <FinancialAlertsBanner alerts={activeFinancialAlerts} onDismiss={handleDismissAlert} />
-
-            {/* Grid Principal: Cards e Resumo à esquerda, Gráficos e Inteligência à direita */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Grid Principal: KPIs à esquerda e Gráficos à direita */}
+            <div data-enter="item" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
-                    {/* Card Fatura Total com Surface DS2 */}
-                    <Surface variant="elevated" padding="md" className="transition-all hover:border-[var(--fc-accent)]/30">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Fatura Total do Mês</h3>
-                            <div className="w-8 h-8 rounded-lg bg-[var(--fc-surface-1)] text-[var(--fc-accent)] flex items-center justify-center border border-[var(--fc-border-subtle)]">
-                                <CreditCardKpiIcon />
-                            </div>
-                        </div>
-                        <p className="text-3xl font-extrabold tracking-tight text-[var(--fc-text-primary)] mt-3">
-                            {formatCurrencyDisplay(summary.totalFatura)}
-                        </p>
-                        <div className="mt-3 flex items-center gap-2">
-                            {monthlyComparison.previousInvoiceTotal > 0 ? (
-                                <Badge variant={monthlyComparison.invoiceDelta.direction === 'up' ? 'warning' : monthlyComparison.invoiceDelta.direction === 'down' ? 'success' : 'neutral'}>
-                                    <span>{monthlyComparison.invoiceDelta.direction === 'up' ? '▲' : (monthlyComparison.invoiceDelta.direction === 'down' ? '▼' : '•')}</span>
-                                    <span>{monthlyComparison.invoiceDelta.label} vs mês anterior</span>
-                                </Badge>
-                            ) : (
-                                <span className="text-xs text-[var(--fc-text-muted)] font-medium">Mês base de referência</span>
-                            )}
-                        </div>
-                    </Surface>
+                    {/* Card Fatura Total com KpiCard DS2 */}
+                    <KpiCard
+                        title="Fatura Total do Mês"
+                        value={summary.totalFatura}
+                        variant="accent"
+                        icon={<CreditCardKpiIcon />}
+                        delta={currentMonthPoint?.delta || (monthlyComparison.previousInvoiceTotal > 0 ? monthlyComparison.invoiceDelta : undefined)}
+                        deltaSubtitle="vs. mês anterior"
+                        sparklineData={monthlySeries.map(p => p.totalCommitted)}
+                        sparklineLabel="Evolução da fatura nos últimos 6 meses"
+                    />
 
-                    {/* Card Progresso de Pagamento com Surface DS2 */}
-                    <Surface variant="elevated" padding="md" className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Progresso de Pagamento</h3>
-                            <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage}%</span>
-                        </div>
-                        <div className="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]">
-                            <div className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300" style={{ width: `${paidPercentage}%` }}></div>
-                        </div>
-                        <div className="flex justify-between text-xs font-medium pt-1">
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
-                                <span className="text-[var(--fc-text-secondary)]">Pago:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalRecebido)}</span>
+                    {/* Card Progresso de Pagamento com KpiCard DS2 */}
+                    <KpiCard
+                        title="Progresso de Pagamento"
+                        value={summary.totalRecebido}
+                        variant="success"
+                        icon={<span>✓</span>}
+                        sparklineData={monthlySeries.map(p => p.installmentsTotal)}
+                        sparklineLabel="Evolução de parcelas nos últimos 6 meses"
+                        secondaryContent={
+                            <div className="space-y-3 pt-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)]">Quitado</span>
+                                    <span className="text-xs font-bold text-[var(--fc-text-primary)]">{paidPercentage.toFixed(0)}%</span>
+                                </div>
+                                <AnimatedProgressBar
+                                    containerClassName="w-full bg-[var(--fc-surface-1)] rounded-full h-2.5 overflow-hidden border border-[var(--fc-border-default)]"
+                                    className="bg-[var(--fc-accent)] h-2.5 rounded-full transition-all duration-300"
+                                    percentage={paidPercentage}
+                                    delay={0.2}
+                                    aria-label="Progresso de Pagamento da Fatura"
+                                />
+                                <div className="flex justify-between text-xs font-medium pt-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-[var(--fc-success)]"></span>
+                                        <span className="text-[var(--fc-text-secondary)]">Pago:</span>
+                                        <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalRecebido} /></span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
+                                        <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
+                                        <span className="text-[var(--fc-text-primary)] font-semibold"><AnimatedCurrency value={summary.totalPendente} /></span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-[var(--fc-warning)]"></span>
-                                <span className="text-[var(--fc-text-secondary)]">Pendente:</span>
-                                <span className="text-[var(--fc-text-primary)] font-semibold">{formatCurrencyDisplay(summary.totalPendente)}</span>
-                            </div>
-                        </div>
-                    </Surface>
-
-                    {/* ProSummary */}
-                    <div className="overflow-hidden">
-                        <ProSummary selectedMonth={selectedMonth} totalExpenses={summary.totalFatura} incomes={incomes} />
-                    </div>
+                        }
+                    />
                 </div>
 
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)]">
+                <div className="lg:col-span-2">
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full">
                         <ProAnalyticsCharts
                             loans={filteredLoansForChart}
                             clients={clients}
@@ -1105,81 +744,31 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             theme={theme}
                         />
                     </div>
-
-                    {/* Novos Widgets de Inteligência (Auditoria Relâmpago & Metas de Quitação) */}
-                    {hasProAccess ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Widget 1: Auditoria Relâmpago (Mini Modo Crise) */}
-                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
-                                <div className="flex items-center gap-2.5 text-[var(--fc-warning)]">
-                                    <ShieldAlertIcon />
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Auditoria Relâmpago</h3>
-                                </div>
-                                <div className="space-y-2.5 text-xs text-[var(--fc-text-secondary)]">
-                                    <div className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
-                                        <span>Compromissos Recorrentes (Assinaturas)</span>
-                                        <span className="font-mono font-bold text-[var(--fc-accent)]">{formatCurrencyDisplay(intelligenceData.activeSubscriptionsTotal)}/mês</span>
-                                    </div>
-                                    <p className="text-[11px] text-[var(--fc-text-muted)] leading-relaxed px-1">
-                                        💡 <strong className="text-[var(--fc-text-primary)] font-semibold">Dica:</strong> Suas assinaturas ativas representam um custo contínuo. Revise serviços pouco utilizados para aliviar a fatura.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Widget 2: Metas & Timeline de Quitação */}
-                            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 rounded-3xl shadow-[var(--fc-shadow-md)] space-y-4">
-                                <div className="flex items-center gap-2.5 text-[var(--fc-accent)]">
-                                    <TargetIcon />
-                                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--fc-text-primary)]">Metas & Quitação de Dívidas</h3>
-                                </div>
-                                {intelligenceData.upcomingFinishes.length > 0 ? (
-                                    <div className="space-y-2.5">
-                                        {intelligenceData.upcomingFinishes.map((item, idx) => (
-                                            <div key={idx} className="p-3 bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] rounded-xl flex justify-between items-center">
-                                                <div className="truncate pr-2">
-                                                    <span className="text-xs font-bold text-[var(--fc-text-primary)] block truncate">{item.description}</span>
-                                                    <span className="text-[10px] text-[var(--fc-text-muted)]">Faltam {item.remaining} parcelas</span>
-                                                </div>
-                                                <span className="text-[11px] font-semibold text-[var(--fc-success)] whitespace-nowrap bg-[var(--fc-success-soft)] px-2.5 py-1 rounded-lg border border-[var(--fc-success)]/20">
-                                                    Até {new Date(item.finalDate + 'T00:00:00Z').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6 text-xs text-[var(--fc-text-muted)]">
-                                        Nenhuma compra parcelada ativa para projetar quitação no momento.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <ProFeatureLock
-                            title="Auditoria Relâmpago & Metas de Quitação"
-                            description="Análise cirúrgica de recorrências e projeção de encerramento de parcelas no plano Pro."
-                            onAction={() => setIsUpgradeModalOpen(true)}
-                        />
-                    )}
                 </div>
             </div>
 
-            {/* Insights Financeiros Automáticos */}
-            {hasProAccess ? (
-                <DeterministicInsightsWidget insights={deterministicInsights} />
-            ) : (
-                <ProFeatureLock
-                    title="Insights Financeiros Determinísticos"
-                    description="Detecção inteligente de variações de fatura, anomalias e concentração de gastos."
-                    onAction={() => setIsUpgradeModalOpen(true)}
-                />
-            )}
+            {/* Gráfico Destaque: Evolução Mensal de Compromissos (Histórico + Projeção com Recharts) */}
+            <MonthlyEvolutionChart
+                loans={loans}
+                subscriptions={subscriptions}
+                expenses={expenses}
+                cards={cards}
+                selectedMonth={selectedMonth}
+                selectedCardFilter={selectedCardFilter}
+                clients={clients}
+                isPro={isPro}
+                isTrialActive={isTrialActive}
+                onUpgradeClick={handleUpgradeClick}
+                theme={theme}
+            />
 
-            {/* Projeção de Faturas e Descompressão Futura (com suporte a filtro por pessoa) */}
+            {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
             {hasProAccess ? (
-                <FutureCommitmentsCard 
-                    loans={filteredLoansForProjection} 
-                    subscriptions={filteredSubscriptionsForProjection} 
-                    selectedMonth={selectedMonth} 
+                <FutureCommitmentsCard
+                    loans={loans}
+                    subscriptions={subscriptions}
+                    selectedMonth={selectedMonth}
+                    clients={clients}
                     selectedClientName={selectedClientNameForProjection}
                 />
             ) : (
@@ -1190,29 +779,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 />
             )}
 
-            {/* Metas de Orçamento por Categoria (Budgets) */}
-            {hasProAccess ? (
-                <CategoryBudgetsWidget
-                    budgets={userProfile?.budgets || {}}
-                    expenses={expenses}
-                    loans={loans}
-                    selectedMonth={selectedMonth}
-                    onOpenBudgetModal={() => setIsBudgetsModalOpen(true)}
-                />
-            ) : (
-                <ProFeatureLock
-                    title="Metas de Orçamento por Categoria"
-                    description="Defina limites por categoria para manter suas despesas sob controle."
-                    onAction={() => setIsUpgradeModalOpen(true)}
-                />
-            )}
-
             {/* Tabela de Itens da Fatura */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
+            <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
                 <div className="p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 
                     <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>
-                    <button 
+                    <button
                         type="button"
                         onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
                         className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 px-4 py-2 rounded-xl hover:bg-[var(--fc-accent)]/20 text-xs font-semibold transition cursor-pointer"
@@ -1220,7 +792,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         Marcar Tudo Como Pago
                     </button>
                 </div>
-                
+
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-left border-collapse">
                         <thead>
@@ -1253,7 +825,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
                                             {card ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#F2B705' }} aria-hidden="true"></div>
+                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#5CCCCC' }} aria-hidden="true"></div>
                                                     <span>{card.name}</span>
                                                 </div>
                                             ) : '---'}
@@ -1274,9 +846,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {item.currentStatus !== 'Paga' && (
-                                                <button 
+                                                <button
                                                     type="button"
-                                                    onClick={() => updateItemStatus(item, 'Paga')} 
+                                                    onClick={() => updateItemStatus(item, 'Paga')}
                                                     aria-label={`Marcar ${item.description} como paga`}
                                                     className="bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-success)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                 >
@@ -1284,9 +856,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                                 </button>
                                             )}
                                             {item.currentStatus === 'Paga' && (
-                                                 <button 
+                                                 <button
                                                     type="button"
-                                                    onClick={() => updateItemStatus(item, 'Pendente')} 
+                                                    onClick={() => updateItemStatus(item, 'Pendente')}
                                                     aria-label={`Desmarcar ${item.description}`}
                                                     className="bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-danger)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                  >
@@ -1308,24 +880,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             </div>
 
-            <GenericModal 
-                isOpen={isMarkAllPaidConfirmationOpen} 
-                onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
-                onConfirm={handleMarkAllAsPaid} 
-                title="Confirmar Ação" 
+            <GenericModal
+                isOpen={isMarkAllPaidConfirmationOpen}
+                onClose={() => setIsMarkAllPaidConfirmationOpen(false)}
+                onConfirm={handleMarkAllAsPaid}
+                title="Confirmar Ação"
                 message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
-                isConfirmation={true} 
-            />
-
-            <ExecutiveSummaryModal
-                isOpen={isExecutiveSummaryOpen}
-                onClose={() => setIsExecutiveSummaryOpen(false)}
-                selectedMonth={selectedMonth}
-                loans={loans}
-                expenses={expenses}
-                subscriptions={subscriptions}
-                incomes={incomes}
-                clients={clients}
+                isConfirmation={true}
             />
 
             <FinancialSandboxSimulatorModal
@@ -1334,20 +895,6 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 loans={loans}
                 subscriptions={subscriptions}
                 selectedMonth={selectedMonth}
-            />
-
-            <CategoryBudgetsModal
-                isOpen={isBudgetsModalOpen}
-                onClose={() => setIsBudgetsModalOpen(false)}
-                currentBudgets={userProfile?.budgets || {}}
-                onSaveBudgets={handleSaveBudgets}
-            />
-
-            <NotificationSettingsModal
-                isOpen={isNotificationSettingsOpen}
-                onClose={() => setIsNotificationSettingsOpen(false)}
-                currentSettings={userProfile?.notificationSettings || {}}
-                onSaveSettings={handleSaveNotificationSettings}
             />
 
             {/* Modal de Upgrade Pro */}
@@ -1365,4 +912,4 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     );
 }
 
-export default Dashboard;
+export default Dashboard;

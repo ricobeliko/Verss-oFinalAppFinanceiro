@@ -5,6 +5,7 @@ export default defineConfig({
     test: {
         include: ['tests/**/*.test.js'],
         exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
-        environment: 'node'
+        environment: 'node',
+        fileParallelism: false
     }
 });

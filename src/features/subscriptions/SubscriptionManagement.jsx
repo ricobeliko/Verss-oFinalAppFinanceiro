@@ -1,10 +1,13 @@
 // src/features/subscriptions/SubscriptionManagement.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import Select from '../../components/Select';
+import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { isValidFinancialValue } from '../../services/financialService';
 import { useSubscriptions } from '../../hooks/useSubscriptions';
@@ -15,17 +18,19 @@ import { useClients } from '../../hooks/useClients';
 const EditIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const DeleteIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-const UserIcon = () => <svg className="w-4 h-4 mr-2 text-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
-const CardIcon = () => <svg className="w-4 h-4 mr-2 text-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
+const UserIcon = () => <svg className="w-4 h-4 mr-2 text-fc-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>;
+const CardIcon = () => <svg className="w-4 h-4 mr-2 text-fc-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H7a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
 
 export default function SubscriptionManagement() {
     const { userId, db, showToast, getUserCollectionPathSegments } = useAppContext();
+    const scopeRef = useRef(null);
 
+    const { subscriptions, loading: loadingSubs } = useSubscriptions();
+    const { cards, loading: loadingCards } = useCards();
+    const { clients, loading: loadingClients } = useClients();
+    const isLoading = loadingSubs || loadingCards || loadingClients;
+    useEnterStagger(scopeRef, { ready: !isLoading });
 
-    const { subscriptions } = useSubscriptions();
-    const { cards } = useCards();
-    const { clients } = useClients();
-    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -51,7 +56,7 @@ export default function SubscriptionManagement() {
         setClientId('');
         setStatus('Ativa');
     };
-    
+
     const handleOpenModal = (sub = null) => {
         setEditingSubscription(sub);
         if (sub) {
@@ -165,18 +170,22 @@ export default function SubscriptionManagement() {
         }
     };
 
+    if (isLoading) {
+        return <SkeletonPage />;
+    }
+
     return (
-        <div className="space-y-8 animate-fadeIn">
+        <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {/* Header Harmonizado */}
-            <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div data-enter="title" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-xl backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Assinaturas</h1>
                     <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Controle suas assinaturas e serviços recorrentes com facilidade.</p>
                 </div>
-                <Button 
-                    variant="primary" 
+                <Button
+                    variant="primary"
                     icon={<PlusIcon />}
-                    onClick={() => handleOpenModal()} 
+                    onClick={() => handleOpenModal()}
                     className="w-full sm:w-auto"
                 >
                     Adicionar Assinatura
@@ -184,7 +193,7 @@ export default function SubscriptionManagement() {
             </div>
 
             {/* Grid de Cards de Assinaturas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div data-enter="item" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {subscriptions.length > 0 ? subscriptions.map((sub) => {
                     const currentStatus = sub.status || (sub.isActive ? 'Ativa' : 'Inativa');
                     const amount = sub.amount !== undefined ? sub.amount : sub.value;
@@ -203,7 +212,7 @@ export default function SubscriptionManagement() {
                                 <p className={`text-xs mb-5 font-medium ${currentStatus === 'Ativa' ? 'text-[var(--fc-text-secondary)]' : 'text-[var(--fc-text-muted)]'}`}>
                                     Vence dia: <span className="font-bold text-[var(--fc-text-primary)]">{sub.dueDate}</span>
                                 </p>
-                                
+
                                 <div className={`pt-4 border-t space-y-2.5 ${currentStatus === 'Ativa' ? 'text-[var(--fc-text-secondary)] border-[var(--fc-border-subtle)]' : 'text-[var(--fc-text-muted)] border-[var(--fc-border-subtle)]'}`}>
                                     <div className="flex items-center text-xs font-medium">
                                         <UserIcon />
@@ -216,20 +225,20 @@ export default function SubscriptionManagement() {
                                 </div>
                             </div>
                             <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-[var(--fc-border-subtle)]">
-                                <button 
+                                <button
                                     type="button"
-                                    onClick={() => handleOpenModal(sub)} 
+                                    onClick={() => handleOpenModal(sub)}
                                     aria-label={`Editar assinatura ${sub.name || ''}`.trim()}
-                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer p-1" 
+                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer p-1"
                                     title="Editar"
                                 >
                                     <EditIcon />
                                 </button>
-                                <button 
+                                <button
                                     type="button"
-                                    onClick={() => confirmDeleteSubscription(sub.id)} 
+                                    onClick={() => confirmDeleteSubscription(sub.id)}
                                     aria-label={`Excluir assinatura ${sub.name || ''}`.trim()}
-                                    className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition cursor-pointer p-1" 
+                                    className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition cursor-pointer p-1"
                                     title="Excluir"
                                 >
                                     <DeleteIcon />
@@ -243,7 +252,7 @@ export default function SubscriptionManagement() {
                     </div>
                 )}
             </div>
-            
+
             {/* Modal de Cadastro/Edição com Grid Estruturada e Consistente DS2 */}
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} maxWidth="max-w-lg">
                 <div className="space-y-4">
@@ -252,14 +261,14 @@ export default function SubscriptionManagement() {
                         <label htmlFor="subscriptionName" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                             Nome da Assinatura
                         </label>
-                        <input 
-                            id="subscriptionName" 
-                            type="text" 
-                            placeholder="Ex: Netflix, Spotify, iCloud" 
-                            value={name} 
-                            onChange={(e) => setName(e.target.value)} 
+                        <input
+                            id="subscriptionName"
+                            type="text"
+                            placeholder="Ex: Netflix, Spotify, iCloud"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm"
-                            required 
+                            required
                         />
                     </div>
 
@@ -273,15 +282,15 @@ export default function SubscriptionManagement() {
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">
                                     R$
                                 </span>
-                                <input 
-                                    id="subscriptionValue" 
-                                    type="text" 
-                                    placeholder="0,00" 
-                                    value={valueInput} 
-                                    onChange={handleCurrencyInputChange(setValueInput)} 
-                                    className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
-                                    required 
-                                    inputMode="decimal" 
+                                <input
+                                    id="subscriptionValue"
+                                    type="text"
+                                    placeholder="0,00"
+                                    value={valueInput}
+                                    onChange={handleCurrencyInputChange(setValueInput)}
+                                    className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium"
+                                    required
+                                    inputMode="decimal"
                                 />
                             </div>
                         </div>
@@ -290,16 +299,16 @@ export default function SubscriptionManagement() {
                             <label htmlFor="subscriptionDueDate" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Dia da Cobrança
                             </label>
-                            <input 
-                                id="subscriptionDueDate" 
-                                type="number" 
-                                placeholder="Ex: 10" 
-                                value={dueDate} 
-                                onChange={(e) => setDueDate(e.target.value)} 
-                                min="1" 
-                                max="31" 
+                            <input
+                                id="subscriptionDueDate"
+                                type="number"
+                                placeholder="Ex: 10"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                min="1"
+                                max="31"
                                 className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
-                                required 
+                                required
                             />
                         </div>
                     </div>
@@ -310,31 +319,31 @@ export default function SubscriptionManagement() {
                             <label htmlFor="subscriptionCard" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Cartão Vinculado
                             </label>
-                            <select 
-                                id="subscriptionCard" 
-                                value={cardId} 
-                                onChange={(e) => setCardId(e.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                            <Select
+                                id="subscriptionCard"
+                                value={cardId}
+                                onChange={(e) => setCardId(e.target.value)}
                                 required
+                                placeholder="Selecione o Cartão"
                             >
                                 <option value="">Selecione o Cartão</option>
                                 {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
 
                         <div className="w-full">
                             <label htmlFor="subscriptionClient" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Pessoa (Opcional)
                             </label>
-                            <select 
-                                id="subscriptionClient" 
-                                value={clientId} 
-                                onChange={(e) => setClientId(e.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                            <Select
+                                id="subscriptionClient"
+                                value={clientId}
+                                onChange={(e) => setClientId(e.target.value)}
+                                placeholder="Nenhuma / Titular"
                             >
                                 <option value="">Nenhuma / Titular</option>
                                 {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
                     </div>
 
@@ -343,26 +352,25 @@ export default function SubscriptionManagement() {
                         <label htmlFor="subscriptionStatus" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                             Status
                         </label>
-                        <select 
-                            id="subscriptionStatus" 
-                            value={status} 
+                        <Select
+                            id="subscriptionStatus"
+                            value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
                         >
                             <option value="Ativa">Ativa</option>
                             <option value="Inativa">Inativa</option>
-                        </select>
+                        </Select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-[var(--fc-border-subtle)]">
-                    <Button 
-                        variant="secondary" 
+                    <Button
+                        variant="secondary"
                         onClick={handleCloseModal}
                     >
                         Cancelar
                     </Button>
-                    <Button 
-                        variant="primary" 
+                    <Button
+                        variant="primary"
                         type="submit"
                         isLoading={isSubmitting}
                         onClick={handleSaveSubscription}
@@ -373,12 +381,12 @@ export default function SubscriptionManagement() {
             </GenericModal>
 
             {/* Modal de Confirmação de Exclusão */}
-            <GenericModal 
-                isOpen={isConfirmationModalOpen} 
-                onClose={() => setIsConfirmationModalOpen(false)} 
-                onConfirm={handleDeleteSubscriptionConfirmed} 
-                title="Confirmar Exclusão" 
-                isConfirmation={true} 
+            <GenericModal
+                isOpen={isConfirmationModalOpen}
+                onClose={() => setIsConfirmationModalOpen(false)}
+                onConfirm={handleDeleteSubscriptionConfirmed}
+                title="Confirmar Exclusão"
+                isConfirmation={true}
             >
                 <p className="text-sm text-[var(--fc-text-primary)]">
                     Tem certeza que deseja deletar a assinatura <strong className="text-[var(--fc-accent)]">{subscriptions.find(s => s.id === subscriptionToDelete)?.name}</strong>?

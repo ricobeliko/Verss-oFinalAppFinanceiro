@@ -1,6 +1,7 @@
 // src/components/FinancialSandboxSimulatorModal.jsx
 import React, { useState, useMemo } from 'react';
 import GenericModal from './GenericModal';
+import Select from './Select';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange } from '../utils/currency';
 import { calculateInstallments, calculateFutureCommitments } from '../services/financialService';
 
@@ -109,7 +110,7 @@ export default function FinancialSandboxSimulatorModal({
                         <span>🧪</span>
                         <strong>Simulação Temporária:</strong> Nenhum dado real é alterado ou gravado no seu banco.
                     </span>
-                    <span className="text-[10px] uppercase font-bold tracking-wider bg-[var(--fc-accent)] text-carbon-950 px-2.5 py-0.5 rounded-full">
+                    <span className="text-[10px] uppercase font-bold tracking-wider bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] px-2.5 py-0.5 rounded-full">
                         Sandbox
                     </span>
                 </div>
@@ -121,7 +122,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('new_purchase')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'new_purchase'
-                                ? 'bg-[var(--fc-accent)] text-carbon-950 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -132,7 +133,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('cancel_sub')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'cancel_sub'
-                                ? 'bg-[var(--fc-accent)] text-carbon-950 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -143,7 +144,7 @@ export default function FinancialSandboxSimulatorModal({
                         onClick={() => setScenario('simulated_income')}
                         className={`py-2 px-3 text-xs font-bold rounded-xl transition cursor-pointer ${
                             scenario === 'simulated_income'
-                                ? 'bg-[var(--fc-accent)] text-carbon-950 shadow-md'
+                                ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-md'
                                 : 'text-[var(--fc-text-muted)] hover:text-[var(--fc-text-primary)]'
                         }`}
                     >
@@ -173,16 +174,15 @@ export default function FinancialSandboxSimulatorModal({
                                 <label className="block text-xs font-bold text-[var(--fc-text-secondary)] mb-1" htmlFor="simCount">
                                     Quantidade de Parcelas
                                 </label>
-                                <select
+                                <Select
                                     id="simCount"
                                     value={simInstallmentsCount}
                                     onChange={(e) => setSimInstallmentsCount(e.target.value)}
-                                    className="w-full p-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl text-[var(--fc-text-primary)] text-sm focus:outline-none focus:border-[var(--fc-accent)]"
                                 >
                                     {[1, 2, 3, 4, 5, 6, 8, 10, 12, 18, 24].map(n => (
                                         <option key={n} value={n}>{n}x de {formatCurrencyDisplay(parseCurrencyInput(simPurchaseValue) / n)}</option>
                                     ))}
-                                </select>
+                                </Select>
                             </div>
                         </div>
 
@@ -217,11 +217,11 @@ export default function FinancialSandboxSimulatorModal({
                             <label className="block text-xs font-bold text-[var(--fc-text-secondary)] mb-1" htmlFor="subSelect">
                                 Selecione a Assinatura a Cancelar:
                             </label>
-                            <select
+                            <Select
                                 id="subSelect"
                                 value={selectedSubToCancel}
                                 onChange={(e) => setSelectedSubToCancel(e.target.value)}
-                                className="w-full p-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl text-[var(--fc-text-primary)] text-sm focus:outline-none focus:border-[var(--fc-accent)]"
+                                placeholder="Selecione uma assinatura cadastrada..."
                             >
                                 <option value="">Selecione uma assinatura cadastrada...</option>
                                 {subscriptions.map(s => (
@@ -229,7 +229,7 @@ export default function FinancialSandboxSimulatorModal({
                                         {s.name} — {formatCurrencyDisplay(s.amount !== undefined ? s.amount : s.value)}/mês
                                     </option>
                                 ))}
-                            </select>
+                            </Select>
                         </div>
 
                         {subCancelationSavings > 0 && (

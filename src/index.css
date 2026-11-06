@@ -104,7 +104,7 @@
     background-color: var(--fc-field-bg-hover) !important;
   }
 
-  /* Foco e Focus-Visible nítidos no padrão Gold/DS2 */
+  /* Foco e Focus-Visible nitidos no padrao Teal/DS2 */
   input[type="text"]:focus,
   input[type="number"]:focus,
   input[type="month"]:focus,
@@ -278,6 +278,63 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--fc-text-muted);
+}
+
+
+/* ============================================================
+   FinControl Glass Shell & Glass Surfaces (Fase 2)
+   ============================================================ */
+
+.fc-glass-shell {
+  background-color: var(--fc-bg-subtle);
+  background-color: color-mix(in srgb, var(--fc-bg-subtle) 75%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+@supports not (backdrop-filter: blur(12px)) {
+  .fc-glass-shell {
+    background-color: var(--fc-bg-subtle) !important;
+  }
+}
+
+/* Sidebar Glass Translucency com Fallback e Reduced Transparency (Fase 7.2) */
+.fc-glass-sidebar {
+  background-color: var(--fc-surface-1);
+  background-color: color-mix(in srgb, var(--fc-surface-1) var(--fc-sidebar-glass-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--fc-sidebar-glass-blur));
+  backdrop-filter: blur(var(--fc-sidebar-glass-blur));
+  background-image: linear-gradient(180deg, rgba(140, 220, 225, 0.05) 0%, transparent 140px);
+}
+
+[data-theme="light"] .fc-glass-sidebar {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, transparent 140px);
+}
+
+@supports not (backdrop-filter: blur(12px)) {
+  .fc-glass-sidebar {
+    background-color: var(--fc-surface-1) !important;
+    background-image: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .fc-glass-sidebar {
+    background-color: var(--fc-surface-1) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background-image: none !important;
+  }
+}
+
+.fc-glass-card {
+  background-color: var(--fc-surface-1);
+  background-color: color-mix(in srgb, var(--fc-surface-1) 85%, transparent);
+}
+
+.fc-glass-card-elevated {
+  background-color: var(--fc-surface-2);
+  background-color: color-mix(in srgb, var(--fc-surface-2) 88%, transparent);
 }
 
 /* ============================================================

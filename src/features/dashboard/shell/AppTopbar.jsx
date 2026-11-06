@@ -1,6 +1,6 @@
 // src/features/dashboard/shell/AppTopbar.jsx
 import React from 'react';
-import NotificationCenterPopover from '../../../components/NotificationCenterPopover';
+import FinControlMark from '../../../components/FinControlMark';
 
 const SearchIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -37,14 +37,6 @@ const MoonIcon = () => (
   </svg>
 );
 
-const FinControlLogo = ({ className = 'w-5 h-5' }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 export default function AppTopbar({
   onOpenSearch,
   theme,
@@ -53,8 +45,8 @@ export default function AppTopbar({
   mobileMenuTriggerRef,
 }) {
   return (
-    <header className="sticky top-0 z-20 bg-[var(--fc-bg-subtle)]/90 backdrop-blur-md border-b border-[var(--fc-border-subtle)] h-16 px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors">
-      {/* Botão Hamburger e Logo Mobile */}
+    <header className="sticky top-0 z-20 fc-glass-shell border-b border-[var(--fc-border-subtle)] h-16 px-4 sm:px-6 flex items-center justify-between gap-4 transition-colors">
+      {/* Botão Hamburger e Logo Mobile (< 1024px) */}
       <div className="flex items-center gap-2 lg:hidden">
         <button
           ref={mobileMenuTriggerRef}
@@ -66,10 +58,13 @@ export default function AppTopbar({
           <MenuIcon />
         </button>
 
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[var(--fc-surface-2)] text-[var(--fc-accent)] border border-[var(--fc-border-subtle)] flex items-center justify-center shrink-0">
-            <FinControlLogo />
-          </div>
+        <div className="flex items-center gap-2 group/brand">
+          <FinControlMark
+            size={28}
+            animated={true}
+            ariaHidden={true}
+            className="transition-transform duration-200 group-hover/brand:scale-105"
+          />
           <span className="font-semibold text-sm text-[var(--fc-text-primary)]">
             FinControl
           </span>
@@ -97,10 +92,8 @@ export default function AppTopbar({
         </button>
       </div>
 
-      {/* Ações da Direita: Notificações & Alternador de Tema */}
+      {/* Ações da Direita: Alternador de Tema */}
       <div className="flex items-center gap-2 sm:gap-3">
-        <NotificationCenterPopover />
-
         <button
           type="button"
           onClick={onToggleTheme}

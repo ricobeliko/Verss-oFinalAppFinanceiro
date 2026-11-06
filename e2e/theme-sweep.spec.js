@@ -114,7 +114,7 @@ test.describe('FinControl — Full App Light Mode Sweep & Dark Regression Check 
     await assertNotDarkIsland(filterHeader, 'Header de Filtros do Dashboard');
 
     // Valida tabela de faturas
-    const tableContainer = page.locator('table').locator('..').locator('..');
+    const tableContainer = page.locator('table').last().locator('..').locator('..');
     await assertNotDarkIsland(tableContainer, 'Container da Tabela do Dashboard');
   });
 
@@ -184,17 +184,6 @@ test.describe('FinControl — Full App Light Mode Sweep & Dark Regression Check 
     // Abas de Compras, Receitas, Despesas
     const tabsContainer = page.locator('[role="group"][aria-label="Tipos de movimentação"]');
     await assertNotDarkIsland(tabsContainer, 'Seletor de Abas de Movimentação');
-  });
-
-  test('Light Mode Sweep: Modo Crise (Tab Modo Crise) harmonizado em Light Mode', async ({ page }) => {
-    await setupMockSession(page, { theme: 'light' });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
-    await page.getByRole('button', { name: 'Modo Crise' }).first().click();
-
-    // Header do Modo Crise
-    const header = page.locator('h2:has-text("Modo Crise & Raio-X Financeiro")').locator('..').locator('..');
-    await assertNotDarkIsland(header, 'Header do Modo Crise');
   });
 
   test('Dark Mode Regression: Alternância mantém integridade em Dark Mode', async ({ page }) => {
