@@ -15,6 +15,7 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 - **MOTION_PRINCIPLE:** *Alive, layered, responsive, purposeful*.
 - **PRODUCT_PROOF_ONLY:** Toda comunicação visual e textual apoia-se em fatos matemáticos e operacionais comprováveis. Proibida qualquer métrica ou prova social fictícia (`NO_FAKE_SOCIAL_PROOF=true`).
 - **ACCESSIBILITY_FIRST:** Total conformidade com `prefers-reduced-motion: reduce`, touch targets >= 44px e navegação via teclado.
+- **NO_NATIVE_SELECTS_OR_DATE_PICKERS (Regra Constitucional):** Nunca usar `<select>` nativo nem `<input type="month">/<input type="date">` no FinControl. Use sempre `<Select>`, `<MonthPicker>` e `<DatePicker>` de `src/components/`, garantindo acessibilidade (WAI-ARIA combobox/listbox, bottom-sheet mobile >= 44px), tema consistente (*Abyss Teal*) e segurança de fuso horário.
 
 ---
 
