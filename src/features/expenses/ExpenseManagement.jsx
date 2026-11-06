@@ -5,6 +5,7 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from '
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import Select from '../../components/Select';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useCards } from '../../hooks/useCards';
@@ -242,24 +243,24 @@ function ExpenseManagement() {
                     </div>
                     <div>
                         <label htmlFor="expenseCategory" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Categoria</label>
-                        <select id="expenseCategory" value={category} onChange={(e) => setCategory(e.target.value)} required>
+                        <Select id="expenseCategory" value={category} onChange={(e) => setCategory(e.target.value)} required placeholder="Selecione uma categoria">
                             <option value="">Selecione uma categoria</option>
                             {expenseCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
+                        </Select>
                     </div>
                     <div>
                         <label htmlFor="expensePaymentMethod" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Forma de Pagamento</label>
-                        <select id="expensePaymentMethod" value={cardId} onChange={(e) => setCardId(e.target.value)}>
+                        <Select id="expensePaymentMethod" value={cardId} onChange={(e) => setCardId(e.target.value)}>
                             <option value="">Dinheiro/Pix</option>
                             {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                        </select>
+                        </Select>
                     </div>
                     <div>
                         <label htmlFor="expenseClient" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Pessoa (Opcional)</label>
-                        <select id="expenseClient" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+                        <Select id="expenseClient" value={clientId} onChange={(e) => setClientId(e.target.value)}>
                             <option value="">Nenhuma</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                        </select>
+                        </Select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">

@@ -4,6 +4,7 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from '
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import Select from '../../components/Select';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { isValidFinancialValue } from '../../services/financialService';
 import { useIncomes } from '../../hooks/useIncomes';
@@ -219,10 +220,10 @@ function IncomeManagement() {
                     </div>
                     <div>
                         <label htmlFor="incomeClient" className="block text-sm font-medium text-[var(--fc-text-secondary)] mb-1">Pessoa</label>
-                        <select id="incomeClient" value={clientId} onChange={(e) => setClientId(e.target.value)} required>
+                        <Select id="incomeClient" value={clientId} onChange={(e) => setClientId(e.target.value)} required placeholder="Selecione a Pessoa">
                             <option value="">Selecione a Pessoa</option>
                             {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                        </select>
+                        </Select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">

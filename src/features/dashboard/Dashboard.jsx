@@ -27,6 +27,7 @@ import AnimatedProgressBar from '../../components/AnimatedProgressBar';
 import ProFeatureLock from '../../components/ProFeatureLock';
 import UpgradePrompt from '../../components/UpgradePrompt';
 import Spinner from '../../components/Spinner';
+import Select from '../../components/Select';
 import { SkeletonPage } from '../../design-system';
 import Surface from '../../design-system/primitives/Surface';
 import Badge from '../../design-system/primitives/Badge';
@@ -243,7 +244,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             showToast('Não foi possível atualizar o item. Tente novamente.', "error");
         }
     };
-    
+
     const updateInstallmentStatus = async (loanId, personKey, installmentNumber, newStatus) => {
         const loanToUpdate = loans.find(loan => loan.id === loanId);
         if (!loanToUpdate) {
@@ -262,9 +263,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             installmentsList = updatedLoanData.installments;
             originalAmount = updatedLoanData.totalValue;
         }
-        
-        const installmentIndex = Array.isArray(installmentsList) 
-            ? installmentsList.findIndex(installment => installment.number === installmentNumber) 
+
+        const installmentIndex = Array.isArray(installmentsList)
+            ? installmentsList.findIndex(installment => installment.number === installmentNumber)
             : -1;
 
         if (installmentIndex === -1) {
@@ -274,7 +275,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
         installmentsList[installmentIndex].status = newStatus;
         installmentsList[installmentIndex].paidDate = newStatus === 'Paga' ? new Date().toISOString().split('T')[0] : null;
-        
+
         const paidCents = installmentsList
             .filter(installment => installment.status === 'Paga')
             .reduce((sum, installment) => sum + toCents(installment.value || 0), 0);
@@ -386,7 +387,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                     return sortConfig.direction === 'ascending' ? new Date(aValue) - new Date(bValue) : new Date(bValue) - new Date(aValue);
                 }
 
-                return sortConfig.direction === 'ascending' 
+                return sortConfig.direction === 'ascending'
                     ? String(aValue).localeCompare(String(bValue))
                     : String(bValue).localeCompare(String(aValue));
             });
@@ -413,7 +414,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
             };
         }
     }, [isLoading, loans, clients, cards, subscriptions, expenses, paidSubscriptions, selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
-    
+
     const monthlyComparison = useMemo(() => {
         return calculateMonthlyComparisonSummary({
             selectedMonth,
@@ -502,7 +503,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 }
             } else if (item.type === 'Despesa') {
                 const expenseDocRef = doc(db, ...userCollectionPath, userId, 'expenses', item.id);
-                batch.update(expenseDocRef, { 
+                batch.update(expenseDocRef, {
                     status: 'Paga',
                     userId: userId,
                     updatedAt: serverTimestamp()
@@ -581,7 +582,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     if (isLoading) {
         return <SkeletonPage />;
     }
-    
+
     return (
         <div ref={scopeRef} className="space-y-8 animate-fadeIn" aria-busy={isLoading}>
             {isSyncStale && (
@@ -633,7 +634,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 {/* Filtros */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                     <div className="flex items-center gap-2">
-                        <button 
+                        <button
                             type="button"
                             onClick={handlePrevMonth}
                             aria-label="Mês anterior"
@@ -642,14 +643,14 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         >
                             ◀
                         </button>
-                        <input 
-                            type="month" 
-                            value={selectedMonth} 
-                            onChange={(e) => setSelectedMonth(e.target.value)} 
+                        <input
+                            type="month"
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
                             aria-label="Selecionar mês e ano de competência"
-                            className="w-full min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition" 
+                            className="w-full min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
                         />
-                        <button 
+                        <button
                             type="button"
                             onClick={handleNextMonth}
                             aria-label="Próximo mês"
@@ -659,24 +660,24 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                             ▶
                         </button>
                     </div>
-                    <select 
-                        value={selectedCardFilter} 
-                        onChange={(e) => setSelectedCardFilter(e.target.value)} 
+                    <Select
+                        value={selectedCardFilter}
+                        onChange={(e) => setSelectedCardFilter(e.target.value)}
                         aria-label="Filtrar por cartão"
-                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
+                        className="w-full sm:w-auto min-w-[170px]"
                     >
                         <option value="">Todos os Cartões</option>
                         {cards.map(card => (<option key={card.id} value={card.id}>{card.name}</option>))}
-                    </select>
-                    <select 
-                        value={selectedClientFilter} 
-                        onChange={(e) => setSelectedClientFilter(e.target.value)} 
+                    </Select>
+                    <Select
+                        value={selectedClientFilter}
+                        onChange={(e) => setSelectedClientFilter(e.target.value)}
                         aria-label="Filtrar por pessoa"
-                        className="min-h-[44px] px-3.5 py-2.5 bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-xl shadow-sm text-[var(--fc-text-primary)] focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition"
+                        className="w-full sm:w-auto min-w-[170px]"
                     >
                         <option value="">Todas as Pessoas</option>
                         {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
-                    </select>
+                    </Select>
                 </div>
             </Surface>
 
@@ -763,10 +764,10 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
             {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
             {hasProAccess ? (
-                <FutureCommitmentsCard 
-                    loans={loans} 
-                    subscriptions={subscriptions} 
-                    selectedMonth={selectedMonth} 
+                <FutureCommitmentsCard
+                    loans={loans}
+                    subscriptions={subscriptions}
+                    selectedMonth={selectedMonth}
                     clients={clients}
                     selectedClientName={selectedClientNameForProjection}
                 />
@@ -783,7 +784,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 <div className="p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
 
                     <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>
-                    <button 
+                    <button
                         type="button"
                         onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
                         className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 px-4 py-2 rounded-xl hover:bg-[var(--fc-accent)]/20 text-xs font-semibold transition cursor-pointer"
@@ -791,7 +792,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         Marcar Tudo Como Pago
                     </button>
                 </div>
-                
+
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-left border-collapse">
                         <thead>
@@ -845,9 +846,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {item.currentStatus !== 'Paga' && (
-                                                <button 
+                                                <button
                                                     type="button"
-                                                    onClick={() => updateItemStatus(item, 'Paga')} 
+                                                    onClick={() => updateItemStatus(item, 'Paga')}
                                                     aria-label={`Marcar ${item.description} como paga`}
                                                     className="bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-success)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                 >
@@ -855,9 +856,9 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                                 </button>
                                             )}
                                             {item.currentStatus === 'Paga' && (
-                                                 <button 
+                                                 <button
                                                     type="button"
-                                                    onClick={() => updateItemStatus(item, 'Pendente')} 
+                                                    onClick={() => updateItemStatus(item, 'Pendente')}
                                                     aria-label={`Desmarcar ${item.description}`}
                                                     className="bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-danger)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
                                                  >
@@ -879,13 +880,13 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             </div>
 
-            <GenericModal 
-                isOpen={isMarkAllPaidConfirmationOpen} 
-                onClose={() => setIsMarkAllPaidConfirmationOpen(false)} 
-                onConfirm={handleMarkAllAsPaid} 
-                title="Confirmar Ação" 
+            <GenericModal
+                isOpen={isMarkAllPaidConfirmationOpen}
+                onClose={() => setIsMarkAllPaidConfirmationOpen(false)}
+                onConfirm={handleMarkAllAsPaid}
+                title="Confirmar Ação"
                 message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
-                isConfirmation={true} 
+                isConfirmation={true}
             />
 
             <FinancialSandboxSimulatorModal

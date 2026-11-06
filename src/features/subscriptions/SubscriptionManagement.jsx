@@ -6,6 +6,7 @@ import { collection, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from '
 import { useAppContext } from '../../context/AppContext';
 import GenericModal from '../../components/GenericModal';
 import Button from '../../components/Button';
+import Select from '../../components/Select';
 import { SkeletonPage } from '../../design-system';
 import { formatCurrencyDisplay, parseCurrencyInput, handleCurrencyInputChange, formatCurrencyForInput } from '../../utils/currency';
 import { isValidFinancialValue } from '../../services/financialService';
@@ -29,7 +30,7 @@ export default function SubscriptionManagement() {
     const { clients, loading: loadingClients } = useClients();
     const isLoading = loadingSubs || loadingCards || loadingClients;
     useEnterStagger(scopeRef, { ready: !isLoading });
-    
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingSubscription, setEditingSubscription] = useState(null);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
@@ -55,7 +56,7 @@ export default function SubscriptionManagement() {
         setClientId('');
         setStatus('Ativa');
     };
-    
+
     const handleOpenModal = (sub = null) => {
         setEditingSubscription(sub);
         if (sub) {
@@ -181,10 +182,10 @@ export default function SubscriptionManagement() {
                     <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--fc-text-primary)]">Gerenciamento de Assinaturas</h1>
                     <p className="text-sm text-[var(--fc-text-secondary)] mt-1">Controle suas assinaturas e serviços recorrentes com facilidade.</p>
                 </div>
-                <Button 
-                    variant="primary" 
+                <Button
+                    variant="primary"
                     icon={<PlusIcon />}
-                    onClick={() => handleOpenModal()} 
+                    onClick={() => handleOpenModal()}
                     className="w-full sm:w-auto"
                 >
                     Adicionar Assinatura
@@ -211,7 +212,7 @@ export default function SubscriptionManagement() {
                                 <p className={`text-xs mb-5 font-medium ${currentStatus === 'Ativa' ? 'text-[var(--fc-text-secondary)]' : 'text-[var(--fc-text-muted)]'}`}>
                                     Vence dia: <span className="font-bold text-[var(--fc-text-primary)]">{sub.dueDate}</span>
                                 </p>
-                                
+
                                 <div className={`pt-4 border-t space-y-2.5 ${currentStatus === 'Ativa' ? 'text-[var(--fc-text-secondary)] border-[var(--fc-border-subtle)]' : 'text-[var(--fc-text-muted)] border-[var(--fc-border-subtle)]'}`}>
                                     <div className="flex items-center text-xs font-medium">
                                         <UserIcon />
@@ -224,20 +225,20 @@ export default function SubscriptionManagement() {
                                 </div>
                             </div>
                             <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-[var(--fc-border-subtle)]">
-                                <button 
+                                <button
                                     type="button"
-                                    onClick={() => handleOpenModal(sub)} 
+                                    onClick={() => handleOpenModal(sub)}
                                     aria-label={`Editar assinatura ${sub.name || ''}`.trim()}
-                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer p-1" 
+                                    className="text-[var(--fc-accent)] hover:opacity-80 transition cursor-pointer p-1"
                                     title="Editar"
                                 >
                                     <EditIcon />
                                 </button>
-                                <button 
+                                <button
                                     type="button"
-                                    onClick={() => confirmDeleteSubscription(sub.id)} 
+                                    onClick={() => confirmDeleteSubscription(sub.id)}
                                     aria-label={`Excluir assinatura ${sub.name || ''}`.trim()}
-                                    className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition cursor-pointer p-1" 
+                                    className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition cursor-pointer p-1"
                                     title="Excluir"
                                 >
                                     <DeleteIcon />
@@ -251,7 +252,7 @@ export default function SubscriptionManagement() {
                     </div>
                 )}
             </div>
-            
+
             {/* Modal de Cadastro/Edição com Grid Estruturada e Consistente DS2 */}
             <GenericModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingSubscription ? 'Editar Assinatura' : 'Adicionar Assinatura'} maxWidth="max-w-lg">
                 <div className="space-y-4">
@@ -260,14 +261,14 @@ export default function SubscriptionManagement() {
                         <label htmlFor="subscriptionName" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                             Nome da Assinatura
                         </label>
-                        <input 
-                            id="subscriptionName" 
-                            type="text" 
-                            placeholder="Ex: Netflix, Spotify, iCloud" 
-                            value={name} 
-                            onChange={(e) => setName(e.target.value)} 
+                        <input
+                            id="subscriptionName"
+                            type="text"
+                            placeholder="Ex: Netflix, Spotify, iCloud"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm"
-                            required 
+                            required
                         />
                     </div>
 
@@ -281,15 +282,15 @@ export default function SubscriptionManagement() {
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--fc-accent)] font-bold pointer-events-none z-10 text-sm">
                                     R$
                                 </span>
-                                <input 
-                                    id="subscriptionValue" 
-                                    type="text" 
-                                    placeholder="0,00" 
-                                    value={valueInput} 
-                                    onChange={handleCurrencyInputChange(setValueInput)} 
-                                    className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium" 
-                                    required 
-                                    inputMode="decimal" 
+                                <input
+                                    id="subscriptionValue"
+                                    type="text"
+                                    placeholder="0,00"
+                                    value={valueInput}
+                                    onChange={handleCurrencyInputChange(setValueInput)}
+                                    className="w-full min-h-[48px] h-12 currency-input !pl-14 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono font-medium"
+                                    required
+                                    inputMode="decimal"
                                 />
                             </div>
                         </div>
@@ -298,16 +299,16 @@ export default function SubscriptionManagement() {
                             <label htmlFor="subscriptionDueDate" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Dia da Cobrança
                             </label>
-                            <input 
-                                id="subscriptionDueDate" 
-                                type="number" 
-                                placeholder="Ex: 10" 
-                                value={dueDate} 
-                                onChange={(e) => setDueDate(e.target.value)} 
-                                min="1" 
-                                max="31" 
+                            <input
+                                id="subscriptionDueDate"
+                                type="number"
+                                placeholder="Ex: 10"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                min="1"
+                                max="31"
                                 className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm font-mono"
-                                required 
+                                required
                             />
                         </div>
                     </div>
@@ -318,31 +319,31 @@ export default function SubscriptionManagement() {
                             <label htmlFor="subscriptionCard" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Cartão Vinculado
                             </label>
-                            <select 
-                                id="subscriptionCard" 
-                                value={cardId} 
-                                onChange={(e) => setCardId(e.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                            <Select
+                                id="subscriptionCard"
+                                value={cardId}
+                                onChange={(e) => setCardId(e.target.value)}
                                 required
+                                placeholder="Selecione o Cartão"
                             >
                                 <option value="">Selecione o Cartão</option>
                                 {cards.map(card => <option key={card.id} value={card.id}>{card.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
 
                         <div className="w-full">
                             <label htmlFor="subscriptionClient" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                                 Pessoa (Opcional)
                             </label>
-                            <select 
-                                id="subscriptionClient" 
-                                value={clientId} 
-                                onChange={(e) => setClientId(e.target.value)} 
-                                className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
+                            <Select
+                                id="subscriptionClient"
+                                value={clientId}
+                                onChange={(e) => setClientId(e.target.value)}
+                                placeholder="Nenhuma / Titular"
                             >
                                 <option value="">Nenhuma / Titular</option>
                                 {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
                     </div>
 
@@ -351,26 +352,25 @@ export default function SubscriptionManagement() {
                         <label htmlFor="subscriptionStatus" className="block text-xs font-semibold uppercase tracking-wider text-[var(--fc-text-secondary)] mb-1.5">
                             Status
                         </label>
-                        <select 
-                            id="subscriptionStatus" 
-                            value={status} 
+                        <Select
+                            id="subscriptionStatus"
+                            value={status}
                             onChange={(e) => setStatus(e.target.value)}
-                            className="w-full min-h-[48px] h-12 px-3.5 py-2.5 rounded-xl border border-[var(--fc-border-default)] bg-[var(--fc-surface-1)] text-[var(--fc-text-primary)] text-sm focus:ring-2 focus:ring-[var(--fc-focus-ring)] focus:outline-none transition shadow-sm cursor-pointer"
                         >
                             <option value="Ativa">Ativa</option>
                             <option value="Inativa">Inativa</option>
-                        </select>
+                        </Select>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-[var(--fc-border-subtle)]">
-                    <Button 
-                        variant="secondary" 
+                    <Button
+                        variant="secondary"
                         onClick={handleCloseModal}
                     >
                         Cancelar
                     </Button>
-                    <Button 
-                        variant="primary" 
+                    <Button
+                        variant="primary"
                         type="submit"
                         isLoading={isSubmitting}
                         onClick={handleSaveSubscription}
@@ -381,12 +381,12 @@ export default function SubscriptionManagement() {
             </GenericModal>
 
             {/* Modal de Confirmação de Exclusão */}
-            <GenericModal 
-                isOpen={isConfirmationModalOpen} 
-                onClose={() => setIsConfirmationModalOpen(false)} 
-                onConfirm={handleDeleteSubscriptionConfirmed} 
-                title="Confirmar Exclusão" 
-                isConfirmation={true} 
+            <GenericModal
+                isOpen={isConfirmationModalOpen}
+                onClose={() => setIsConfirmationModalOpen(false)}
+                onConfirm={handleDeleteSubscriptionConfirmed}
+                title="Confirmar Exclusão"
+                isConfirmation={true}
             >
                 <p className="text-sm text-[var(--fc-text-primary)]">
                     Tem certeza que deseja deletar a assinatura <strong className="text-[var(--fc-accent)]">{subscriptions.find(s => s.id === subscriptionToDelete)?.name}</strong>?
