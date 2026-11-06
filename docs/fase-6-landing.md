@@ -347,4 +347,49 @@ Foram capturados 20 screenshots em Desktop (1440x900) e Mobile (390x844) nos tem
 5. `desktop-dark-timeline-coerente.png`: Ribbon de 5 meses com contagem de lançamentos e detalhamento explícito (parcelas + assinaturas + avulsas).
 - **Achados e Observações Críticas de Layout:**
   - *Viewport Mobile (390x844):* Ao rolar a página até a timeline ou o simulador, a barra de navegação superior fixa (`position: fixed`) sobrepõe sutilmente a primeira linha de texto do cabeçalho da seção quando o scroll é ancorado no topo exato do elemento. No uso interativo real do usuário (com scroll contínuo), o comportamento é natural, mas na captura estática de elemento (`element.screenshot()`), a barra fixa aparece sobreposta.
-  - *Card Estreito no Mobile:* No primeiro card da timeline (Novembro 2026), o texto de detalhamento `"4 parcelas + 2 assinaturas + 1 avulsa"` é truncado com reticências (`truncate`) devido à largura reduzida da coluna dupla no mobile, mantendo o layout limpo sem quebrar a altura dos cards vizinhos.
+  - *Card Estreito no Mobile (Fase 6.2):* No primeiro card da timeline (Novembro 2026), o texto de detalhamento `"4 parcelas + 2 assinaturas + 1 avulsa"` era truncado com reticências (`truncate`) devido à largura reduzida da coluna dupla no mobile. Esse ponto foi formalmente corrigido e validado na Fase 6.3 abaixo.
+
+---
+
+## 12. Adendo Fase 6.3 — Acabamento da Landing (Texto Público e Mobile)
+
+### 12.1. Varredura e Eliminação de Jargão Técnico em Cópia Pública
+- **Termo Técnico Identificado:**
+  - Em [`src/features/landing/components/SharedPurchaseSection.jsx`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/components/SharedPurchaseSection.jsx#L112), a nota explicativa sob o simulador continha nomes de arquivos de código interno:
+    - *Texto Original:* `"Regra idêntica ao código do FinControl (LoanManagement e financialService)"`
+    - *Texto Corrigido:* `"Mesma regra de divisão usada no FinControl: a segunda pessoa fica sempre com o valor restante exato, e o centavo residual vai para a última parcela."`
+- **Varredura Completa da Cópia Pública:**
+  - Foi executada uma varredura rigorosa em todos os componentes de `src/features/landing/**` e nos textos de upsell em `src/features/subscription/**` buscando menções a nomes de arquivos internos (`financialService`, `LoanManagement`, `sampleData`, `planEntitlements`), termos técnicos inapropriados para o público leigo (`mock`, `Firestore`, `Firebase`, `hook`, `componente`, `payload`, `state`), e métricas falsas.
+  - **Resultado:** Nenhum outro termo técnico encontrado em textos visíveis ao visitante além da linha 112 de `SharedPurchaseSection.jsx`.
+- **Garantia por Teste Automatizado:**
+  - Foi criado o teste unitário [`tests/landingAndUpsellCopy.test.js`](file:///c:/Users/CyberLiko/projects/app-financeiro/tests/landingAndUpsellCopy.test.js) que valida programaticamente o conteúdo de todos os componentes da landing e modais de upsell, garantindo ausência contínua de termos técnicos e preservação da copy honesta.
+
+### 12.2. Ajuste Responsivo da Legenda da Timeline Ribbon (Mobile)
+- **Problema Abordado:**
+  - No viewport mobile com grade de 2 colunas, o primeiro card da timeline (*Novembro 2026*) possuía o detalhamento mais longo (*"4 parcelas + 2 assinaturas + 1 avulsa"*). O uso da classe `truncate` cortava a legenda com `...`, impedindo a leitura completa da composição do mês atual.
+- **Solução Implementada em [`InvoiceTimelineSection.jsx`](file:///c:/Users/CyberLiko/projects/app-financeiro/src/features/landing/components/InvoiceTimelineSection.jsx):**
+  - Substituição de `truncate` por `leading-snug break-words`.
+  - Estruturação do card com layout flex vertical (`flex flex-col justify-between`) para garantir alinhamento harmônico de altura entre cards vizinhos.
+  - Refinamento do padding interno de `p-5` para `p-3.5 sm:p-5`, mantendo respiro e legibilidade.
+  - Ajuste de responsividade da escala sutil do primeiro card (`sm:scale-[1.02]`), evitando transbordamento horizontal em telas de largura ultracompacta ($\le 320$px).
+- **Validação Automatizada em Múltiplos Viewports:**
+  - A suite E2E [`e2e/landing-and-navigation.spec.js`](file:///c:/Users/CyberLiko/projects/app-financeiro/e2e/landing-and-navigation.spec.js) adicionou validação automatizada iterando sobre 4 viewports:
+    - **320px (ultracompacto):** Legenda completa visível, zero reticências (`...` ou `…`), e `document.documentElement.scrollWidth === document.documentElement.clientWidth` (zero scroll horizontal).
+    - **360px (Android compacto):** Legenda completa visível, zero reticências, zero scroll horizontal.
+    - **390px (iPhone padrão):** Legenda completa visível, zero reticências, zero scroll horizontal.
+    - **768px (Tablet):** Legenda completa visível, zero reticências, zero scroll horizontal.
+  - Todos os 4 testes foram aprovados no Chromium com 100% de sucesso.
+
+### 12.3. Relatório de Inspeção Visual dos Screenshots (via `read_file`)
+Os screenshots oficiais foram gerados pelo Playwright diretamente no diretório `screenshots/` (gitignored, garantindo integridade de `public/`):
+
+1. **Desktop 1440x900 — Tema Escuro (`desktop-1440-dark-landing-full.png` — 822.970 bytes):**
+   - *Inspeção Visual:* Fundo Abyss Teal profundo (`#04171F`) com iluminação ambiente suave. O cabeçalho exibe o logotipo animado FinControl e links de ancoragem funcionais. O Living Ledger renderiza com nitidez a fatura atual de R$ 3.840,25 com a cota pendente do Lucas (R$ 575,00) e o rodapé de tolerância zero ("R$ 0,00"). Todas as seções subsequentes (Proof Strip, 3 passos, Visão Panorâmica, Simulador de 2 pessoas sem nomes de arquivo internos, Timeline de 5 meses com o card de R$ 0,01, Grid de 6 recursos essenciais, Tabela de Preços Free vs Pro sem Modo Crise e CTA final) encontram-se perfeitamente diagramadas sem falhas de renderização ou sobreposição.
+2. **Desktop 1440x900 — Tema Claro (`desktop-1440-light-landing-full.png` — 832.959 bytes):**
+   - *Inspeção Visual:* Fundo claro e arejado com superfícies em tons sutis de ciano-acinzentado (`#E6F4F7` / `#FFFFFF`). Tipografia em slate escuro de alto contraste garantindo conformidade WCAG AA/AAA. Todos os números de faturas, contagens de lançamentos e badges de status coincidem de maneira idêntica com o tema escuro.
+3. **Mobile 390x844 — Tema Escuro (`mobile-390-dark-landing-full.png` — 768.072 bytes):**
+   - *Inspeção Visual:* Adaptação fluida para dispositivos móveis com alinhamento vertical balanceado. O cabeçalho apresenta botão de alternância de tema e menu hambúrguer com áreas de toque seguras ($\ge 44$px). O simulador exibe os botões seletores de parcelas em grade acessível. Na timeline de faturas, a legenda do card de Novembro 2026 (*"4 parcelas + 2 assinaturas + 1 avulsa"*) quebra naturalmente em duas linhas legíveis, sem reticências e sem gerar rolagem horizontal na viewport.
+4. **Mobile 390x844 — Tema Claro (`mobile-390-light-landing-full.png` — 767.574 bytes):**
+   - *Inspeção Visual:* Versão móvel sob tema claro perfeitamente legível, destacando as badges dos meses (*Atual*, *Previsto*, *Final*), a cota individual de despesas compartilhadas e o callout explicativo do princípio de R$ 0,01.
+5. **Mobile 320x640 — Seção da Timeline Dark (`mobile-320-dark-timeline.png` — 98.122 bytes):**
+   - *Inspeção Visual:* Captura de detalhe no menor viewport de smartphone. Os cards da timeline em grade de 2 colunas acomodam integralmente os valores monetários, a contagem de lançamentos e o detalhamento completo sem truncamento. O texto *"4 parcelas + 2 assinaturas + 1 avulsa"* quebra em duas linhas com leading confortável, sem vazamento de margens ou deslocamento do container.

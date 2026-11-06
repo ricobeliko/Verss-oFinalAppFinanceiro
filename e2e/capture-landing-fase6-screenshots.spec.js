@@ -1,10 +1,86 @@
 /* global process */
 // e2e/capture-landing-fase6-screenshots.spec.js
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const outDir = path.resolve('screenshots');
+
+test.describe('Captura Oficial de Provas Visuais — Fase 6.3 (Somente em screenshots/)', () => {
+  test.beforeEach(() => {
+    test.setTimeout(60000);
+    test.skip(
+      process.env.CAPTURE_SCREENSHOTS !== '1',
+      'Execução opt-in com CAPTURE_SCREENSHOTS=1'
+    );
+  });
+
+  test.beforeAll(() => {
+    fs.mkdirSync(outDir, { recursive: true });
+  });
+
+  const fullViewports = [
+    { name: 'desktop-1440', width: 1440, height: 900 },
+    { name: 'mobile-390', width: 390, height: 844 },
+  ];
+
+  const themes = ['dark', 'light'];
+
+  for (const vp of fullViewports) {
+    for (const th of themes) {
+      test(`Captura Landing Completa ${vp.name} - ${th}`, async ({ page }) => {
+        await page.setViewportSize({ width: vp.width, height: vp.height });
+        await page.goto('/');
+
+        // Aguarda montagem completa da Landing e saída do fallback de Suspense
+        await expect(page.locator('h1')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('#invoices-timeline')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('footer')).toBeVisible({ timeout: 15000 });
+
+        // Alterna tema se necessário
+        const currentTheme = await page.locator('html').getAttribute('data-theme');
+        if (currentTheme !== th) {
+          const toggleBtn = page.locator('header button[aria-label*="Alternar"]:visible').first();
+          await toggleBtn.click();
+          await expect(page.locator('html')).toHaveAttribute('data-theme', th, { timeout: 5000 });
+        }
+
+        // Rola a página para acionar renderização e acomodação de todas as seções
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(400);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.waitForTimeout(800);
+
+        await page.screenshot({
+          path: path.join(outDir, `${vp.name}-${th}-landing-full.png`),
+          fullPage: true,
+        });
+      });
+    }
+  }
+
+  test('Captura Mobile 320x640 - Seção da Timeline (dark)', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto('/');
+
+    await expect(page.locator('h1')).toBeVisible({ timeout: 15000 });
+    const timeline = page.locator('#invoices-timeline');
+    await expect(timeline).toBeVisible({ timeout: 15000 });
+
+    const currentTheme = await page.locator('html').getAttribute('data-theme');
+    if (currentTheme !== 'dark') {
+      const toggleBtn = page.locator('header button[aria-label*="Alternar"]:visible').first();
+      await toggleBtn.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark', { timeout: 5000 });
+    }
+
+    await timeline.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+    await timeline.screenshot({
+      path: path.join(outDir, 'mobile-320-dark-timeline.png'),
+    });
+  });
+});
 
 test.describe('Captura Oficial de Provas Visuais — Fase 6.2 (Somente em screenshots/)', () => {
   test.beforeEach(() => {
