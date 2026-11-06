@@ -194,7 +194,7 @@ const LivingLedgerStage = forwardRef(function LivingLedgerStage({ prefersReduced
         <div className="space-y-2.5">
           <div className="text-xs font-semibold text-[var(--fc-text-secondary)] tracking-wider uppercase flex items-center justify-between px-1">
             <span>Lançamentos Recentes</span>
-            <span className="text-[var(--fc-accent)] text-[11px] lowercase">3 itens ativos</span>
+            <span className="text-[var(--fc-accent)] text-[11px] lowercase">3 itens em destaque</span>
           </div>
 
           {/* Row 1: Shared Purchase */}
@@ -208,7 +208,7 @@ const LivingLedgerStage = forwardRef(function LivingLedgerStage({ prefersReduced
                   {sharedNotebook.title} ({sharedNotebook.installments})
                 </p>
                 <p className="text-xs text-[var(--fc-text-secondary)] truncate flex items-center gap-1.5">
-                  <span className="text-[var(--fc-info)]">Divisão 50%</span> • {sharedNotebook.debtorName} deve {sharedNotebook.debtorShareDisplay}
+                  <span className="text-[var(--fc-info)]">Divisão {sharedNotebook.splitPercent}</span> • {sharedNotebook.debtorName} deve {sharedNotebook.debtorShareDisplay}
                 </p>
               </div>
             </div>

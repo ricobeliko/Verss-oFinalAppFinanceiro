@@ -58,8 +58,11 @@ export default function InvoiceTimelineSection() {
               </div>
 
               <div className="text-xs text-[var(--fc-text-secondary)] flex items-center gap-1.5">
-                <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)]" />
-                <span>{m.installments} {m.installments === 1 ? 'parcela ativa' : 'parcelas ativas'}</span>
+                <FiClock className="w-3.5 h-3.5 text-[var(--fc-accent)] shrink-0" />
+                <span>{m.entriesCount} {m.entriesCount === 1 ? 'lançamento' : 'lançamentos'}</span>
+              </div>
+              <div className="text-[10px] text-[var(--fc-text-muted)] mt-1 truncate" title={m.entriesDetail}>
+                {m.entriesDetail}
               </div>
             </div>
           ))}
