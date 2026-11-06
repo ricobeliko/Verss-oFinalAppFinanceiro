@@ -41,8 +41,8 @@ export default function InvoiceTimelineSection() {
               }`}
             >
               <div>
-                <div className="flex items-center justify-between text-xs mb-3 gap-1">
-                  <span className="text-[var(--fc-text-secondary)] font-medium text-[11px] sm:text-xs truncate">
+                <div className="flex flex-wrap items-center justify-between text-xs mb-3 gap-1.5">
+                  <span className="text-[var(--fc-text-secondary)] font-medium text-[11px] sm:text-xs">
                     {m.month} {m.year}
                   </span>
                   <span
