@@ -1,38 +1,64 @@
 // src/features/landing/components/SharedPurchaseSection.jsx
 import React, { useState, useId } from 'react';
-import { FiUsers, FiCheck, FiShield } from 'react-icons/fi';
+import { FiUsers, FiCheck, FiShield, FiAlertCircle } from 'react-icons/fi';
 import {
   parseCurrencyToCents,
-  splitExactCents,
+  splitSharedPurchaseTwoPeople,
   formatCentsDisplay,
   formatCentsForInput,
   MAX_INPUT_LENGTH,
 } from '../lib/splitExactCents';
 
 export default function SharedPurchaseSection() {
-  const [inputValue, setInputValue] = useState('1.000,00');
-  const [peopleCount, setPeopleCount] = useState(3);
+  const [totalInput, setTotalInput] = useState('1.000,00');
+  const [splitMode, setSplitMode] = useState('half'); // 'half' | 'custom'
+  const [person1Input, setPerson1Input] = useState('500,00');
+  const [installments, setInstallments] = useState(1);
 
-  const inputId = useId();
-  const helpId = useId();
+  const totalInputId = useId();
+  const person1InputId = useId();
+  const totalHelpId = useId();
+  const person1HelpId = useId();
 
-  const totalCents = parseCurrencyToCents(inputValue);
-  const splitResult = totalCents !== null ? splitExactCents(totalCents, peopleCount) : null;
+  const totalCents = parseCurrencyToCents(totalInput);
+  const person1Cents = splitMode === 'custom' ? parseCurrencyToCents(person1Input) : null;
 
-  const handleChange = (e) => {
+  const result = totalCents !== null
+    ? splitSharedPurchaseTwoPeople({
+        totalCents,
+        mode: splitMode,
+        person1CentsInput: person1Cents,
+        installmentsCount: installments,
+      })
+    : null;
+
+  const handleTotalChange = (e) => {
     const val = e.target.value;
     if (val.length <= MAX_INPUT_LENGTH) {
-      setInputValue(val);
+      setTotalInput(val);
     }
   };
 
-  const handleBlur = () => {
+  const handleTotalBlur = () => {
     if (totalCents !== null) {
-      setInputValue(formatCentsForInput(totalCents));
+      setTotalInput(formatCentsForInput(totalCents));
     }
   };
 
-  const mockNames = ['Você', 'Lucas', 'Mariana', 'Beatriz', 'Felipe'];
+  const handlePerson1Change = (e) => {
+    const val = e.target.value;
+    if (val.length <= MAX_INPUT_LENGTH) {
+      setPerson1Input(val);
+    }
+  };
+
+  const handlePerson1Blur = () => {
+    if (person1Cents !== null) {
+      setPerson1Input(formatCentsForInput(person1Cents));
+    }
+  };
+
+  const installmentOptions = [1, 2, 3, 6, 10, 12];
 
   return (
     <section id="shared-purchases" className="py-24 scroll-mt-20 bg-[var(--fc-bg)] relative overflow-hidden">
@@ -40,16 +66,16 @@ export default function SharedPurchaseSection() {
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
-          {/* Left Column: Explanatory & Math Integrity */}
+          {/* Left Column: Product Proof & App-identical Rule */}
           <div className="lg:col-span-6">
             <span className="text-xs font-semibold text-[var(--fc-accent)] uppercase tracking-wider px-3 py-1 rounded-full bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/20">
-              Engenharia de Divisão
+              Compra Compartilhada Fiel ao App
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--fc-text-primary)] mt-4 mb-4 tracking-tight leading-tight">
-              Fim das discussões de "quem deve quanto" no final do mês.
+              Divisão exata entre duas pessoas com cálculo de parcelas sem centavos perdidos.
             </h2>
             <p className="text-[var(--fc-text-secondary)] text-base leading-relaxed mb-6">
-              Quando você passa uma compra conjunta no seu cartão de crédito (uma viagem, o jantar com amigos, ou uma assinatura compartilhada), o FinControl calcula a fração exata de cada um sem deixar centavos perdidos no limbo.
+              No FinControl, uma compra compartilhada divide o valor total entre duas pessoas: você define a fração da primeira pessoa (ou divide meio a meio) e a segunda pessoa fica com o complemento exato.
             </p>
 
             <div className="space-y-3.5 mb-8">
@@ -58,7 +84,7 @@ export default function SharedPurchaseSection() {
                   <FiCheck className="w-3 h-3" />
                 </div>
                 <p className="text-sm text-[var(--fc-text-secondary)]">
-                  <strong className="text-[var(--fc-text-primary)]">Precisão em Cada Centavo:</strong> A soma das partes sempre resulta rigorosamente no valor total da transação.
+                  <strong className="text-[var(--fc-text-primary)]">Complemento Rigoroso:</strong> O valor da Pessoa 2 é rigorosamente o total menos a Pessoa 1 em centavos inteiros.
                 </p>
               </div>
 
@@ -67,7 +93,7 @@ export default function SharedPurchaseSection() {
                   <FiCheck className="w-3 h-3" />
                 </div>
                 <p className="text-sm text-[var(--fc-text-secondary)]">
-                  <strong className="text-[var(--fc-text-primary)]">Controle de Reembolsos:</strong> Saiba quem já fez o Pix e quem ainda está com o pagamento pendente.
+                  <strong className="text-[var(--fc-text-primary)]">Resíduo na Última Parcela:</strong> Quando a divisão do parcelamento gera resto, o centavo residual é absorvido na última parcela.
                 </p>
               </div>
 
@@ -76,14 +102,14 @@ export default function SharedPurchaseSection() {
                   <FiCheck className="w-3 h-3" />
                 </div>
                 <p className="text-sm text-[var(--fc-text-secondary)]">
-                  <strong className="text-[var(--fc-text-primary)]">Parcelamentos Compartilhados:</strong> Se a compra for parcelada, o FinControl projeta a cobrança mês a mês para todos.
+                  <strong className="text-[var(--fc-text-primary)]">Zero Drift Financeiro:</strong> A soma das parcelas de cada pessoa fecha 100% com o total da transação.
                 </p>
               </div>
             </div>
 
             <div className="inline-flex items-center gap-2 p-3 rounded-xl bg-[var(--fc-surface-1)] border border-[var(--fc-border-subtle)] text-xs text-[var(--fc-text-secondary)]">
               <FiShield className="text-[var(--fc-accent)] w-4 h-4 shrink-0" />
-              <span>Cálculos realizados com validação exata em centavos no FinControl.</span>
+              <span>Regra idêntica ao código do FinControl (LoanManagement e financialService).</span>
             </div>
           </div>
 
@@ -98,21 +124,21 @@ export default function SharedPurchaseSection() {
                 <div className="w-8 h-8 rounded-lg bg-[var(--fc-accent-soft)] border border-[var(--fc-accent)]/30 flex items-center justify-center text-[var(--fc-accent)]">
                   <FiUsers className="w-4 h-4" />
                 </div>
-                <span className="text-sm font-bold text-[var(--fc-text-primary)]">Simulador de Divisão Exata</span>
+                <span className="text-sm font-bold text-[var(--fc-text-primary)]">Simulador de Compra Compartilhada</span>
                 <span className="text-[10px] font-medium text-[var(--fc-text-muted)] px-1.5 py-0.5 rounded bg-[var(--fc-surface-2)]">
                   Dados de exemplo
                 </span>
               </div>
               <span className="text-[11px] font-semibold text-[var(--fc-success)] bg-[var(--fc-success-soft)] px-2.5 py-0.5 rounded-full border border-[var(--fc-success)]/30">
-                Exatidão Ativa
+                2 Pessoas
               </span>
             </div>
 
-            {/* Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {/* Total Input & Mode Switch */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label
-                  htmlFor={inputId}
+                  htmlFor={totalInputId}
                   className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2"
                 >
                   Valor Total da Compra (R$)
@@ -122,100 +148,165 @@ export default function SharedPurchaseSection() {
                     R$
                   </span>
                   <input
-                    id={inputId}
+                    id={totalInputId}
                     type="text"
                     inputMode="decimal"
                     autoComplete="off"
-                    value={inputValue}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    value={totalInput}
+                    onChange={handleTotalChange}
+                    onBlur={handleTotalBlur}
                     placeholder="1.000,00"
-                    aria-describedby={helpId}
+                    aria-describedby={totalHelpId}
                     className="w-full bg-transparent border-0 py-2.5 pr-3 text-sm text-[var(--fc-text-primary)] focus:outline-none tabular-nums"
                   />
                 </div>
-                <span id={helpId} className="sr-only">
-                  Digite o valor total em reais para calcular a divisão exata em centavos
+                <span id={totalHelpId} className="sr-only">
+                  Digite o valor total em reais para calcular a divisão entre duas pessoas
                 </span>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
-                  Pessoas na Divisão ({peopleCount})
-                </label>
+                <span className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
+                  Modo de Rateio
+                </span>
                 <div
                   role="group"
-                  aria-label="Pessoas na divisão"
+                  aria-label="Modo de divisão entre duas pessoas"
                   className="flex items-center gap-2"
                 >
-                  {[2, 3, 4, 5].map((cnt) => (
-                    <button
-                      key={cnt}
-                      type="button"
-                      onClick={() => setPeopleCount(cnt)}
-                      aria-pressed={peopleCount === cnt}
-                      aria-label={`${cnt} pessoas`}
-                      className={`min-h-[44px] min-w-[44px] flex-1 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                        peopleCount === cnt
-                          ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
-                          : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
-                      }`}
-                    >
-                      {cnt}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSplitMode('half')}
+                    aria-pressed={splitMode === 'half'}
+                    className={`min-h-[44px] flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      splitMode === 'half'
+                        ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
+                        : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
+                    }`}
+                  >
+                    Meio a meio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitMode('custom')}
+                    aria-pressed={splitMode === 'custom'}
+                    className={`min-h-[44px] flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      splitMode === 'custom'
+                        ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
+                        : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
+                    }`}
+                  >
+                    Definir Pessoa 1
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Live Distribution Output */}
+            {/* Custom Person 1 Input Field (When mode === 'custom') */}
+            {splitMode === 'custom' && (
+              <div className="mb-4 animate-in fade-in duration-200">
+                <label
+                  htmlFor={person1InputId}
+                  className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2"
+                >
+                  Valor da Pessoa 1 (Você)
+                </label>
+                <div className="relative flex items-center bg-[var(--fc-surface-2)] border border-[var(--fc-border-default)] rounded-xl focus-within:border-[var(--fc-accent)] focus-within:ring-1 focus-within:ring-[var(--fc-accent)] transition-colors">
+                  <span className="pl-3 pr-1 text-xs font-medium text-[var(--fc-text-muted)] select-none">
+                    R$
+                  </span>
+                  <input
+                    id={person1InputId}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={person1Input}
+                    onChange={handlePerson1Change}
+                    onBlur={handlePerson1Blur}
+                    placeholder="500,00"
+                    aria-describedby={person1HelpId}
+                    className="w-full bg-transparent border-0 py-2.5 pr-3 text-sm text-[var(--fc-text-primary)] focus:outline-none tabular-nums"
+                  />
+                </div>
+                <span id={person1HelpId} className="sr-only">
+                  Digite a parte da Pessoa 1; a Pessoa 2 receberá o valor restante exato
+                </span>
+              </div>
+            )}
+
+            {/* Installments Selector */}
+            <div className="mb-6">
+              <span className="block text-xs font-medium text-[var(--fc-text-secondary)] mb-2">
+                Parcelas da Compra ({installments}x)
+              </span>
+              <div
+                role="group"
+                aria-label="Número de parcelas"
+                className="grid grid-cols-3 sm:grid-cols-6 gap-2"
+              >
+                {installmentOptions.map((cnt) => (
+                  <button
+                    key={cnt}
+                    type="button"
+                    onClick={() => setInstallments(cnt)}
+                    aria-pressed={installments === cnt}
+                    aria-label={`${cnt} parcelas`}
+                    className={`min-h-[44px] min-w-[44px] py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      installments === cnt
+                        ? 'bg-[var(--fc-accent)] text-[var(--fc-accent-contrast)] shadow-sm'
+                        : 'bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] hover:text-[var(--fc-text-primary)] border border-[var(--fc-border-subtle)]'
+                    }`}
+                  >
+                    {cnt}x
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Error Message if Person 1 > Total */}
+            {result?.error && (
+              <div className="mb-4 p-3 rounded-xl bg-[var(--fc-danger-soft)] border border-[var(--fc-danger)]/30 text-xs text-[var(--fc-danger)] flex items-center gap-2">
+                <FiAlertCircle className="w-4 h-4 shrink-0" />
+                <span>{result.error}</span>
+              </div>
+            )}
+
+            {/* Results Output */}
             <div className="space-y-2.5 mb-6">
               <div className="text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider mb-2">
                 Resultado por Pessoa:
               </div>
               <div aria-live="polite" className="space-y-2.5">
-                {splitResult ? (
-                  splitResult.sharesCents.map((shareCents, idx) => (
+                {result && !result.error ? (
+                  [result.person1, result.person2].map((person, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)]"
+                      className="p-3.5 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-[var(--fc-accent-soft)] text-xs font-bold text-[var(--fc-accent)] flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-full bg-[var(--fc-accent-soft)] text-xs font-bold text-[var(--fc-accent)] flex items-center justify-center shrink-0">
                           {idx + 1}
                         </div>
-                        <span className="text-xs font-medium text-[var(--fc-text-primary)]">
-                          {mockNames[idx] || `Pessoa ${idx + 1}`}
-                        </span>
+                        <div>
+                          <span className="text-xs font-semibold text-[var(--fc-text-primary)] block">
+                            {person.name}
+                          </span>
+                          <span className="text-[11px] text-[var(--fc-text-secondary)] tabular-nums">
+                            {person.plan.summaryText}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-[var(--fc-text-primary)] font-mono tabular-nums">
-                          {formatCentsDisplay(shareCents)}
+                      <div className="text-right self-end sm:self-auto">
+                        <span className="text-sm font-bold text-[var(--fc-text-primary)] tabular-nums">
+                          {person.display}
                         </span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  Array.from({ length: peopleCount }).map((_, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] opacity-70"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-[var(--fc-surface-1)] text-xs font-bold text-[var(--fc-text-muted)] flex items-center justify-center">
-                          {idx + 1}
-                        </div>
-                        <span className="text-xs font-medium text-[var(--fc-text-muted)]">
-                          {mockNames[idx] || `Pessoa ${idx + 1}`}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-medium text-[var(--fc-text-muted)] italic">
-                          Informe um valor
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                  <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] text-center text-xs text-[var(--fc-text-muted)] italic">
+                    {result?.error ? 'Corrija o valor acima para ver o resultado' : 'Informe um valor para simular a divisão'}
+                  </div>
                 )}
               </div>
             </div>
@@ -223,15 +314,15 @@ export default function SharedPurchaseSection() {
             {/* Math Audit Box */}
             <div className="p-4 rounded-xl bg-[var(--fc-surface-2)] border border-[var(--fc-border-subtle)] flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Soma das Parcelas</span>
-                <span className="text-sm font-bold text-[var(--fc-success)] font-mono tabular-nums">
-                  {splitResult ? formatCentsDisplay(splitResult.sumCents) : '—'}
+                <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Soma das Partes</span>
+                <span className="text-sm font-bold text-[var(--fc-success)] tabular-nums">
+                  {result && !result.error ? formatCentsDisplay(result.sumCents) : '—'}
                 </span>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-[var(--fc-text-muted)] uppercase block">Diferença Residual</span>
-                <span className="text-sm font-bold text-[var(--fc-accent)] font-mono tabular-nums">
-                  {splitResult ? formatCentsDisplay(splitResult.driftCents) : '—'}
+                <span className="text-sm font-bold text-[var(--fc-accent)] tabular-nums">
+                  {result && !result.error ? formatCentsDisplay(result.driftCents) : '—'}
                 </span>
               </div>
             </div>

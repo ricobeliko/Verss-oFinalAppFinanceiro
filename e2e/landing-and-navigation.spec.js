@@ -258,7 +258,7 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     }
   });
 
-  test('Simulador de Divisão Exata: corrige bug do 11000, valida digitação, estado vazio e divisão de 5 pessoas', async ({ page }) => {
+  test('Simulador de Compra Compartilhada Fiel ao App: 2 pessoas, modo meio a meio e parcelas com centavo residual', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
 
@@ -266,60 +266,67 @@ test.describe('E2E Real Browser - Landing Page Oficial e Navegação Pública', 
     await expect(sharedSection).toBeVisible();
     await sharedSection.scrollIntoViewIfNeeded();
 
-    const input = sharedSection.locator('input[type="text"]');
+    const input = sharedSection.locator('input[type="text"]').first();
     await expect(input).toBeVisible();
     await expect(input).toHaveValue('1.000,00');
 
-    // Estado inicial: 3 pessoas, total 1.000,00 -> 333,34 / 333,33 / 333,33
-    await expect(sharedSection.locator('text=R$ 333,34')).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 333,33').first()).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
-
-    // 1. Testa reprodução do bug antigo: apagar tudo e digitar 1000 não pode virar 11000
+    // 1. Apagar tudo e digitar "1000" caractere a caractere não vira "11000"
     await input.click();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await input.pressSequentially('1000', { delay: 50 });
     await page.locator('body').click(); // dispara onBlur
-
-    // Verifica que formatou para 1.000,00 e não 11.000,00
     await expect(input).toHaveValue('1.000,00');
 
-    // Clica no botão de 2 pessoas
-    const btn2 = sharedSection.getByRole('button', { name: '2 pessoas' });
-    await btn2.click();
-    await expect(btn2).toHaveAttribute('aria-pressed', 'true');
-    // 2 pessoas com 1.000,00 -> cada uma R$ 500,00
+    // Estado inicial: meio a meio, 1 parcela de R$ 1.000,00 -> Você R$ 500,00 e Lucas R$ 500,00
     await expect(sharedSection.locator('text=R$ 500,00').first()).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=1 × R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,00').first()).toBeVisible(); // Soma das Partes
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible(); // Diferença Residual
 
-    // 2. Testa estado vazio: apagar tudo
+    // 2. Meio a meio com R$ 1.000,01 dá R$ 500,00 e R$ 500,01
     await input.click();
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
-    await page.locator('body').click(); // dispara onBlur
+    await input.pressSequentially('1000,01', { delay: 50 });
+    await page.locator('body').click(); // onBlur
+    await expect(input).toHaveValue('1.000,01');
 
-    // Cards exibem "Informe um valor" e auditoria exibe "—"
-    await expect(sharedSection.locator('text=Informe um valor').first()).toBeVisible();
-    await expect(sharedSection.locator('text=—').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 500,00').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 500,01').first()).toBeVisible();
+    await expect(sharedSection.locator('text=R$ 1.000,01').first()).toBeVisible(); // Soma das Partes
+    await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible(); // Diferença Residual
 
-    // 3. Testa valor com centavos e 5 pessoas: 1.234,56
+    // 3. Com 3 parcelas, a última parcela absorve o resíduo
+    // Para R$ 500,00 em 3x: 166,66, 166,66, 166,68 -> "2 × R$ 166,66 + última R$ 166,68"
+    // Para R$ 500,01 em 3x: 166,67, 166,67, 166,67 -> "3 × R$ 166,67"
+    const btn3x = sharedSection.getByRole('button', { name: '3 parcelas' });
+    await btn3x.click();
+    await expect(btn3x).toHaveAttribute('aria-pressed', 'true');
+
+    await expect(sharedSection.locator('text=2 × R$ 166,66 + última R$ 166,68')).toBeVisible();
+    await expect(sharedSection.locator('text=3 × R$ 166,67')).toBeVisible();
+
+    // 4. Valores aparecem com ponto de milhar, a soma bate e a diferença é R$ 0,00
     await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
     await input.pressSequentially('1234,56', { delay: 50 });
-    await page.locator('body').click(); // dispara onBlur
+    await page.locator('body').click();
     await expect(input).toHaveValue('1.234,56');
 
-    const btn5 = sharedSection.getByRole('button', { name: '5 pessoas' });
-    await btn5.click();
-    await expect(btn5).toHaveAttribute('aria-pressed', 'true');
-
-    // 1234,56 / 5 = 246,91 com resto de 1 centavo: primeiro recebe 246,92 e demais 246,91
-    await expect(sharedSection.locator('text=R$ 246,92')).toBeVisible();
-    await expect(sharedSection.locator('text=R$ 246,91').first()).toBeVisible();
+    // 1.234,56 / 2 = 617,28 cada um. Em 3x: 617,28 / 3 = 205,76 (3 parcelas iguais)
+    await expect(sharedSection.locator('text=R$ 617,28').first()).toBeVisible();
     await expect(sharedSection.locator('text=R$ 1.234,56').first()).toBeVisible();
     await expect(sharedSection.locator('text=R$ 0,00').first()).toBeVisible();
+
+    // 5. Estado vazio: apagar tudo
+    await input.click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.locator('body').click();
+    await expect(sharedSection.locator('text=Informe um valor para simular a divisão')).toBeVisible();
+    await expect(sharedSection.locator('text=—').first()).toBeVisible();
   });
 
   test('Performance e Motion: FinControlMark sempre animada não gera Long Tasks nem CLS em repouso', async ({ page }) => {
