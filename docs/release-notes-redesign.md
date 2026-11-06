@@ -41,16 +41,18 @@ Para simplificar a manutenção e focar o app nas dores reais (cartões de créd
 
 | Funcionalidade Removida | Onde Ficava | Os Dados Continuam no Firestore? | Substituto / Onde Consultar |
 | :--- | :--- | :--- | :--- |
-| **Modo Crise** | Aba/Modal lateral de emergência financeira | Sim (apenas lia despesas e cartões em runtime) | Gestão normal de parcelas e cartões no Dashboard e Faturas. |
-| **Resumo Executivo** | Modal acessível pelo Dashboard | Sim (não gravava dados; apenas compilava métricas) | Novos KPIs do Dashboard e Gráfico de Evolução Mensal. |
-| **Alertas & Notificações** | Sininho e banner de notificações no Dashboard | Sim (`notificationSettings` preservado no documento do usuário) | Indicadores visuais diretos nos cartões e status de faturas. |
-| **Metas de Orçamento por Categoria** | Widget e Modal no Dashboard | Sim (objeto `budgets` no documento do usuário preservado intacto) | Visualização de Gastos por Pessoa na fatura e no Dashboard. |
-| **Auditoria Relâmpago / Insights Determinísticos** | Widget informativo no Dashboard | Sim (processamento puramente em memória) | KPIs analíticos e visão unificada de faturas. |
-| **Total Receitas / Balanço Geral no Dashboard** | Cards superiores de receita e saldo | Sim (coleção `incomes` e aba Movimentações intactas) | Aba "Movimentações" dedicada a receitas e despesas avulsas. |
-| **Exportação CSV Geral no Dashboard** | Botão de exportar no topo do Dashboard | Sim (lançamentos preservados) | Exportação CSV individual e anual na aba "Pessoas". |
+| **Modo Crise** | Aba/Modal lateral de emergência (`src/features/crisis/CrisisMode.jsx`) | **Sim** (não gravava coleção própria; lia despesas e cartões em runtime) | Gestão normal de parcelas e cartões no Dashboard e Faturas. |
+| **Resumo Executivo** | Modal acessível por botão no Dashboard (`src/components/ExecutiveSummaryModal.jsx`) | **Sim** (não gravava dados no Firestore; métricas puramente calculadas em memória) | Novos KPIs do Dashboard e Gráfico de Evolução Mensal. |
+| **Alertas & Notificações** | Sininho no Topbar e banner no Dashboard (`FinancialAlertsBanner.jsx`, `NotificationCenterPopover.jsx`, `NotificationSettingsModal.jsx`) | **Sim** (o objeto `notificationSettings` no documento do usuário em `users/{uid}` foi preservado 100% intacto, sem exclusões ou migrações) | Indicadores visuais diretos nos cartões e status de faturas (pendente, pago, atrasado). |
+| **Metas de Orçamento por Categoria** | Widget e Modal no Dashboard (`src/components/CategoryBudgetsWidget.jsx`, `src/components/CategoryBudgetsModal.jsx`) | **Sim** (o objeto `budgets` no documento do usuário em `users/{uid}` foi preservado 100% intacto, sem alterações de schema) | Sem substituto direto (análise agora é focada em gastos por pessoa e fechamento de fatura). |
+| **Metas & Quitação de Dívidas** | Widget no Dashboard na grade de inteligência Pro (`src/features/dashboard/Dashboard.jsx`) | **Sim** (não gravava campos isolados como `debtGoals` no usuário; lia diretamente o array `installments` de `loans`. Todas as compras e parcelas continuam 100% íntegras no Firestore) | Sem substituto direto como widget isolado no Dashboard; a consulta de parcelas restantes e término é feita diretamente na listagem de compras da fatura e na aba Movimentações. |
+| **Auditoria Relâmpago** | Widget no Dashboard na grade de inteligência Pro (`src/features/dashboard/Dashboard.jsx`) | **Sim** (não gravava dados; compilava em memória o custo mensal de `subscriptions` ativas) | Aba dedicada "Assinaturas" e novos KPIs unificados de fatura do Dashboard. |
+| **Insights Determinísticos** | Widget de dicas automatizadas no Dashboard (`src/components/DeterministicInsightsWidget.jsx`) | **Sim** (processamento puramente em memória; nenhum dado persistido) | Sem substituto. |
+| **Total Receitas / Balanço Geral no Dashboard** | Cards superiores de receita e saldo no Dashboard (`src/features/dashboard/ProSummary.jsx`) | **Sim** (a coleção `incomes` e todos os lançamentos continuam 100% intactos no Firestore) | Aba "Movimentações" dedicada ao histórico e cadastro de receitas e despesas avulsas. |
+| **Exportação CSV Geral no Dashboard** | Botão de download no topo do Dashboard (`src/features/dashboard/Dashboard.jsx`) | **Sim** (todos os lançamentos permanecem intactos) | Exportação CSV individual e anual na aba "Pessoas" (`FinancialReportModal.jsx`), focada em prestação de contas. |
 
 > [!NOTE]
-> **Garantia de Preservação de Dados:** Nenhuma rotina de exclusão ou migração destrutiva foi executada no Firestore. Os schemas de usuário, cartões, compras e transações continuam 100% retrocompatíveis.
+> **Garantia de Preservação de Dados:** Nenhuma rotina de exclusão ou migração destrutiva foi executada no Firestore. Os schemas de usuário, cartões, compras, parcelas, receitas e transações continuam 100% retrocompatíveis.
 
 ---
 
@@ -104,39 +106,53 @@ Caso seja identificado qualquer comportamento anômalo pós-deploy, o procedimen
 ## 6. Checklist de Deploy para o Proprietário
 
 > [!IMPORTANT]
-> Siga rigorosamente este roteiro numerado. O deploy só deve ser executado para o **Hosting**.
+> Siga rigorosamente este roteiro numerado. O release preflight só aprovará após o merge em `main` e o deploy só deve ser executado para o **Hosting**.
 
 1. [ ] **Backup de Segurança:** Confirmar backup recente do Firestore (conforme `docs/disaster-recovery.md`).
 2. [ ] **CI Verde no GitHub:** Aguardar todas as checks automatizadas da PR passarem (Lint, Testes Vitest, Build).
 3. [ ] **Revisão Visual em Homologação:** Acessar a aplicação com a conta real (apenas para navegação visual, sem lançar dados críticos).
-4. [ ] **Merge Manual da PR:** Fazer o merge da PR na branch `main` via GitHub (Create a merge commit).
+4. [ ] **Merge Manual da PR:** Fazer o merge da PR na branch `main` via GitHub (*Create a merge commit*).
 5. [ ] **Puxar `main` Atualizada Localmente:**
    ```powershell
    git checkout main
    git pull origin main
    ```
-6. [ ] **Conferir Variáveis de Ambiente de Produção:**
-   - Verificar se o arquivo `.env.production` local existe e contém `VITE_FIREBASE_APPCHECK_SITE_KEY` e demais chaves `VITE_FIREBASE_*` preenchidas.
-7. [ ] **Executar o Preflight Operacional:**
+6. [ ] **Configurar Ambiente Node 22 LTS:**
+   - O Release Preflight reprova versões fora do Node 22 (como Node 24).
+   - Use o `nvm-windows` para alternar:
+     ```powershell
+     nvm use 22
+     node -v  # Deve retornar v22.x.x
+     ```
+7. [ ] **Criar Arquivo `.env.production`:**
+   - Crie o arquivo `.env.production` localmente a partir de `.env.production.example`.
+   - Preencha com os valores reais das credenciais públicas do Firebase Web SDK do projeto `controle-de-cartao` e a chave `VITE_FIREBASE_APPCHECK_SITE_KEY`.
+   - > [!CAUTION]
+     > NUNCA faça commit de arquivos `.env` ou `.env.production`.
+8. [ ] **Instalar Dependências Limpas e Compilar:**
    ```powershell
    npm ci
    npm run build
+   ```
+9. [ ] **Executar o Release Preflight Operacional:**
+   ```powershell
    node scripts/release/preflight.js --expected-head $(git rev-parse HEAD)
    ```
-   *(Todos os gates operacionais devem retornar verde).*
-8. [ ] **Deploy Exclusivo de Hosting:**
+   - Conferir que **TODOS** os gates retornam verde (inclusive `NODE_22`, `HEAD_MATCH`, `ORIGIN_MAIN_MATCH`, `DIST_PRESENT` e `DEMO_FALLBACK_ABSENT`).
+   - Conferir que o erro de `"demo-e2e-api-key"` desapareceu graças ao `.env.production`.
+10. [ ] **Deploy Exclusivo de Hosting:**
    ```powershell
    firebase deploy --only hosting --project controle-de-cartao
    ```
    > [!CAUTION]
-   > NUNCA execute `firebase deploy` sem `--only hosting`. Deploy de rules, functions ou indexes está restrito e desnecessário nesta etapa.
-9. [ ] **Teste de Fumaça Pós-Deploy:**
+   > NUNCA execute `firebase deploy` sem `--only hosting`. Deploy de rules, functions ou indexes está bloqueado e desnecessário nesta etapa.
+11. [ ] **Teste de Fumaça Pós-Deploy:**
    - Carregar a Landing (`/`) e testar o simulador de divisão.
    - Verificar o favicon da aba do navegador.
    - Fazer login na conta real.
    - Navegar pelo Dashboard, verificar KPIs, filtros de cartões, rosca de pessoas e gráfico de evolução.
    - Abrir os seletores próprios (`MonthPicker` e `Select`) e constatar ausência de popups nativos cinzas.
-10. [ ] **Aviso aos Usuários:** Publicar comunicado amigável sobre a nova interface.
+12. [ ] **Aviso aos Usuários:** Publicar comunicado amigável sobre a nova interface.
 
 ---
 
