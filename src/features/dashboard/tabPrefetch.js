@@ -47,10 +47,18 @@ export function prefetchTab(tabKey) {
 }
 
 /**
- * Dispara o download em background de todas as abas secundárias.
+ * Dispara o download em background de todas as abas secundárias,
+ * escalonando as requisições em intervalos de idle para não competir
+ * com o render e a interatividade da tela inicial.
  */
 export function prefetchAllTabs() {
-  Object.keys(TAB_LOADERS).forEach((key) => {
-    prefetchTab(key);
+  const keys = Object.keys(TAB_LOADERS);
+  keys.forEach((key, index) => {
+    const delay = index * 300;
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => prefetchTab(key), { timeout: 2000 + delay });
+    } else {
+      setTimeout(() => prefetchTab(key), 1000 + delay);
+    }
   });
 }

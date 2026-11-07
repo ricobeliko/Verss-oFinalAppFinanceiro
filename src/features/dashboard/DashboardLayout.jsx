@@ -166,9 +166,9 @@ export default function DashboardLayout() {
 
     if (typeof window !== 'undefined') {
       if (typeof window.requestIdleCallback === 'function') {
-        idleId = window.requestIdleCallback(doPrefetch, { timeout: 400 });
+        idleId = window.requestIdleCallback(doPrefetch, { timeout: 2500 });
       } else {
-        timeoutId = window.setTimeout(doPrefetch, 250);
+        timeoutId = window.setTimeout(doPrefetch, 1500);
       }
     }
 

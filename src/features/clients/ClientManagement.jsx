@@ -44,6 +44,16 @@ export default function ClientManagement({ selectedMonth }) {
         });
     }, [allLoans, allExpenses, allSubscriptions, clients, currentMonth]);
 
+    const receivablesByClientMap = useMemo(() => {
+        const map = new Map();
+        if (receivablesData?.byClient) {
+            receivablesData.byClient.forEach(c => {
+                if (c) map.set(c.clientId, c);
+            });
+        }
+        return map;
+    }, [receivablesData]);
+
     // --- Estados para o formulário de ADIÇÃO ---
     const [newClientName, setNewClientName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -255,7 +265,7 @@ export default function ClientManagement({ selectedMonth }) {
                         </thead>
                         <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
                             {clients.length > 0 ? clients.map((client) => {
-                                const clientRec = receivablesData.byClient.find(c => c.clientId === client.id) || {
+                                const clientRec = receivablesByClientMap.get(client.id) || {
                                     receivableThisMonth: 0,
                                     paidThisMonth: 0,
                                     pendingThisMonth: 0,
