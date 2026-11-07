@@ -17,6 +17,8 @@ const TRANSITIONS = [
 const CPU_RATES = [1, 4, 6];
 
 test.describe('Bloco C: Medição Sistemática de Fluidez da Troca de Abas', () => {
+  test.skip(!process.env.FC_PERF, 'benchmark de performance: rode com FC_PERF=1');
+
   test('Mede trocas de abas sob CPU 1x, 4x e 6x com profiling CDP e detecção de Long Tasks', async ({ browser }) => {
     test.setTimeout(300000);
     const heavyData = getHeavyAccountData('2026-11');

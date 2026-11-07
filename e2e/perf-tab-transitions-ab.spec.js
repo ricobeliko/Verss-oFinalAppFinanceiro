@@ -50,6 +50,8 @@ const CPU_RATES = [1, 4, 6];
 const REPETITIONS = 7;
 
 test.describe('FinControl — Benchmark Científico A/B de Troca de Abas (N >= 7, 1x, 4x, 6x)', () => {
+  test.skip(!process.env.FC_PERF, 'benchmark de performance: rode com FC_PERF=1');
+
   test('Executa N=7 medições sistemáticas por cenário e calcula Mediana e P90', async ({ browser }) => {
     test.setTimeout(1200000); // 20 minutos para suite completa de múltiplos cenários em CPU 1x, 4x e 6x
     const heavyData = getHeavyAccountData('2026-11');
