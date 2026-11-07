@@ -221,6 +221,9 @@ export default function DashboardLayout() {
   return (
     <div
       data-theme={theme}
+      style={{
+        '--fc-sidebar-width': isSidebarCollapsed ? '72px' : '256px',
+      }}
       className="min-h-screen bg-[var(--fc-bg)] text-[var(--fc-text-primary)] flex overflow-x-hidden font-sans fc-shell-enter transition-colors relative"
     >
       {/* Camada Atmosférica Viva (Fixed Background) */}
@@ -261,6 +264,9 @@ export default function DashboardLayout() {
         triggerRef={mobileMenuTriggerRef}
       />
 
+      {/* Véu de Transição da Janela / Canvas Inteiro (à direita da Sidebar) */}
+      <PageWaveSweep ref={waveSweepRef} />
+
       {/* Canvas Principal: Topbar + Conteúdo */}
       <div
         ref={scrollContainerRef}
@@ -274,8 +280,7 @@ export default function DashboardLayout() {
           mobileMenuTriggerRef={mobileMenuTriggerRef}
         />
 
-        <main className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl flex-1 relative z-10">
-          <PageWaveSweep ref={waveSweepRef} />
+        <main className="w-full mx-auto p-4 sm:p-6 lg:p-8 2xl:px-10 3xl:px-12 4xl:px-16 max-w-7xl 2xl:max-w-[1536px] 3xl:max-w-[1760px] 4xl:max-w-[1920px] flex-1 relative z-10">
           <div ref={contentWrapperRef} className="w-full">
             {renderActivePage()}
           </div>

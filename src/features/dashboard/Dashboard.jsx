@@ -747,37 +747,39 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
             </div>
 
-            {/* Gráfico Destaque: Evolução Mensal de Compromissos (Histórico + Projeção com Recharts) */}
-            <MonthlyEvolutionChart
-                loans={loans}
-                subscriptions={subscriptions}
-                expenses={expenses}
-                cards={cards}
-                selectedMonth={selectedMonth}
-                selectedCardFilter={selectedCardFilter}
-                clients={clients}
-                isPro={isPro}
-                isTrialActive={isTrialActive}
-                onUpgradeClick={handleUpgradeClick}
-                theme={theme}
-            />
-
-            {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
-            {hasProAccess ? (
-                <FutureCommitmentsCard
+            {/* Gráficos e Projeção Lado a Lado em Telas Grandes (>= 1536px / 2xl), Empilhados em Telas Menores */}
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 items-start">
+                <MonthlyEvolutionChart
                     loans={loans}
                     subscriptions={subscriptions}
+                    expenses={expenses}
+                    cards={cards}
                     selectedMonth={selectedMonth}
+                    selectedCardFilter={selectedCardFilter}
                     clients={clients}
-                    selectedClientName={selectedClientNameForProjection}
+                    isPro={isPro}
+                    isTrialActive={isTrialActive}
+                    onUpgradeClick={handleUpgradeClick}
+                    theme={theme}
                 />
-            ) : (
-                <ProFeatureLock
-                    title="Projeção de Faturas Futuras"
-                    description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
-                    onAction={() => setIsUpgradeModalOpen(true)}
-                />
-            )}
+
+                {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
+                {hasProAccess ? (
+                    <FutureCommitmentsCard
+                        loans={loans}
+                        subscriptions={subscriptions}
+                        selectedMonth={selectedMonth}
+                        clients={clients}
+                        selectedClientName={selectedClientNameForProjection}
+                    />
+                ) : (
+                    <ProFeatureLock
+                        title="Projeção de Faturas Futuras"
+                        description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
+                        onAction={() => setIsUpgradeModalOpen(true)}
+                    />
+                )}
+            </div>
 
             {/* Tabela de Itens da Fatura */}
             <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">

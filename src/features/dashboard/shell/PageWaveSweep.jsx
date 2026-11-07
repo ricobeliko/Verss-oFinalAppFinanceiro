@@ -428,7 +428,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
     <div
       ref={waveContainerRef}
       data-fc-wave-sweep="true"
-      className="absolute inset-0 z-20 pointer-events-none overflow-hidden"
+      className="fixed top-0 right-0 bottom-0 z-[25] pointer-events-none overflow-hidden left-0 lg:left-[var(--fc-sidebar-width,256px)] transition-[left] duration-200"
       aria-hidden="true"
       style={{ display: 'none' }}
     >
