@@ -382,18 +382,20 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
             const safeClients = Array.isArray(clients) ? clients : [];
             const safeCards = Array.isArray(cards) ? cards : [];
+            const clientNameMap = new Map(safeClients.filter(Boolean).map(c => [c.id, c.name || '']));
+            const cardNameMap = new Map(safeCards.filter(Boolean).map(c => [c.id, c.name || '']));
 
             const sortedItems = [...breakdown.items].sort((a, b) => {
                 let aValue = a[sortConfig.key] || '';
                 let bValue = b[sortConfig.key] || '';
 
                 if (sortConfig.key === 'clientId') {
-                    aValue = safeClients.find(c => c && c.id === a.clientId)?.name || '';
-                    bValue = safeClients.find(c => c && c.id === b.clientId)?.name || '';
+                    aValue = clientNameMap.get(a.clientId) || '';
+                    bValue = clientNameMap.get(b.clientId) || '';
                 }
                 if (sortConfig.key === 'cardId') {
-                    aValue = safeCards.find(c => c && c.id === a.cardId)?.name || '';
-                    bValue = safeCards.find(c => c && c.id === b.cardId)?.name || '';
+                    aValue = cardNameMap.get(a.cardId) || '';
+                    bValue = cardNameMap.get(b.cardId) || '';
                 }
 
                 if (sortConfig.key === 'dueDate') {
