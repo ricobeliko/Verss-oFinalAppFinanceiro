@@ -1,6 +1,6 @@
 // src/features/dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import useEnterStagger from '../../hooks/useEnterStagger';
 import { collection, getDocs, doc, updateDoc, writeBatch, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
@@ -70,6 +70,18 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
     const scopeRef = useRef(null);
+    const tableScrollRef = useRef(null);
+    const [showLeftScrollShadow, setShowLeftScrollShadow] = useState(false);
+    const [showRightScrollShadow, setShowRightScrollShadow] = useState(false);
+
+    const updateScrollShadows = useCallback(() => {
+        const el = tableScrollRef.current;
+        if (!el) return;
+        const { scrollLeft, scrollWidth, clientWidth } = el;
+        setShowLeftScrollShadow(scrollLeft > 4);
+        setShowRightScrollShadow(scrollWidth - (scrollLeft + clientWidth) > 4);
+    }, []);
+
     useEnterStagger(scopeRef, { ready: !isLoading });
 
     useEffect(() => {
@@ -459,6 +471,12 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         setSortConfig({ key, direction });
     };
 
+    useEffect(() => {
+        updateScrollShadows();
+        window.addEventListener('resize', updateScrollShadows);
+        return () => window.removeEventListener('resize', updateScrollShadows);
+    }, [updateScrollShadows, displayableItems]);
+
     const handleMarkAllAsPaid = async () => {
         setIsMarkAllPaidConfirmationOpen(false);
         const batch = writeBatch(db);
@@ -783,102 +801,255 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
             {/* Tabela de Itens da Fatura */}
             <div data-enter="item" className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] rounded-3xl shadow-[var(--fc-shadow-md)] overflow-hidden">
-                <div className="p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-
-                    <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>
+                <div className="p-4 sm:p-6 border-b border-[var(--fc-border-subtle)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h3 className="text-base font-bold text-[var(--fc-text-primary)]">Itens da Fatura</h3>
+                        <p className="text-xs text-[var(--fc-text-secondary)] mt-0.5">
+                            {displayableItems.length} {displayableItems.length === 1 ? 'item listado' : 'itens listados'} no mês
+                        </p>
+                    </div>
                     <button
                         type="button"
                         onClick={() => setIsMarkAllPaidConfirmationOpen(true)}
-                        className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 px-4 py-2 rounded-xl hover:bg-[var(--fc-accent)]/20 text-xs font-semibold transition cursor-pointer"
+                        className="bg-[var(--fc-accent-soft)] text-[var(--fc-accent)] border border-[var(--fc-accent)]/30 px-4 py-2 rounded-xl hover:bg-[var(--fc-accent)]/20 text-xs font-semibold transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
                     >
                         Marcar Tudo Como Pago
                     </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="min-w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
-                                <th scope="col" aria-sort={sortConfig.key === 'type' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('type')}>
-                                    Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
-                                </th>
-                                <th scope="col" className="px-6 py-4">Descrição</th>
-                                <th scope="col" aria-sort={sortConfig.key === 'clientId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('clientId')}>
-                                    Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
-                                </th>
-                                <th scope="col" aria-sort={sortConfig.key === 'cardId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'} className="px-6 py-4 cursor-pointer" onClick={() => requestSort('cardId')}>
-                                    Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
-                                </th>
-                                <th scope="col" className="px-6 py-4">Valor da Parcela</th>
-                                <th scope="col" className="px-6 py-4">Nº Parcelas</th>
-                                <th scope="col" className="px-6 py-4">Status</th>
-                                <th scope="col" className="px-6 py-4">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
-                            {displayableItems.length > 0 ? displayableItems.map((item) => {
-                                const client = clients.find(c => c.id === item.clientId);
-                                const card = cards.find(c => c.id === item.cardId);
-                                return (
-                                    <tr key={item.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)] font-medium">{item.type}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-[var(--fc-text-primary)]">{item.description}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">{client?.name || '---'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
-                                            {card ? (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: card.color || '#5CCCCC' }} aria-hidden="true"></div>
-                                                    <span>{card.name}</span>
-                                                </div>
-                                            ) : '---'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap font-bold text-[var(--fc-accent)] font-mono">{formatCurrencyDisplay(item.value)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-[var(--fc-text-secondary)]">
-                                            {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-                                                item.currentStatus === 'Paga' ? 'bg-[var(--fc-success-soft)] text-[var(--fc-success)] border-[var(--fc-success)]/30' :
-                                                item.currentStatus === 'Pendente' ? 'bg-[var(--fc-warning-soft)] text-[var(--fc-warning)] border-[var(--fc-warning)]/30' :
-                                                item.currentStatus === 'Atrasado' ? 'bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] border-[var(--fc-danger)]/30' :
-                                                'bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border-[var(--fc-border-default)]'
-                                            }`}>
-                                                {item.currentStatus}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {item.currentStatus !== 'Paga' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => updateItemStatus(item, 'Paga')}
-                                                    aria-label={`Marcar ${item.description} como paga`}
-                                                    className="bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-success)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
-                                                >
-                                                    Marcar Paga
-                                                </button>
-                                            )}
-                                            {item.currentStatus === 'Paga' && (
-                                                 <button
-                                                    type="button"
-                                                    onClick={() => updateItemStatus(item, 'Pendente')}
-                                                    aria-label={`Desmarcar ${item.description}`}
-                                                    className="bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-danger)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
-                                                 >
-                                                     Desmarcar
-                                                 </button>
-                                            )}
+                {/* Modo Tabela para Telas Médias e Grandes (sm:block, >= 640px) */}
+                <div className="relative hidden sm:block">
+                    {/* Indicadores de overflow com gradiente sutil quando houver rolagem horizontal */}
+                    {showLeftScrollShadow && (
+                        <div
+                            className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[var(--fc-surface-1)] to-transparent pointer-events-none z-10"
+                            aria-hidden="true"
+                        />
+                    )}
+                    {showRightScrollShadow && (
+                        <div
+                            className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[var(--fc-surface-1)] to-transparent pointer-events-none z-10"
+                            aria-hidden="true"
+                        />
+                    )}
+
+                    <div
+                        ref={tableScrollRef}
+                        onScroll={updateScrollShadows}
+                        className="overflow-x-auto"
+                    >
+                        <table className="w-full text-left border-collapse table-auto">
+                            <thead>
+                                <tr className="border-b border-[var(--fc-border-subtle)] text-xs font-semibold text-[var(--fc-text-secondary)] uppercase tracking-wider bg-[var(--fc-surface-2)]">
+                                    <th
+                                        scope="col"
+                                        aria-sort={sortConfig.key === 'type' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'}
+                                        className="px-3 sm:px-4 py-3 cursor-pointer whitespace-nowrap text-left"
+                                        onClick={() => requestSort('type')}
+                                    >
+                                        Tipo {sortConfig.key === 'type' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        aria-sort={sortConfig.key === 'description' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'}
+                                        className="px-3 sm:px-4 py-3 cursor-pointer text-left"
+                                        onClick={() => requestSort('description')}
+                                    >
+                                        Descrição {sortConfig.key === 'description' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        aria-sort={sortConfig.key === 'clientId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'}
+                                        className="px-3 sm:px-4 py-3 cursor-pointer whitespace-nowrap text-left"
+                                        onClick={() => requestSort('clientId')}
+                                    >
+                                        Pessoa {sortConfig.key === 'clientId' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        aria-sort={sortConfig.key === 'cardId' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'}
+                                        className="px-3 sm:px-4 py-3 cursor-pointer whitespace-nowrap text-left"
+                                        onClick={() => requestSort('cardId')}
+                                    >
+                                        Cartão {sortConfig.key === 'cardId' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        aria-sort={sortConfig.key === 'value' ? (sortConfig.direction === 'ascending' ? 'ascending' : 'descending') : 'none'}
+                                        className="px-3 sm:px-4 py-3 cursor-pointer whitespace-nowrap text-right"
+                                        onClick={() => requestSort('value')}
+                                    >
+                                        Valor {sortConfig.key === 'value' && <SortIcon direction={sortConfig.direction} />}
+                                    </th>
+                                    <th scope="col" className="px-3 sm:px-4 py-3 whitespace-nowrap text-center">
+                                        Nº Parcelas
+                                    </th>
+                                    <th scope="col" className="px-3 sm:px-4 py-3 whitespace-nowrap text-center">
+                                        Status
+                                    </th>
+                                    <th scope="col" className="px-3 sm:px-4 py-3 whitespace-nowrap text-right">
+                                        Ações
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
+                                {displayableItems.length > 0 ? displayableItems.map((item) => {
+                                    const client = clients.find(c => c.id === item.clientId);
+                                    const card = cards.find(c => c.id === item.cardId);
+                                    return (
+                                        <tr key={item.id} className="hover:bg-[var(--fc-surface-2)]/50 transition-colors">
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-xs text-[var(--fc-text-secondary)] font-medium">
+                                                {item.type}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 font-semibold text-[var(--fc-text-primary)] text-sm max-w-[200px] xl:max-w-[320px] 2xl:max-w-none truncate" title={item.description}>
+                                                {item.description}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-xs text-[var(--fc-text-secondary)] max-w-[130px] xl:max-w-[180px] truncate" title={client?.name || '---'}>
+                                                {client?.name || '---'}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-xs text-[var(--fc-text-secondary)] max-w-[140px] xl:max-w-[190px] truncate" title={card?.name || '---'}>
+                                                {card ? (
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                        <div className="w-2.5 h-2.5 rounded-full shadow-sm shrink-0" style={{ backgroundColor: card.color || '#5CCCCC' }} aria-hidden="true"></div>
+                                                        <span className="truncate">{card.name}</span>
+                                                    </div>
+                                                ) : '---'}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap font-bold text-[var(--fc-accent)] font-mono text-right text-sm">
+                                                {formatCurrencyDisplay(item.value)}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-xs text-[var(--fc-text-secondary)] text-center">
+                                                {item.type === 'Parcela' ? `${item.number}/${item.installmentsCount}` : '1/1'}
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-center">
+                                                <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+                                                    item.currentStatus === 'Paga' ? 'bg-[var(--fc-success-soft)] text-[var(--fc-success)] border-[var(--fc-success)]/30' :
+                                                    item.currentStatus === 'Pendente' ? 'bg-[var(--fc-warning-soft)] text-[var(--fc-warning)] border-[var(--fc-warning)]/30' :
+                                                    item.currentStatus === 'Atrasado' ? 'bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] border-[var(--fc-danger)]/30' :
+                                                    'bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border-[var(--fc-border-default)]'
+                                                }`}>
+                                                    {item.currentStatus}
+                                                </span>
+                                            </td>
+                                            <td className="px-3 sm:px-4 py-3 whitespace-nowrap text-right">
+                                                {item.currentStatus !== 'Paga' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateItemStatus(item, 'Paga')}
+                                                        aria-label={`Marcar ${item.description} como paga`}
+                                                        className="bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-success)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
+                                                    >
+                                                        Marcar Paga
+                                                    </button>
+                                                )}
+                                                {item.currentStatus === 'Paga' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateItemStatus(item, 'Pendente')}
+                                                        aria-label={`Desmarcar ${item.description}`}
+                                                        className="bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition border border-[var(--fc-danger)]/20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
+                                                    >
+                                                        Desmarcar
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                }) : (
+                                    <tr>
+                                        <td colSpan="8" className="text-center py-12 text-[var(--fc-text-muted)]">
+                                            Nenhum item na fatura para os filtros selecionados.
                                         </td>
                                     </tr>
-                                );
-                            }) : (
-                                <tr>
-                                    <td colSpan="8" className="text-center py-12 text-[var(--fc-text-muted)]">
-                                        Nenhum item na fatura para os filtros selecionados.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Modo Cards Empilhados para Mobile (< 640px) */}
+                <div className="block sm:hidden divide-y divide-[var(--fc-border-subtle)]" data-testid="invoice-cards-mobile">
+                    {displayableItems.length > 0 ? displayableItems.map((item) => {
+                        const client = clients.find(c => c.id === item.clientId);
+                        const card = cards.find(c => c.id === item.cardId);
+                        return (
+                            <div key={item.id} className="p-4 space-y-3 hover:bg-[var(--fc-surface-2)]/30 transition-colors">
+                                {/* Linha 1: Descrição e Valor */}
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <span className="text-[11px] font-medium text-[var(--fc-text-secondary)] uppercase tracking-wider block mb-0.5">
+                                            {item.type} {item.type === 'Parcela' ? `(${item.number}/${item.installmentsCount})` : ''}
+                                        </span>
+                                        <p className="text-sm font-semibold text-[var(--fc-text-primary)] break-words" title={item.description}>
+                                            {item.description}
+                                        </p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="font-bold text-[var(--fc-accent)] font-mono text-base block">
+                                            {formatCurrencyDisplay(item.value)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Linha 2: Badges compactos de Responsável e Cartão */}
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    {client && (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] border border-[var(--fc-border-subtle)]" title={client.name}>
+                                            <svg className="w-3.5 h-3.5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                                                <circle cx="12" cy="7" r="4" />
+                                            </svg>
+                                            <span className="truncate max-w-[130px]">{client.name}</span>
+                                        </span>
+                                    )}
+                                    {card && (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--fc-surface-2)] text-[var(--fc-text-secondary)] border border-[var(--fc-border-subtle)]" title={card.name}>
+                                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: card.color || '#5CCCCC' }} aria-hidden="true" />
+                                            <span className="truncate max-w-[130px]">{card.name}</span>
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Linha 3: Status e Ação com hit target acessível (min-h-[44px]) */}
+                                <div className="flex items-center justify-between pt-1 gap-2">
+                                    <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                                        item.currentStatus === 'Paga' ? 'bg-[var(--fc-success-soft)] text-[var(--fc-success)] border-[var(--fc-success)]/30' :
+                                        item.currentStatus === 'Pendente' ? 'bg-[var(--fc-warning-soft)] text-[var(--fc-warning)] border-[var(--fc-warning)]/30' :
+                                        item.currentStatus === 'Atrasado' ? 'bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] border-[var(--fc-danger)]/30' :
+                                        'bg-[var(--fc-surface-2)] text-[var(--fc-text-muted)] border-[var(--fc-border-default)]'
+                                    }`}>
+                                        {item.currentStatus}
+                                    </span>
+
+                                    <div>
+                                        {item.currentStatus !== 'Paga' ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => updateItemStatus(item, 'Paga')}
+                                                aria-label={`Marcar ${item.description} como paga`}
+                                                className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold bg-[var(--fc-success-soft)] text-[var(--fc-success)] hover:bg-[var(--fc-success)]/20 border border-[var(--fc-success)]/30 transition cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
+                                            >
+                                                Marcar Paga
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => updateItemStatus(item, 'Pendente')}
+                                                aria-label={`Desmarcar ${item.description}`}
+                                                className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold bg-[var(--fc-danger-soft)] text-[var(--fc-danger)] hover:bg-[var(--fc-danger)]/20 border border-[var(--fc-danger)]/30 transition cursor-pointer flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[var(--fc-focus-ring)]"
+                                            >
+                                                Desmarcar
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }) : (
+                        <div className="text-center py-12 text-[var(--fc-text-muted)] text-sm">
+                            Nenhum item na fatura para os filtros selecionados.
+                        </div>
+                    )}
                 </div>
             </div>
 
