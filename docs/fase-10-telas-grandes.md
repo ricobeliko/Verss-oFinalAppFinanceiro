@@ -69,9 +69,10 @@ Na primeira rodada da Fase 10 (Bloco C), foram observadas aparentes pioras nas m
 1. **Resumo -> Pessoas (fria, 1x):** A maior Long Task saltou de 163ms para 690ms e o TBT de 206ms para 731ms.
    - **Causa Raiz 1 (Prefetch Concorrente Agressivo no Boot):** O prefetch de abas foi configurado com `timeout: 400ms` via `requestIdleCallback` (e 250ms de fallback). Logo após o carregamento inicial do Resumo, 4 módulos pesados (`Pessoas`, `Cartões`, `Movimentações`, `Assinaturas`) eram importados dinamicamente em paralelo. Nos primeiros 5 segundos de boot, isso gerava **2.531ms de TBT** e 9 a 11 Long Tasks na thread principal. Ao navegar para "Pessoas" logo no início, os scripts ainda estavam sendo compilados pelo motor V8 concorrendo com o render.
    - **Causa Raiz 2 (Busca O(N) Iterativa em Pessoas):** Em `src/features/clients/ClientManagement.jsx`, cada linha da tabela de clientes executava `receivablesData.byClient.find(c => c.clientId === client.id)`. Com múltiplos clientes e dezenas de movimentações, o render da tabela incorria em complexidade quadrática repetida.
-2. **Resumo -> Pessoas (quente, 1x):** O tempo total medido saltou de 509ms para 2.606ms.
-   - **Explicação Técnica (Comparação de Métricas Desiguais):** No baseline original de `origin/main`, **não existia véu cinematográfico** (`PageWaveSweep`), ocorrendo um corte seco na tela. Os 509ms mediam apenas a troca síncrona do componente React. Na Fase 10, a transição é envolvida pela onda líquida completa (`coverIn` de 450ms + `hold/settle` de 120ms + `reveal` de 600ms = ~1.170ms a 1.700ms de animação visual fluida no compositor). O TBT real durante essa animação é de apenas **19ms** (praticamente zero bloqueio de thread), e o conteúdo torna-se utilizável em **1.418ms**, muito antes do término do desvanecimento estético do véu.
-3. **Pessoas -> Cartões (4x):** O tempo total medido foi de 2.693ms, mas a Max Long Task despencou de 1.328ms para 199ms (-85%). O tempo aparente superior deveu-se unicamente ao ciclo visual do véu e não a engasgos de processamento.
+2. **Resumo -> Pessoas (quente, 1x):** O tempo total medido foi registrado como 509ms no baseline de `origin/main` e 2.606ms na primeira rodada da Fase 10.
+   - **Correção Factual e Análise de Evidências:** Ao contrário de alegações anteriores equivocadas, o componente de véu cinematográfico (`PageWaveSweep`) **já existia na branch main** (`a865839`). A discrepância no tempo total decorre primariamente de divergência no critério/sinal de espera da medição: no baseline original, a medição não capturou o ciclo visual completo do véu (o sinal `fc-transitioning` resolvia antes da animação ou media apenas o ciclo síncrono do clique/componente). Nos testes posteriores com instrumentação completa do ciclo GSAP (`coverIn` + `hold` + `reveal`), a medição passou a aguardar o ciclo total até a remoção de `.fc-transitioning` (~1.748ms no total). Para quaisquer outras variações residuais observadas, a classificação formal é de **causa não determinada** pela ausência de rastreamento idêntico de instrumentação gravado no commit base.
+   - **Métricas Reais na Thread Principal:** O TBT medido durante essa animação é de apenas **19ms** (praticamente zero bloqueio de thread), com conteúdo utilizável em **1.418ms**, enquanto a GPU processa a transição visual.
+3. **Pessoas -> Cartões (4x):** O tempo total medido foi de 2.693ms, mas a Max Long Task despencou de 1.328ms para 199ms (-85%).
 
 ---
 
@@ -107,37 +108,59 @@ Extração via Chrome DevTools Protocol (`Profiler.start` e `Profiler.stop`) dur
 
 ---
 
-### 3.4. Tabela de Benchmark A/B Científico ($N = 7$ repetições, Mediana e P90)
+### 3.4. Tabela de Benchmark A/B Científico ($N = 7$ repetições, Mediana e P90) com Metas Originais
+
+**Critérios Originais de Sucesso:**
+- **CPU 1x (Desktop Normal):** Nenhuma transição com Long Task pior que a BASE de origem.
+- **CPU 4x (Notebook Intermediário):** Na visita QUENTE, nenhuma Long Task > 100ms; na visita FRIA, nenhuma > 150ms.
+- **CPU 6x (Hardware Modesto):** Avaliação comparativa com metas equivalentes (Quente <= 100ms, Fria <= 150ms).
 
 Medições conduzidas com a fixture pesada realista (`heavyAccountFixture.js`: 8 cartões, 10 pessoas, 60 compras parceladas cobrindo 36 meses, 250 despesas, 40 receitas, 30 assinaturas ativas com histórico de 12 meses):
 
-| Cenário de Throttling | Transição | Max Task Mediana | Max Task P90 | TBT Mediana | TBT P90 | Usável Mediana | Véu Mediana | Status vs Meta |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1x (Desktop/CPU Normal)** | **Resumo -> Pessoas (fria)** | **131ms** | 191ms | **144ms** | 279ms | 1.698ms | 2.158ms | **Atingido** *(caiu 81% de 690ms)* |
-| **1x (Desktop/CPU Normal)** | **Resumo -> Pessoas (quente)** | **69ms** | 167ms | **19ms** | 135ms | 1.418ms | 1.748ms | **Atingido** *(TBT < 50ms)* |
-| **1x (Desktop/CPU Normal)** | **Pessoas -> Cartões** | **83ms** | 92ms | **37ms** | 61ms | 1.302ms | 1.603ms | **Atingido** *(TBT < 50ms)* |
-| **1x (Desktop/CPU Normal)** | **Cartões -> Movimentações** | **232ms** | 249ms | **238ms** | 312ms | 1.465ms | 1.831ms | **Atingido** *(250 itens renderizados)* |
-| **1x (Desktop/CPU Normal)** | **Movimentações -> Assinaturas**| **91ms** | 98ms | **52ms** | 70ms | 1.280ms | 1.580ms | **Atingido** |
-| **1x (Desktop/CPU Normal)** | **Assinaturas -> Resumo** | **380ms** | 412ms | **790ms** | 840ms | 1.850ms | 2.300ms | **Atingido** *(Montagem pesada de Recharts)*|
-| **4x (Notebook Intermediário)**| **Resumo -> Pessoas (fria)** | **960ms** | 2.049ms | **2.560ms** | 5.307ms | 4.168ms | 5.259ms | **Parcial** *(compilação V8 em 4x)* |
-| **4x (Notebook Intermediário)**| **Resumo -> Pessoas (quente)** | **111ms** | 317ms | **222ms** | 443ms | 1.924ms | 2.998ms | **Atingido** *(queda de 68% no TBT)* |
-| **4x (Notebook Intermediário)**| **Pessoas -> Cartões** | **199ms** | 2.393ms | **367ms** | 2.480ms | 1.618ms | 2.741ms | **Atingido** *(queda de 85% vs 1.328ms)* |
-| **4x (Notebook Intermediário)**| **Assinaturas -> Resumo** | **859ms** | 947ms | **1.795ms** | 2.297ms | 2.310ms | 4.059ms | **Atingido** |
-| **6x (Hardware Modesto)** | **Resumo -> Pessoas (fria)** | **2.086ms** | 2.490ms | **5.441ms** | 6.718ms | 7.557ms | 8.640ms | **Parcial** *(custo fixo sem virtualização)*|
-| **6x (Hardware Modesto)** | **Resumo -> Pessoas (quente)** | **231ms** | 2.512ms | **421ms** | 3.086ms | 2.177ms | 3.241ms | **Atingido** *(queda de 74% de 884ms)* |
-| **6x (Hardware Modesto)** | **Assinaturas -> Resumo** | **826ms** | 1.158ms | **2.151ms** | 2.632ms | 2.516ms | 4.432ms | **Atingido** |
+| Cenário de Throttling | Transição | Max Task Mediana | Max Task P90 | TBT Mediana | TBT P90 | Usável Mediana | Véu Mediana | Status vs Meta Original |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **1x (Desktop Normal)** | **Resumo -> Pessoas (fria)** | **131ms** | 191ms | **144ms** | 279ms | 1.698ms | 2.158ms | **NÃO ATINGIDO** (P90 191ms > base 163ms; Mediana 131ms < 163ms) |
+| **1x (Desktop Normal)** | **Resumo -> Pessoas (quente)** | **69ms** | 167ms | **19ms** | 135ms | 1.418ms | 1.748ms | **ATINGIDO** (Mediana 69ms / P90 167ms < base 495ms) |
+| **1x (Desktop Normal)** | **Pessoas -> Cartões** | **83ms** | 92ms | **37ms** | 61ms | 1.302ms | 1.603ms | **NÃO ATINGIDO** (Mediana 83ms / P90 92ms > base 81ms) |
+| **1x (Desktop Normal)** | **Cartões -> Movimentações** | **232ms** | 249ms | **238ms** | 312ms | 1.465ms | 1.831ms | **NÃO ATINGIDO** (Mediana 232ms / P90 249ms > base 229ms) |
+| **1x (Desktop Normal)** | **Movimentações -> Assinaturas**| **91ms** | 98ms | **52ms** | 70ms | 1.280ms | 1.580ms | **ATINGIDO** (Mediana 91ms / P90 98ms < base 103ms) |
+| **1x (Desktop Normal)** | **Assinaturas -> Resumo** | **380ms** | 412ms | **790ms** | 840ms | 1.850ms | 2.300ms | **ATINGIDO vs BASE** (Mediana 380ms < base 464ms) *(MAIOR GARGALO)* |
+| **4x (Notebook Intermediário)**| **Resumo -> Pessoas (fria)** | **960ms** | 2.049ms | **2.560ms** | 5.307ms | 4.168ms | 5.259ms | **NÃO ATINGIDO** (Mediana 960ms / P90 2.049ms > 150ms) |
+| **4x (Notebook Intermediário)**| **Resumo -> Pessoas (quente)** | **111ms** | 317ms | **222ms** | 443ms | 1.924ms | 2.998ms | **NÃO ATINGIDO** (Mediana 111ms / P90 317ms > 100ms) |
+| **4x (Notebook Intermediário)**| **Pessoas -> Cartões** | **199ms** | 2.393ms | **367ms** | 2.480ms | 1.618ms | 2.741ms | **NÃO ATINGIDO** (Mediana 199ms / P90 2.393ms > 100ms) |
+| **4x (Notebook Intermediário)**| **Assinaturas -> Resumo** | **859ms** | 947ms | **1.795ms** | 2.297ms | 2.310ms | 4.059ms | **NÃO ATINGIDO** (Mediana 859ms / P90 947ms > 100ms) *(MAIOR GARGALO)* |
+| **6x (Hardware Modesto)** | **Resumo -> Pessoas (fria)** | **2.086ms** | 2.490ms | **5.441ms** | 6.718ms | 7.557ms | 8.640ms | **NÃO ATINGIDO** (Mediana 2.086ms / P90 2.490ms > 150ms) |
+| **6x (Hardware Modesto)** | **Resumo -> Pessoas (quente)** | **231ms** | 2.512ms | **421ms** | 3.086ms | 2.177ms | 3.241ms | **NÃO ATINGIDO** (Mediana 231ms / P90 2.512ms > 100ms) |
+| **6x (Hardware Modesto)** | **Assinaturas -> Resumo** | **826ms** | 1.158ms | **2.151ms** | 2.632ms | 2.516ms | 4.432ms | **NÃO ATINGIDO** (Mediana 826ms / P90 1.158ms > 100ms) *(MAIOR GARGALO)* |
 
 ---
 
-### 3.5. Diagnóstico Honesto contra os Critérios de Sucesso
+### 3.5. Diagnóstico Técnico Honesto, Maior Gargalo e Pendências da Próxima Rodada
 
-1. **Transições Quentes (1x e 4x):**
-   - O critério foi **plenamente atingido**. A Max Long Task mediana na transição quente de Pessoas é de **69ms** em 1x e **111ms** em 4x. O TBT de 19ms em 1x comprova ausência de congelamento da interface, com 60fps constantes na GPU.
-2. **Resumo -> Pessoas Fria (1x):**
-   - O critério foi **plenamente atingido**. A Max Long Task despencou de 690ms para **131ms** (-81%) e o TBT de 731ms para **144ms** (-80.3%), comprovando a eliminação do gargalo gerado pelo prefetch agressivo.
-3. **Hardware Modesto com Carga Fria (6x):**
-   - O critério foi **parcialmente atingido**. Embora a Max Long Task tenha sido reduzida de 2.878ms para 2.086ms e o TBT de 7.448ms para 5.441ms (-27%), a compilação inicial de chunks pelo V8 e a renderização síncrona de dezenas de elementos de clientes sob CPU 6x ainda geram tarefas > 1s na carga fria.
-   - **Diagnóstico Técnico de Longo Prazo:** Para erradicar completamente Long Tasks em hardware 6x sob contas massivas, a solução arquitetural necessária é a **virtualização de listas** (`@tanstack/react-virtual` ou similar) na tabela de movimentações e clientes, evitando instanciar nós DOM invisíveis fora da viewport. Durante todo o tempo da troca, o **véu de transição protege a interface contra layout shift ou telas brancas**, garantindo elegância estética contínua.
+1. **Maior Gargalo Remanescente — Assinaturas -> Resumo:**
+   - Com Max Long Task de **380ms (P90 412ms) em 1x**, **859ms (P90 947ms) em 4x** e **826ms (P90 1.158ms) em 6x**, a transição de volta para o **Resumo** é o ponto de maior lentidão do FinControl.
+   - **Registro de Causa Real:** A suposição de que a causa seria a complexidade dos gráficos Recharts é apenas uma **hipótese**, e **NÃO uma medição empírica comprovada**. A causa raiz exata dessa transição ainda **NÃO foi atribuída por função ou chunk**.
+   - **Pendência Formal da Próxima Rodada:** Realizar profiling profundo com trace CDP dedicado para atribuir o consumo por função/arquivo em `Assinaturas -> Resumo` e nas visitas frias de todas as abas.
+
+2. **Diagnóstico dos Critérios de Sucesso:**
+   - **Visitas Quentes em 1x:** Atingido em Resumo->Pessoas (69ms vs 495ms) e Movimentações->Assinaturas (91ms vs 103ms). Pessoas->Cartões e Cartões->Movimentações oscilaram ligeiramente acima da medição pontual anterior (+2ms e +3ms), sendo marcadas estritamente como NÃO ATINGIDAS.
+   - **Visitas Quentes em 4x:** Embora Resumo->Pessoas tenha caído significativamente (Mediana 111ms) e Pessoas->Cartões tenha caído 85% (199ms vs 1.328ms), ambas permanecem acima do teto estrito de 100ms, sendo marcadas como **NÃO ATINGIDAS**.
+   - **Visitas Frias (1x, 4x, 6x):** Todas permanecem com tarefas longas acima dos limites (150ms), sendo marcadas como **NÃO ATINGIDAS**.
+
+3. **Estratégias Arquiteturais Sem Dependências Externas (Em Conformidade com a Constituição):**
+   - É estritamente vedada a introdução de novas dependências (como bibliotecas externas de virtualização) sem aprovação expressa do proprietário do produto.
+   - Alternativas limpas e nativas a serem avaliadas nas próximas etapas:
+     1. **Paginação sob demanda ("Mostrar mais itens"):** Limitar a renderização inicial a 25 ou 50 itens da tabela, carregando mais sob ação explícita do usuário.
+     2. **Janela de linhas própria (windowing nativo):** Implementação leve sem dependências com cálculo de `scrollTop` e offset CSS em React.
+     3. **Montagem em duas etapas (staged mount):** Montar inicialmente os KPIs e esqueleto da tela, delegando a renderização pesada das tabelas completas para o ciclo de ociosidade (`requestIdleCallback`).
+
+---
+
+### 3.6. Nota sobre o Módulo de Teste de Paridade (`tests/helpers/legacyFinancial.js`)
+
+- **Propósito:** Módulo auxiliar contendo 2.680 linhas com a implementação literal das funções financeiras do commit base `a865839` (`origin/main`). Foi introduzido unicamente para permitir a execução da bateria de 3.000 casos de teste pseudoaleatórios determinísticos em `tests/financialParity.test.js`, comprovando o zero drift matemático.
+- **Isolamento de Produção:** Testes automatizados de search gate e varredura estrita (`grep`) no diretório de build de produção (`dist/assets/`) confirmam que **zero linhas ou símbolos de `legacyFinancial` entram no bundle final de produção**.
+- **Ciclo de Vida:** Trata-se de um artefato estritamente de validação de paridade, podendo ser removido em conjunto com `tests/financialParity.test.js` assim que o proprietário considerar que o ciclo de transição e auditoria de paridade das funções financeiras cumpriu plenamente seu objetivo.
 
 ---
 
