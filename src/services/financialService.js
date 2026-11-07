@@ -674,7 +674,7 @@ export function calculateInvoiceBreakdownForMonth({
 
     const cardMap = new Map();
     safeCards.forEach(c => {
-        if (c && c.id) cardMap.set(c.id, c);
+        if (c && !cardMap.has(c.id)) cardMap.set(c.id, c);
     });
 
     const isUnassigned = personId === 'unassigned';
@@ -764,7 +764,7 @@ export function calculateInvoiceBreakdownForMonth({
         if (!matchesCard(sub.cardId)) return;
         if (!matchesPerson(sub.clientId)) return;
 
-        const card = sub.cardId ? cardMap.get(sub.cardId) : null;
+        const card = cardMap.get(sub.cardId);
         const subDay = parseInt(sub.dueDate, 10) || 1;
 
         if (card && card.closingDay && card.dueDay) {
@@ -835,7 +835,7 @@ export function calculateInvoiceBreakdownForMonth({
         }
         if (isNaN(expenseDate.getTime())) return;
 
-        const card = expense.cardId ? cardMap.get(expense.cardId) : null;
+        const card = cardMap.get(expense.cardId);
         const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
 
         if (relevantDate && relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
@@ -1100,7 +1100,7 @@ export function calculateConsolidatedClientReceivables({
 
     const clientAccMap = new Map();
     safeClients.forEach(client => {
-        if (client && client.id) {
+        if (client && !clientAccMap.has(client.id)) {
             clientAccMap.set(client.id, {
                 receivableCents: 0,
                 paidCents: 0,
@@ -1133,21 +1133,21 @@ export function calculateConsolidatedClientReceivables({
             const p1Id = loan.sharedDetails.person1?.clientId;
             const p2Id = loan.sharedDetails.person2?.clientId;
 
-            if (p1Id && clientAccMap.has(p1Id)) {
+            if (clientAccMap.has(p1Id)) {
                 const acc = clientAccMap.get(p1Id);
                 const instList = asArray(loan.sharedDetails.person1?.installments);
                 for (let i = 0; i < instList.length; i++) {
                     processInst(acc, instList[i]);
                 }
             }
-            if (p2Id && clientAccMap.has(p2Id)) {
+            if (p2Id !== p1Id && clientAccMap.has(p2Id)) {
                 const acc = clientAccMap.get(p2Id);
                 const instList = asArray(loan.sharedDetails.person2?.installments);
                 for (let i = 0; i < instList.length; i++) {
                     processInst(acc, instList[i]);
                 }
             }
-        } else if (loan.clientId && clientAccMap.has(loan.clientId)) {
+        } else if (clientAccMap.has(loan.clientId)) {
             const acc = clientAccMap.get(loan.clientId);
             const instList = asArray(loan.installments);
             if (instList.length > 0) {
@@ -1166,7 +1166,7 @@ export function calculateConsolidatedClientReceivables({
 
     // 2. Processar despesas avulsas vinculadas em passada única
     safeExpenses.forEach(exp => {
-        if (!exp || !exp.clientId || !clientAccMap.has(exp.clientId)) return;
+        if (!exp || !clientAccMap.has(exp.clientId)) return;
         const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
         if (dateStr.startsWith(targetMonth)) {
             const acc = clientAccMap.get(exp.clientId);
@@ -1180,7 +1180,7 @@ export function calculateConsolidatedClientReceivables({
 
     // 3. Processar assinaturas vinculadas em passada única
     safeSubs.forEach(sub => {
-        if (!sub || !sub.clientId || !clientAccMap.has(sub.clientId)) return;
+        if (!sub || !clientAccMap.has(sub.clientId)) return;
         if (sub.isActive !== false && sub.status !== 'Inativa') {
             const acc = clientAccMap.get(sub.clientId);
             const valCents = toCents(sub.amount !== undefined ? sub.amount : (sub.value || 0));
