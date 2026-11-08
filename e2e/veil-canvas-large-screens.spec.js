@@ -63,12 +63,6 @@ test.describe('Bloco B: Véu de transição e Layout Responsivo em Telas Grandes
 
       // Dispara transição para 'Pessoas'
       const pessoasBtn = page.getByRole('button', { name: 'Pessoas' }).first();
-
-      // Intercepta e retarda animação WAAPI ligeiramente para medir o bounding box com precisão
-      await page.evaluate(() => {
-        window.__TEST_PAUSE_SWEEP__ = true;
-      });
-
       await pessoasBtn.click();
 
       // Aguarda classe fc-transitioning ou elemento visível
@@ -101,7 +95,13 @@ test.describe('Bloco B: Véu de transição e Layout Responsivo em Telas Grandes
       // 2. Sidebar Recolhida (desktop w-[72px] = 72px)
       const collapseToggle = page.locator('button[aria-label="Recolher menu lateral"]').first();
       await collapseToggle.click();
-      await page.waitForTimeout(300);
+      
+      // Aguarda a transição CSS de largura estabilizar em ~72px de forma condicional
+      await expect(async () => {
+        const asideWidth = await page.locator('aside').evaluate((el) => el.getBoundingClientRect().width);
+        expect(asideWidth).toBeGreaterThanOrEqual(70);
+        expect(asideWidth).toBeLessThanOrEqual(75);
+      }).toPass({ timeout: 3000 });
 
       const sidebarWidthCollapsed = 72;
 

@@ -103,7 +103,7 @@ test.describe('Bloco A: Tabela Responsiva de Itens da Fatura', () => {
 
     // Ação de clicar e interagir
     await firstButton.click();
-    await page.waitForTimeout(300);
+    await expect(cardsMobile.locator('button').first()).toBeVisible();
   });
 
   test('Captura screenshots em 7 viewports (Dark e Light) para tabela e cards', async ({ page }) => {
