@@ -72,6 +72,16 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
     const [visibleInvoiceItemsCount, setVisibleInvoiceItemsCount] = useState(INVOICE_BATCH_SIZE);
+    const [isAnalyticsReady, setIsAnalyticsReady] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        if (import.meta.env && (import.meta.env.MODE === 'test' || import.meta.env.VITEST)) return true;
+        return false;
+    });
+    const [isChartsBelowFoldReady, setIsChartsBelowFoldReady] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        if (import.meta.env && (import.meta.env.MODE === 'test' || import.meta.env.VITEST)) return true;
+        return false;
+    });
     const scopeRef = useRef(null);
     const tableScrollRef = useRef(null);
     const [showLeftScrollShadow, setShowLeftScrollShadow] = useState(false);
@@ -86,6 +96,55 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     }, []);
 
     useEnterStagger(scopeRef, { ready: !isLoading });
+
+    // Montagem em duas etapas (staged mount): adia componentes pesados de gráficos e projeções
+    // Etapa 1: ProAnalyticsCharts ativa na revelação do véu (fc:page-reveal-start)
+    // Etapa 2: Gráficos abaixo da dobra ativam após frame de assentamento ou ciclo ocioso
+    useEffect(() => {
+        if (isAnalyticsReady && isChartsBelowFoldReady) return;
+
+        let idleId;
+        let timeout1;
+        let timeout2;
+
+        const isTransitioning = typeof document !== 'undefined' && document.documentElement.classList.contains('fc-transitioning');
+
+        if (isTransitioning) {
+            const onReveal = () => {
+                window.removeEventListener('fc:page-reveal-start', onReveal);
+                requestAnimationFrame(() => {
+                    setIsAnalyticsReady(true);
+                    timeout2 = setTimeout(() => {
+                        setIsChartsBelowFoldReady(true);
+                    }, 120);
+                });
+            };
+            window.addEventListener('fc:page-reveal-start', onReveal);
+            timeout1 = setTimeout(() => {
+                setIsAnalyticsReady(true);
+                setIsChartsBelowFoldReady(true);
+            }, 400);
+            return () => {
+                window.removeEventListener('fc:page-reveal-start', onReveal);
+                clearTimeout(timeout1);
+                clearTimeout(timeout2);
+            };
+        } else {
+            timeout1 = setTimeout(() => setIsAnalyticsReady(true), 30);
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                idleId = window.requestIdleCallback(() => setIsChartsBelowFoldReady(true), { timeout: 150 });
+            } else {
+                timeout2 = setTimeout(() => setIsChartsBelowFoldReady(true), 120);
+            }
+            return () => {
+                clearTimeout(timeout1);
+                clearTimeout(timeout2);
+                if (idleId && typeof window.cancelIdleCallback === 'function') {
+                    window.cancelIdleCallback(idleId);
+                }
+            };
+        }
+    }, [isAnalyticsReady, isChartsBelowFoldReady]);
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) {
@@ -768,49 +827,70 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
 
                 <div className="lg:col-span-2">
-                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full">
-                        <ProAnalyticsCharts
-                            loans={filteredLoansForChart}
-                            clients={clients}
-                            expenses={filteredExpensesForChart}
-                            subscriptions={filteredSubscriptionsForChart}
-                            theme={theme}
-                        />
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full min-h-[360px] flex flex-col justify-center">
+                        {isAnalyticsReady ? (
+                            <ProAnalyticsCharts
+                                loans={filteredLoansForChart}
+                                clients={clients}
+                                expenses={filteredExpensesForChart}
+                                subscriptions={filteredSubscriptionsForChart}
+                                theme={theme}
+                            />
+                        ) : (
+                            <div className="h-[280px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando gráficos analíticos">
+                                <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                                <span className="text-xs text-[var(--fc-text-muted)]">Carregando indicadores analíticos...</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             {/* Gráficos e Projeção Lado a Lado em Telas Grandes (>= 1536px / 2xl), Empilhados em Telas Menores */}
             <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 items-start">
-                <MonthlyEvolutionChart
-                    loans={loans}
-                    subscriptions={subscriptions}
-                    expenses={expenses}
-                    cards={cards}
-                    selectedMonth={selectedMonth}
-                    selectedCardFilter={selectedCardFilter}
-                    clients={clients}
-                    isPro={isPro}
-                    isTrialActive={isTrialActive}
-                    onUpgradeClick={handleUpgradeClick}
-                    theme={theme}
-                />
-
-                {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
-                {hasProAccess ? (
-                    <FutureCommitmentsCard
+                {isChartsBelowFoldReady ? (
+                    <MonthlyEvolutionChart
                         loans={loans}
                         subscriptions={subscriptions}
+                        expenses={expenses}
+                        cards={cards}
                         selectedMonth={selectedMonth}
+                        selectedCardFilter={selectedCardFilter}
                         clients={clients}
-                        selectedClientName={selectedClientNameForProjection}
+                        isPro={isPro}
+                        isTrialActive={isTrialActive}
+                        onUpgradeClick={handleUpgradeClick}
+                        theme={theme}
                     />
                 ) : (
-                    <ProFeatureLock
-                        title="Projeção de Faturas Futuras"
-                        description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
-                        onAction={() => setIsUpgradeModalOpen(true)}
-                    />
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-[380px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando evolução mensal">
+                        <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                        <span className="text-xs text-[var(--fc-text-muted)]">Carregando evolução da fatura...</span>
+                    </div>
+                )}
+
+                {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
+                {isChartsBelowFoldReady ? (
+                    hasProAccess ? (
+                        <FutureCommitmentsCard
+                            loans={loans}
+                            subscriptions={subscriptions}
+                            selectedMonth={selectedMonth}
+                            clients={clients}
+                            selectedClientName={selectedClientNameForProjection}
+                        />
+                    ) : (
+                        <ProFeatureLock
+                            title="Projeção de Faturas Futuras"
+                            description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
+                            onAction={() => setIsUpgradeModalOpen(true)}
+                        />
+                    )
+                ) : (
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-[380px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando projeção de compromissos">
+                        <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                        <span className="text-xs text-[var(--fc-text-muted)]">Carregando projeções futuras...</span>
+                    </div>
                 )}
             </div>
 
