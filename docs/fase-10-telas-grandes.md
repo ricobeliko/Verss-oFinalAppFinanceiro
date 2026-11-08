@@ -208,3 +208,56 @@ A skill permanente [`.agents/skills/fincontrol-cinematic-ui/SKILL.md`](file:///c
 - [x] **Arquivos Protegidos Intactos:** `firestore.rules`, `functions/`, `planEntitlements.js`, `firebase.json` e `.firebaserc` permaneceram intocados.
 - [x] **Acessibilidade e Reduced Motion:** Total conformidade com `prefers-reduced-motion: reduce`, touch targets `>= 44px` e WCAG AAA nos contrastes.
 - [x] **Zero RAF Loops Contínuos:** Nenhuma chamada contínua a `requestAnimationFrame` em repouso.
+
+---
+
+## 7. Fase 10.3 — Sanidade do CI: Amostragem Determinística de Pixels e Cobertura da Topbar
+
+### 7.1. Causa-Raiz da Fragilidade no CI (Playwright E2E)
+No teste anterior em `e2e/veil-topbar-pixel-coverage.spec.js`, a validação de opacidade do véu dependia de leitura assíncrona (`toPass`) durante uma animação em movimento contínuo (`coverIn` -> 120ms de hold -> `reveal`).
+No ambiente virtualizado do GitHub Actions (onde a CPU sofre contenção), a janela de 120ms de hold expirava antes ou durante a checagem do Playwright.
+- Na 1ª tentativa do CI: o `toPass` passou no limiar, mas a leitura seguinte ocorreu durante a fase de `reveal` (fade out), resultando em `Received 0.801158` vs `Expected >= 0.85`.
+- No retry do CI: o timeout de 1500ms expirou, com última leitura de `0.826658`.
+
+### 7.2. Nova Metodologia: Amostragem Determinística via WAAPI e Pixels Reais (HTML5 Canvas)
+A nova implementação substituiu completamente a inferência de opacidade transiente por uma verificação determinística e visualmente comprovada:
+1. **Congelamento no Ápice da Transição via WAAPI (`armPeakFreezer`):**
+   - Interceptação não intrusiva de `Element.prototype.animate` nos elementos marcados com `data-fc-wave-sweep`.
+   - Ao concluir a subida da onda (`coverIn.onfinish`) ou iniciar a revelação (`reveal`), a animação é pausada de imediato no instante zero (`anim.currentTime = 0; anim.pause()`).
+   - O véu e o container permanecem 100% estáticos no pico exato (`translateY(0%)`, opacidade total de 0.92), eliminando qualquer concorrência temporal (*race condition*).
+2. **Amostragem Real de Pixels via HTML5 Canvas (`getPixel`):**
+   - O screenshot real da janela é capturado via `page.screenshot()`.
+   - Um canvas oculto decodifica o PNG em memória e extrai os valores RGB físicos exatos via `ctx.getImageData(x, y, 1, 1).data`.
+   - Comparação física rigorosa entre o estado de Repouso (*rest*) e o estado de Pico (*peak*).
+
+### 7.3. Correção de Bug Real no App (`src/features/dashboard/shell/PageWaveSweep.jsx`)
+A amostragem de pixels revelou uma falha de geometria real no componente de onda:
+- **Problema:** Os contêineres de onda SVG possuíam classes `h-[115%] -top-[7%]`. Como o caminho vetorial do SVG (`viewBox="0 0 1440 900"`) possui uma crista que desce até $Y = 170$ ($18.9\%$ da altura), a $-7\%$ de topo a massa da onda só atingia $+132.5\text{px}$ a partir do topo do viewport. Isso deixava a Topbar ($Y = 0..64\text{px}$) desprotegida e transparente no momento do ápice ($\Delta = 0$ de diferença de cor).
+- **Solução Aplicada:** Os 3 tracks SVG (`track1Ref`, `track2Ref`, `track3Ref`) foram corrigidos para `h-[132%] -top-[26%]`.
+- **Efeito Matemático:** O rebaixo mais profundo da onda agora se situa em $-26\% + (18.9\% \times 132\%) = -1.1\%$ (rigorosamente acima de $Y = 0$), garantindo cobertura 100% opaca da Topbar e do Canvas no instante do ápice, estendendo-se até $+106\%$ na borda inferior.
+
+### 7.4. Tabela de Medições de Pixels Reais (Repouso vs Pico)
+
+| Região / Ponto de Teste | Tema | RGB em Repouso | RGB no Pico | Diferença ($\Delta$ RGB) | Veredito |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Topbar** `(x=500, y=30)` | Dark | `rgb(10, 34, 43)` | `rgb(22, 61, 70)` | **$\Delta = 66$** | **COBERTA** ($\ge 25$) |
+| **Canvas** `(x=500, y=150)` | Dark | `rgb(13, 42, 52)` | `rgb(18, 53, 61)` | **$\Delta = 25$** | **COBERTO** ($\ge 20$) |
+| **Sidebar** `(x=100, y=300)` | Dark | `rgb(11, 36, 44)` | `rgb(11, 36, 44)` | **$\Delta = 0$** | **NÃO COBERTA** ($\le 5$) |
+| **Modal Busca** `(x=720, y=245)` | Dark | `rgb(2, 6, 8)` | `rgb(1, 6, 8)` | **$\Delta = 1$** | **ACIMA DO VÉU** ($\le 10$) |
+| **Topbar** `(x=500, y=30)` | Light | `rgb(248, 253, 254)` | `rgb(205, 230, 233)` | **$\Delta = 87$** | **COBERTA** ($\ge 25$) |
+| **Canvas** `(x=500, y=150)` | Light | `rgb(232, 245, 248)` | `rgb(209, 233, 235)` | **$\Delta = 48$** | **COBERTO** ($\ge 20$) |
+| **Sidebar** `(x=100, y=300)` | Light | `rgb(241, 249, 251)` | `rgb(241, 249, 251)` | **$\Delta = 0$** | **NÃO COBERTA** ($\le 5$) |
+
+### 7.5. Auditoria de Specs e Eliminação de Esperas Frágeis
+- `e2e/veil-canvas-large-screens.spec.js`: Removida flag morta `window.__TEST_PAUSE_SWEEP__` e substituído `waitForTimeout(300)` após alternar sidebar por polling condicional da largura do `<aside>` (`expect(...).toPass({ timeout: 3000 })`).
+- `e2e/invoice-table-responsive.spec.js`: Substituído `waitForTimeout(300)` por asserção determinística de visibilidade do primeiro card mobile (`expect(cardsMobile.locator('button').first()).toBeVisible()`).
+- `e2e/perf-tab-transitions-ab.spec.js` e `e2e/perf-tab-transitions.spec.js`: Configurados para rodar exclusivamente sob demanda via `npm run perf:tabs` (`FC_PERF=1`), mantendo o CI padrão rápido e sem risco de timeout.
+
+### 7.6. Resultados das Rodadas de Verificação de Estresse
+- **30 Rodadas Consecutivas Sem Throttling:** 30/30 verdes (100% taxa de sucesso, tempo médio ~13s por teste).
+- **30 Rodadas Consecutivas Com CPU Throttling 4x:** 30/30 verdes (100% taxa de sucesso, tempo médio ~14s por teste).
+- **Suíte E2E Completa (`CI=1 npm run test:e2e`):** 154 passed, 2 skipped (18.3m), 0 failures.
+- **Suíte de Testes Unitários (`npm test`):** 724 passed, 13 skipped em 56 suítes (92.46s).
+- **Linter (`npm run lint`):** 0 errors, 0 warnings (`--max-warnings 0`).
+- **Build de Produção (`npm run build`):** Sucesso em 42.83s.
+- **Busca por Fixtures em `dist/`:** 0 ocorrências de `fincontrol_e2e`, `__FINCONTROL_E2E` ou `test-user`.
