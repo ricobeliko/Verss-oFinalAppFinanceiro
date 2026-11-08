@@ -6,15 +6,17 @@
  * @param {number | null | undefined} value - O valor numérico a ser formatado.
  * @returns {string} O valor formatado como string BRL.
  */
+const brlFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
 export const formatCurrencyDisplay = (value) => {
   const num = Number(value);
   if (typeof num !== 'number' || isNaN(num)) {
     return 'R$ 0,00';
   }
-  return num.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
+  return brlFormatter.format(num);
 };
 
 /**

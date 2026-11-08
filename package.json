@@ -13,6 +13,7 @@
     "test:functions": "vitest run tests/cloudFunctions.test.js",
     "test:integration": "vitest run tests/workflowIntegration.test.js",
     "test:e2e": "playwright test",
+    "perf:tabs": "node scripts/run-perf-tabs.mjs",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
     "watch-css": "tailwindcss -i ./src/index.css -o ./src/tailwind-output.css --watch"

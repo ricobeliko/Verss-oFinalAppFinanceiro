@@ -428,14 +428,14 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
     <div
       ref={waveContainerRef}
       data-fc-wave-sweep="true"
-      className="absolute inset-0 z-20 pointer-events-none overflow-hidden"
+      className="fixed top-0 right-0 bottom-0 z-[25] pointer-events-none overflow-hidden left-0 lg:left-[var(--fc-sidebar-width,256px)] transition-[left] duration-200"
       aria-hidden="true"
       style={{ display: 'none' }}
     >
       {/* Camada 1: Base sólida do tema + Onda Primária (impede vazamento visual no pico) */}
       <div
         ref={track1Ref}
-        className="absolute inset-0 w-full h-[115%] -top-[7%] pointer-events-none will-change-transform"
+        className="absolute inset-0 w-full h-[132%] -top-[26%] pointer-events-none will-change-transform"
       >
         <svg
           viewBox="0 0 1440 900"
@@ -477,7 +477,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
       {/* Camada 2: Onda Intermediária de Profundidade */}
       <div
         ref={track2Ref}
-        className="absolute inset-0 w-full h-[115%] -top-[7%] pointer-events-none will-change-transform opacity-75"
+        className="absolute inset-0 w-full h-[132%] -top-[26%] pointer-events-none will-change-transform opacity-75"
       >
         <svg
           viewBox="0 0 1440 900"
@@ -510,7 +510,7 @@ const PageWaveSweep = React.memo(forwardRef(function PageWaveSweep(props, ref) {
       {/* Camada 3: Crista de Brilho em Destaque */}
       <div
         ref={track3Ref}
-        className="absolute inset-0 w-full h-[115%] -top-[7%] pointer-events-none will-change-transform"
+        className="absolute inset-0 w-full h-[132%] -top-[26%] pointer-events-none will-change-transform"
       >
         <svg
           viewBox="0 0 1440 900"

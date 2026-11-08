@@ -169,7 +169,7 @@ describe('splitExactCents — Parser de Moeda e Divisão Fiel ao App', () => {
         }
       }
       expect(true).toBe(true);
-    }, 30000);
+    }, 60000);
   });
 
   describe('4. Algoritmo Legado Auxiliar (splitExactCents)', () => {

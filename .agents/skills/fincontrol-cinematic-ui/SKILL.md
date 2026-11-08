@@ -16,6 +16,7 @@ Esta skill documenta a linguagem de design visual cinematográfica, composição
 - **PRODUCT_PROOF_ONLY:** Toda comunicação visual e textual apoia-se em fatos matemáticos e operacionais comprováveis. Proibida qualquer métrica ou prova social fictícia (`NO_FAKE_SOCIAL_PROOF=true`).
 - **ACCESSIBILITY_FIRST:** Total conformidade com `prefers-reduced-motion: reduce`, touch targets >= 44px e navegação via teclado.
 - **NO_NATIVE_SELECTS_OR_DATE_PICKERS (Regra Constitucional):** Nunca usar `<select>` nativo nem `<input type="month">/<input type="date">` no FinControl. Use sempre `<Select>`, `<MonthPicker>` e `<DatePicker>` de `src/components/`, garantindo acessibilidade (WAI-ARIA combobox/listbox, bottom-sheet mobile >= 44px), tema consistente (*Abyss Teal*) e segurança de fuso horário.
+- **FULL_CANVAS_VEIL_AND_4K_RESPONSIVENESS (Regra Constitucional da Fase 10):** O véu de transição cobre o canvas inteiro (`fixed`, `top: 0`, `bottom: 0`, `right: 0`, alinhado à sidebar `left: var(--fc-sidebar-width)` no desktop e `left: 0` no mobile, `z-index: 25`), cobrindo topbar e conteúdo simultaneamente sem rolar com a página; o layout do dashboard escala progressivamente por breakpoints até resoluções 4K (`max-w-7xl`, `2xl:max-w-[1536px]`, `3xl:max-w-[1760px]`, `4xl:max-w-[1920px]`), com gráficos analíticos dispostos lado a lado em `2xl:grid-cols-2`.
 
 ---
 
@@ -167,6 +168,11 @@ A experiência de navegação do FinControl é fluida, escalonada e orquestrada 
 
 2. **`PageWaveSweep` (Shell) & Arquitetura "Montar sob o Véu, Assentar, Só Então Animar":**
    - **Propósito:** Cortina líquida de ondas com 3 camadas SVG e backplate opaco que varre a tela de baixo para cima durante a troca de abas no dashboard (~1.2s total), eliminando travamentos de montagem/desmontagem e garantindo cobertura visual completa no pico.
+   - **Cobertura do Canvas Inteiro (Fase 10):**
+     - O véu é renderizado com posicionamento fixo (`fixed`, `top: 0`, `bottom: 0`, `right: 0`, `z-index: 25`), alinhado diretamente à margem direita da sidebar (`left: var(--fc-sidebar-width)` em desktop `>= 1024px`, e `left: 0` em mobile).
+     - Isso assegura cobertura simultânea da `AppTopbar` e de toda a área rolável de conteúdo sob qualquer nível de scroll, impedindo que a barra superior fique exposta durante a troca.
+   - **Escalonamento Responsivo até 4K:**
+     - O container principal `<main>` escala de forma harmoniosa: `max-w-7xl` (1024px-1535px), `2xl:max-w-[1536px]` com padding `2xl:px-10` e gráficos analíticos em grid duplo `2xl:grid-cols-2`, `3xl:max-w-[1760px]` (`3xl:px-12`) e `4xl:max-w-[1920px]` (`4xl:px-16`) em telas Ultra HD 4K (3840x2160).
    - **Execução via WAAPI (Web Animations API) no Compositor de GPU:**
      - A animação do véu opera primariamente via `element.animate` com aceleração nativa na thread do compositor (`transform: translate3d(...)` e `opacity`), mantendo fluidez mesmo sob carga na thread principal. Fallback automático para GSAP caso WAAPI não esteja disponível.
    - **Carregamento de Módulos em Paralelo (`loadTabModule`):**

@@ -672,6 +672,11 @@ export function calculateInvoiceBreakdownForMonth({
     const safeClients = asArray(knownClientIds);
     const safePaidSubs = asArray(paidSubscriptions);
 
+    const cardMap = new Map();
+    safeCards.forEach(c => {
+        if (c && !cardMap.has(c.id)) cardMap.set(c.id, c);
+    });
+
     const isUnassigned = personId === 'unassigned';
     const isAllPersons = !personId || personId === 'all';
     const validClientIds = knownClientIds
@@ -759,7 +764,7 @@ export function calculateInvoiceBreakdownForMonth({
         if (!matchesCard(sub.cardId)) return;
         if (!matchesPerson(sub.clientId)) return;
 
-        const card = safeCards.find(c => c && c.id === sub.cardId);
+        const card = cardMap.get(sub.cardId);
         const subDay = parseInt(sub.dueDate, 10) || 1;
 
         if (card && card.closingDay && card.dueDay) {
@@ -830,7 +835,7 @@ export function calculateInvoiceBreakdownForMonth({
         }
         if (isNaN(expenseDate.getTime())) return;
 
-        const card = expense.cardId ? safeCards.find(c => c && c.id === expense.cardId) : null;
+        const card = cardMap.get(expense.cardId);
         const relevantDate = card ? calculateInvoiceDueDate(expenseDate, card) : expenseDate;
 
         if (relevantDate && relevantDate.getUTCFullYear() === filterYear && relevantDate.getUTCMonth() + 1 === filterMonth) {
@@ -1093,111 +1098,119 @@ export function calculateConsolidatedClientReceivables({
     const safeSubs = asArray(subscriptions);
     const safeClients = asArray(clients);
 
+    const clientAccMap = new Map();
+    safeClients.forEach(client => {
+        if (client && !clientAccMap.has(client.id)) {
+            clientAccMap.set(client.id, {
+                receivableCents: 0,
+                paidCents: 0,
+                futureRemainingCents: 0
+            });
+        }
+    });
+
+    const processInst = (acc, inst) => {
+        if (!inst) return;
+        const isThisMonth = inst.dueDate && inst.dueDate.startsWith(targetMonth);
+        const instValCents = toCents(inst.value || 0);
+
+        if (isThisMonth) {
+            acc.receivableCents += instValCents;
+            if (inst.status === 'Pago' || inst.status === 'Paga') {
+                acc.paidCents += instValCents;
+            }
+        } else if (inst.dueDate && inst.dueDate > targetMonth) {
+            if (inst.status !== 'Pago' && inst.status !== 'Paga') {
+                acc.futureRemainingCents += instValCents;
+            }
+        }
+    };
+
+    // 1. Processar compras (individuais e compartilhadas) em passada única
+    safeLoans.forEach(loan => {
+        if (!loan) return;
+        if (loan.isShared && loan.sharedDetails) {
+            const p1Id = loan.sharedDetails.person1?.clientId;
+            const p2Id = loan.sharedDetails.person2?.clientId;
+
+            if (clientAccMap.has(p1Id)) {
+                const acc = clientAccMap.get(p1Id);
+                const instList = asArray(loan.sharedDetails.person1?.installments);
+                for (let i = 0; i < instList.length; i++) {
+                    processInst(acc, instList[i]);
+                }
+            }
+            if (p2Id !== p1Id && clientAccMap.has(p2Id)) {
+                const acc = clientAccMap.get(p2Id);
+                const instList = asArray(loan.sharedDetails.person2?.installments);
+                for (let i = 0; i < instList.length; i++) {
+                    processInst(acc, instList[i]);
+                }
+            }
+        } else if (clientAccMap.has(loan.clientId)) {
+            const acc = clientAccMap.get(loan.clientId);
+            const instList = asArray(loan.installments);
+            if (instList.length > 0) {
+                for (let i = 0; i < instList.length; i++) {
+                    processInst(acc, instList[i]);
+                }
+            } else if (loan.dueDate && loan.dueDate.startsWith(targetMonth)) {
+                const totalValCents = toCents(loan.totalValue || loan.value || 0);
+                acc.receivableCents += totalValCents;
+                if (loan.status === 'Pago' || loan.status === 'Paga') {
+                    acc.paidCents += totalValCents;
+                }
+            }
+        }
+    });
+
+    // 2. Processar despesas avulsas vinculadas em passada única
+    safeExpenses.forEach(exp => {
+        if (!exp || !clientAccMap.has(exp.clientId)) return;
+        const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
+        if (dateStr.startsWith(targetMonth)) {
+            const acc = clientAccMap.get(exp.clientId);
+            const valCents = toCents(exp.value || 0);
+            acc.receivableCents += valCents;
+            if (exp.status === 'Pago' || exp.status === 'Paga') {
+                acc.paidCents += valCents;
+            }
+        }
+    });
+
+    // 3. Processar assinaturas vinculadas em passada única
+    safeSubs.forEach(sub => {
+        if (!sub || !clientAccMap.has(sub.clientId)) return;
+        if (sub.isActive !== false && sub.status !== 'Inativa') {
+            const acc = clientAccMap.get(sub.clientId);
+            const valCents = toCents(sub.amount !== undefined ? sub.amount : (sub.value || 0));
+            acc.receivableCents += valCents;
+            if (sub.status === 'Pago' || sub.status === 'Paga') {
+                acc.paidCents += valCents;
+            }
+        }
+    });
+
     let grandTotalReceivableCents = 0;
     let grandTotalPaidCents = 0;
     let grandTotalFutureCents = 0;
 
     const byClient = safeClients.map(client => {
         if (!client) return { clientId: '', clientName: '', receivableThisMonth: 0, paidThisMonth: 0, pendingThisMonth: 0, totalFutureRemaining: 0, hasPending: false };
-        let clientReceivableCents = 0;
-        let clientPaidCents = 0;
-        let clientFutureRemainingCents = 0;
+        const acc = clientAccMap.get(client.id) || { receivableCents: 0, paidCents: 0, futureRemainingCents: 0 };
+        const pendingCents = Math.max(0, acc.receivableCents - acc.paidCents);
 
-        // 1. Processar compras (individuais e compartilhadas)
-        safeLoans.forEach(loan => {
-            if (!loan) return;
-            if (loan.isShared && loan.sharedDetails) {
-                const isPerson1 = loan.sharedDetails.person1?.clientId === client.id;
-                const isPerson2 = loan.sharedDetails.person2?.clientId === client.id;
-
-                if (isPerson1 || isPerson2) {
-                    const personDetails = isPerson1 ? loan.sharedDetails.person1 : loan.sharedDetails.person2;
-                    const instList = asArray(personDetails?.installments);
-
-                    instList.forEach(inst => {
-                        if (!inst) return;
-                        const isThisMonth = inst.dueDate && inst.dueDate.startsWith(targetMonth);
-                        const instValCents = toCents(inst.value || 0);
-
-                        if (isThisMonth) {
-                            clientReceivableCents += instValCents;
-                            if (inst.status === 'Pago' || inst.status === 'Paga') {
-                                clientPaidCents += instValCents;
-                            }
-                        } else if (inst.dueDate && inst.dueDate > targetMonth) {
-                            if (inst.status !== 'Pago' && inst.status !== 'Paga') {
-                                clientFutureRemainingCents += instValCents;
-                            }
-                        }
-                    });
-                }
-            } else if (loan.clientId === client.id) {
-                const instList = asArray(loan.installments);
-                if (instList.length > 0) {
-                    instList.forEach(inst => {
-                        if (!inst) return;
-                        const isThisMonth = inst.dueDate && inst.dueDate.startsWith(targetMonth);
-                        const instValCents = toCents(inst.value || 0);
-
-                        if (isThisMonth) {
-                            clientReceivableCents += instValCents;
-                            if (inst.status === 'Pago' || inst.status === 'Paga') {
-                                clientPaidCents += instValCents;
-                            }
-                        } else if (inst.dueDate && inst.dueDate > targetMonth) {
-                            if (inst.status !== 'Pago' && inst.status !== 'Paga') {
-                                clientFutureRemainingCents += instValCents;
-                            }
-                        }
-                    });
-                } else if (loan.dueDate && loan.dueDate.startsWith(targetMonth)) {
-                    const totalValCents = toCents(loan.totalValue || loan.value || 0);
-                    clientReceivableCents += totalValCents;
-                    if (loan.status === 'Pago' || loan.status === 'Paga') {
-                        clientPaidCents += totalValCents;
-                    }
-                }
-            }
-        });
-
-        // 2. Processar despesas avulsas vinculadas
-        safeExpenses.forEach(exp => {
-            if (exp && exp.clientId === client.id) {
-                const dateStr = typeof exp.date === 'string' ? exp.date : (exp.date?.toDate ? exp.date.toDate().toISOString().substring(0, 10) : (exp.date instanceof Date ? exp.date.toISOString().substring(0, 10) : ''));
-                if (dateStr.startsWith(targetMonth)) {
-                    const valCents = toCents(exp.value || 0);
-                    clientReceivableCents += valCents;
-                    if (exp.status === 'Pago' || exp.status === 'Paga') {
-                        clientPaidCents += valCents;
-                    }
-                }
-            }
-        });
-
-        // 3. Processar assinaturas vinculadas
-        safeSubs.forEach(sub => {
-            if (sub && sub.clientId === client.id && sub.isActive !== false && sub.status !== 'Inativa') {
-                const valCents = toCents(sub.amount !== undefined ? sub.amount : (sub.value || 0));
-                clientReceivableCents += valCents;
-                if (sub.status === 'Pago' || sub.status === 'Paga') {
-                    clientPaidCents += valCents;
-                }
-            }
-        });
-
-        const pendingCents = Math.max(0, clientReceivableCents - clientPaidCents);
-
-        grandTotalReceivableCents += clientReceivableCents;
-        grandTotalPaidCents += clientPaidCents;
-        grandTotalFutureCents += clientFutureRemainingCents;
+        grandTotalReceivableCents += acc.receivableCents;
+        grandTotalPaidCents += acc.paidCents;
+        grandTotalFutureCents += acc.futureRemainingCents;
 
         return {
             clientId: client.id,
             clientName: client.name,
-            receivableThisMonth: fromCents(clientReceivableCents),
-            paidThisMonth: fromCents(clientPaidCents),
+            receivableThisMonth: fromCents(acc.receivableCents),
+            paidThisMonth: fromCents(acc.paidCents),
             pendingThisMonth: fromCents(pendingCents),
-            totalFutureRemaining: fromCents(clientFutureRemainingCents),
+            totalFutureRemaining: fromCents(acc.futureRemainingCents),
             hasPending: pendingCents > 0
         };
     });
