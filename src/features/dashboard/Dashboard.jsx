@@ -41,6 +41,8 @@ const CreditCardKpiIcon = () => (
     </svg>
 );
 
+const INVOICE_BATCH_SIZE = 50;
+
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
     <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-fc-accent transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -69,6 +71,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
+    const [visibleInvoiceItemsCount, setVisibleInvoiceItemsCount] = useState(INVOICE_BATCH_SIZE);
     const scopeRef = useRef(null);
     const tableScrollRef = useRef(null);
     const [showLeftScrollShadow, setShowLeftScrollShadow] = useState(false);
@@ -473,11 +476,21 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         setSortConfig({ key, direction });
     };
 
+    // Reseta lote visível para o tamanho padrão ao alterar mês, filtros ou ordenação
+    useEffect(() => {
+        setVisibleInvoiceItemsCount(INVOICE_BATCH_SIZE);
+    }, [selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
+
+    // Lote visível renderizado na tabela e no card mobile (ordenação e filtros já aplicados em 100% dos dados)
+    const visibleDisplayableItems = useMemo(() => {
+        return displayableItems.slice(0, visibleInvoiceItemsCount);
+    }, [displayableItems, visibleInvoiceItemsCount]);
+
     useEffect(() => {
         updateScrollShadows();
         window.addEventListener('resize', updateScrollShadows);
         return () => window.removeEventListener('resize', updateScrollShadows);
-    }, [updateScrollShadows, displayableItems]);
+    }, [updateScrollShadows, visibleDisplayableItems]);
 
     const handleMarkAllAsPaid = async () => {
         setIsMarkAllPaidConfirmationOpen(false);
@@ -895,7 +908,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
-                                {displayableItems.length > 0 ? displayableItems.map((item) => {
+                                {visibleDisplayableItems.length > 0 ? visibleDisplayableItems.map((item) => {
                                     const client = clients.find(c => c.id === item.clientId);
                                     const card = cards.find(c => c.id === item.cardId);
                                     return (
@@ -971,7 +984,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
                 {/* Modo Cards Empilhados para Mobile (< 640px) */}
                 <div className="block sm:hidden divide-y divide-[var(--fc-border-subtle)]" data-testid="invoice-cards-mobile">
-                    {displayableItems.length > 0 ? displayableItems.map((item) => {
+                    {visibleDisplayableItems.length > 0 ? visibleDisplayableItems.map((item) => {
                         const client = clients.find(c => c.id === item.clientId);
                         const card = cards.find(c => c.id === item.cardId);
                         return (
@@ -1053,6 +1066,33 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         </div>
                     )}
                 </div>
+
+                {/* Controles de Lotes para Grandes Faturas */}
+                {displayableItems.length > visibleInvoiceItemsCount && (
+                    <div className="p-4 bg-[var(--fc-surface-2)]/40 border-t border-[var(--fc-border-subtle)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--fc-text-secondary)]">
+                        <span role="status" aria-live="polite">
+                            Exibindo <span className="font-semibold text-[var(--fc-text-primary)]">{visibleDisplayableItems.length}</span> de <span className="font-semibold text-[var(--fc-text-primary)]">{displayableItems.length}</span> itens
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setVisibleInvoiceItemsCount(prev => Math.min(prev + INVOICE_BATCH_SIZE, displayableItems.length))}
+                                aria-label={`Mostrar mais ${Math.min(INVOICE_BATCH_SIZE, displayableItems.length - visibleDisplayableItems.length)} itens da fatura`}
+                                className="px-4 py-2 rounded-xl bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] font-semibold border border-[var(--fc-border-default)] transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
+                            >
+                                Mostrar mais {Math.min(INVOICE_BATCH_SIZE, displayableItems.length - visibleDisplayableItems.length)} itens
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setVisibleInvoiceItemsCount(displayableItems.length)}
+                                aria-label={`Mostrar todos os ${displayableItems.length} itens da fatura`}
+                                className="px-3 py-2 rounded-xl bg-transparent hover:bg-[var(--fc-surface-2)] text-[var(--fc-accent)] font-semibold border border-[var(--fc-accent)]/30 hover:border-[var(--fc-accent)]/50 transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
+                            >
+                                Mostrar todos
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <GenericModal
@@ -1060,7 +1100,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 onClose={() => setIsMarkAllPaidConfirmationOpen(false)}
                 onConfirm={handleMarkAllAsPaid}
                 title="Confirmar Ação"
-                message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
+                message={`Tem certeza de que deseja marcar TODOS os ${displayableItems.filter(item => item.currentStatus !== 'Paga').length} itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita.`}
                 isConfirmation={true}
             />
 
