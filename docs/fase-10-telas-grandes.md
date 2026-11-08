@@ -110,6 +110,9 @@ Extração via Chrome DevTools Protocol (`Profiler.start` e `Profiler.stop`) dur
 
 ### 3.4. Tabela de Benchmark A/B Científico ($N = 7$ repetições, Mediana e P90) com Metas Originais
 
+> [!NOTE] Nota Metodológica sobre Linha de Base Anterior
+> As medições preliminares da primeira rodada da Fase 10 (Bloco C) utilizaram apenas $N = 3$ repetições em contexto de página compartilhado. Isso introduzia acúmulo de estado e alta variância térmica. A partir da Fase 10.1, adotou-se o protocolo com $N = 7$ repetições, isolando estritamente visitas frias (contexto e aba limpos por repetição) e visitas quentes (ida e volta estabilizada), garantindo significância estatística (Mediana e P90).
+
 **Critérios Originais de Sucesso:**
 - **CPU 1x (Desktop Normal):** Nenhuma transição com Long Task pior que a BASE de origem.
 - **CPU 4x (Notebook Intermediário):** Na visita QUENTE, nenhuma Long Task > 100ms; na visita FRIA, nenhuma > 150ms.
