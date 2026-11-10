@@ -13,7 +13,9 @@ A Fase 11 atacou de forma factual e mensurável os 4 principais gargalos de lat�
    - **Resultado:** Eliminação de 100% da transferência de assets com hash na 2ª visita (**0 bytes transferidos pela rede**, contra 191 kB no baseline), carregando instantaneamente do cache de disco (`fromDiskCache: true`) em **2,3s** mesmo sob rede Slow 4G.
 2. **Divisão de Bundles e Code Splitting Estável (`manualChunks` no Rollup):**
    - **Commit:** `0e00873` — `perf(bundle): divide vendors estaveis via manualchunks no rollup`
-   - **Resultado:** O bundle de entrada `index.js` foi reduzido de **677,29 kB para 19,25 kB** (**-97,2%** de redução no chunk inicial). O peso de `DashboardLayout.js` caiu de **609,11 kB para 199,33 kB** (**-67,3%**). O módulo pesado de `vendor-recharts` (384 kB) foi totalmente desacoplado da Landing Page e do Login, reduzindo o FCP da Landing sob Slow 4G de 7.744ms para 3.640ms (**-53% de tempo até o primeiro paint**).
+   - **Endurecimento:** `38c459f` — `perf(bundle): endurece manualchunks com correspondencia exata de pacotes`
+   - **Resultado Arquitetural:** O bundle de entrada `index.js` foi reduzido de **677,29 kB para 18,84 kB** raw (6,77 kB gzip). O módulo pesado de gráficos `vendor-recharts` (400,52 kB raw / 108,01 kB gzip) foi totalmente desacoplado da Landing Page e do Login.
+   - **Esclarecimento Importante sobre Primeira Visita (Carga Fria):** A hipótese preliminar de que a divisão de chunks reduziria pela metade o FCP/LCP da primeira visita na Landing e Login **não se confirmou na medição científica rigorosa**. Conforme auditado nas Seções 5 e 6, a divisão em múltiplos chunks introduz saltos adicionais de RTT na cascata de módulos e concorre com o pré-carregamento do Firebase, mantendo o Login em empate técnico e a Landing ligeiramente mais lenta na carga fria. O ganho real do `manualChunks` manifesta-se no isolamento de dependências e no cache de visitantes recorrentes após novos deploys (auditado no Bloco 3).
 3. **Renderização em Lotes da Tabela da Fatura ("Mostrar Mais 50 Itens"):**
    - **Commit:** `f3ca61a` — `perf(dashboard): renderiza itens da fatura em lotes preservando total e acao em massa`
    - **Resultado:** A tabela da fatura e os cards mobile agora renderizam um lote inicial de 50 itens. Com a fixture pesada (300+ itens), mais de 500 nós DOM deixaram de ser criados no mesmo ciclo de render. Filtros e ordenação continuam operando sobre 100% dos dados, KPIs exibem valores consolidados completos, e a ação "Marcar Tudo Como Pago" atualiza 100% dos itens da fatura com contagem explícita.
@@ -27,9 +29,17 @@ A Fase 11 atacou de forma factual e mensurável os 4 principais gargalos de lat�
 
 ### 2.1. Carga Fria e Rede Lenta no Build de Produção
 
-Medições conduzidas com Playwright sobre o build estático de produção em servidor local (`dist/` servido com headers HTTP controlados):
+> [!WARNING] MEDIÇÃO PRELIMINAR INVÁLIDA (ANULADA METODOLOGICAMENTE)
+> As medições preliminares constantes na tabela abaixo foram realizadas durante a exploração inicial e são **metodologicamente inválidas**. 
+> **Motivos da Invalidação:**
+> 1. **Poluição de Cache:** O contexto do navegador Playwright foi reutilizado entre rodadas sem isolamento estrito, permitindo reutilização de recursos cacheados em memória/disco.
+> 2. **Bytes Truncados:** O cálculo de bytes encerrou antes da finalização de requisições assíncronas em segundo plano, reportando valores artificialmente baixos (ex.: 97 kB / 124 kB).
+> 3. **Métricas Falsas (FCP/LCP):** Valores de FCP/LCP foram registrados sem validação de sanidade (gerando instâncias de 0ms ou valores coincidentes espúrios).
+> 4. **Conclusão Anulada:** Qualquer afirmação preliminar de que o Login teve "redução de 60%" ou que a Landing caiu 53% na carga fria decorreu dessa medição viciada e está formalmente revogada.
+> 
+> A **medição A/B científica válida, corrigida e definitiva** ($N = 7$, 112 page loads, contexto virgem por rodada, cache desabilitado e verificação de sanidade) encontra-se documentada na **Seção 5**.
 
-| Página | Perfil de Rede | Throttling CPU | FCP | LCP | TBT | Usável | Bytes Transferidos |
+| Página | Perfil de Rede | Throttling CPU | FCP (Inválido) | LCP (Inválido) | TBT (Inválido) | Usável (Inválido) | Bytes (Truncados) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Landing (`/`)** | Slow 4G (1.6 Mbps, 150ms RTT) | 1x | 7.744ms | 7.744ms | 8.045ms | 13.589ms | 124,7 kB |
 | **Landing (`/`)** | Slow 4G (1.6 Mbps, 150ms RTT) | 4x | 6.776ms | 6.776ms | 6.977ms | 10.868ms | 246,1 kB |
@@ -155,3 +165,180 @@ Medições conduzidas com a fixture pesada realista (`heavyAccountFixture.js`: 8
 - [x] **Design System e Cores:** Zero cores hexadecimais novas. Utilização exclusiva dos tokens canônicos do FinControl DS2.
 - [x] **Acessibilidade (WCAG):** Controles de lotes possuem atributos `role="status"`, `aria-live="polite"` e botões de ação com hit targets acessíveis (`min-h-[44px]`).
 - [x] **Zero Vazamento em Produção:** Varredura estrita em `dist/assets/` confirma zero ocorrências de `fincontrol_e2e`, `__FINCONTROL_E2E`, `test-user` ou `legacyFinancial`.
+
+---
+
+## 5. Benchmark A/B Científico de Carga Fria (BASE vs HEAD, $N = 7$)
+
+Medição comparativa automatizada executada com Playwright via Chrome DevTools Protocol (`Network.emulateNetworkConditions`, isolamento total de contexto por rodada via `browser.newContext({ serviceWorkers: 'block' })`, cache estritamente desabilitado via `Network.setCacheDisabled: true`), intercalando BASE (`origin/main`, `c265f81`) e HEAD (`38c459f`), com $N = 7$ repetições por cenário (total de 112 page loads executados, **0 rodadas descartadas**):
+
+### 5.1. Tabela Comparativa de Métricas (Mediana e P90)
+
+| Página | Perfil de Rede | CPU | BASE FCP | HEAD FCP | BASE LCP (Med / P90) | HEAD LCP (Med / P90) | BASE TBT | HEAD TBT | BASE Usável | HEAD Usável | BASE Bytes | HEAD Bytes | Req (B/H) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Landing (`/`)** | Slow 4G | 1x | 7.156ms | 7.440ms | 7.156ms / 10.168ms | 7.500ms / 9.236ms | 2.160ms | 3.221ms | 7.103ms | 8.115ms | 1.052,3 kB | 1.419,7 kB | 15 / 21 |
+| **Landing (`/`)** | Slow 4G | 4x | 10.160ms | 10.888ms | 10.160ms / 11.688ms | 10.888ms / 13.368ms | 7.405ms | 8.295ms | 11.370ms | 14.255ms | 1.052,2 kB | 1.806,0 kB | 15 / 23 |
+| **Landing (`/`)** | Fast 3G | 1x | 13.088ms | 14.136ms | 13.088ms / 13.872ms | 14.136ms / 15.584ms | 1.952ms | 1.238ms | 13.108ms | 14.093ms | 1.011,9 kB | 982,1 kB | 14 / 17 |
+| **Landing (`/`)** | Fast 3G | 4x | 16.256ms | 17.396ms | 16.256ms / 17.124ms | 17.396ms / 18.856ms | 7.881ms | 9.494ms | 18.101ms | 19.451ms | 1.052,2 kB | 1.454,4 kB | 15 / 22 |
+| **Login (`/login`)** | Slow 4G | 1x | 4.872ms | 4.896ms | 4.872ms / 5.268ms | 4.896ms / 5.268ms | 51ms | 32ms | 4.931ms | 4.955ms | 773,4 kB | 785,5 kB | 12 / 15 |
+| **Login (`/login`)** | Slow 4G | 4x | 5.548ms | 5.752ms | 5.548ms / 6.396ms | 5.752ms / 6.508ms | 253ms | 177ms | 5.604ms | 5.863ms | 816,1 kB | 785,5 kB | 13 / 15 |
+| **Login (`/login`)** | Fast 3G | 1x | 9.860ms | 9.948ms | 9.860ms / 10.628ms | 9.948ms / 11.000ms | 54ms | 36ms | 10.086ms | 10.248ms | 773,4 kB | 785,5 kB | 12 / 15 |
+| **Login (`/login`)** | Fast 3G | 4x | 10.280ms | 10.352ms | 10.280ms / 10.448ms | 10.352ms / 11.004ms | 184ms | 133ms | 10.343ms | 10.375ms | 773,4 kB | 785,5 kB | 12 / 15 |
+
+### 5.2. Análise da Variação de Bytes do HEAD e Justiça da Comparação
+
+Na tabela acima, nota-se que o volume de bytes transferidos no HEAD na Landing varia expressivamente entre cenários (1.419,7 kB / 1.806,0 kB / 982,1 kB / 1.454,4 kB).
+- **O que o script mede exatamente:** O script acumula os bytes reais da rede via `encodedDataLength` dos eventos CDP `Network.loadingFinished` e `Network.dataReceived` escutados desde o início de `page.goto` até o instante em que a página atinge o critério de "usável" (`page.waitForSelector` + período de estabilização de métricas).
+- **Causa da variação:** Sob conexões mais lentas ou com CPU throttled (ex.: Slow 4G + CPU 4x), a Landing leva de 14s a 19s para atingir o estado usável. Nessa janela de tempo dilatada, requisições secundárias assíncronas — notadamente múltiplos arquivos de fontes binárias WOFF2 requisitados sob demanda pelo Google Fonts para glifos e pesos específicos — têm tempo suficiente para completar a transferência e entrar na soma. Em conexões mais rápidas ou com menor throttling, a página atinge o seletor antes que esses downloads em segundo plano terminem, registrando menos bytes capturados.
+- **Veredito sobre a Justiça da Comparação:** A medição de bytes brutos na Landing via janela temporal dinâmica **NÃO é uma comparação estritamente justa de peso de payload da página**, pois o total capturado é uma função da duração do teste e do corte temporal das requisições assíncronas. Para comparar com rigor o tamanho dos recursos, deve-se adotar o inventário estático dos chunks e assets baixados na rota (detalhado na Seção 5.3 e Seção 9.1).
+
+### 5.3. Decomposição de Recursos: O Que Realmente Pesa no Login e na Landing
+
+Embora o Login trafegue aproximadamente **~785 kB** e a Landing de **~980 kB a 1.800 kB** pela rede, **o código JavaScript da aplicação representa uma fatia minoritária desse volume**:
+
+#### A. Decomposição do Login (`/login`) — Total medido: ~785 kB transferidos:
+1. **JavaScript da Aplicação e Dependências (Gzip): ~183,1 kB**
+   - `index.js`: 6,77 kB gzip (18,84 kB raw)
+   - `vendor-react.js`: 58,22 kB gzip (177,70 kB raw)
+   - `vendor-firebase.js`: 110,56 kB gzip (474,76 kB raw)
+   - `AuthScreen.js`: 4,09 kB gzip (12,54 kB raw)
+   - `FinControlMark.js`: 2,83 kB gzip (11,06 kB raw)
+   - `theme-init.js`: 0,63 kB gzip (1,35 kB raw)
+2. **CSS da Aplicação (Gzip): 12,71 kB**
+   - `index.css`: 12,71 kB gzip (70,76 kB raw)
+3. **HTML e Metadados Locais: ~15,0 kB**
+   - `index.html`: 0,85 kB gzip (2,25 kB raw)
+   - Favicons e Manifest (`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`, `site.webmanifest`): ~14 kB
+4. **Recursos Externos de Terceiros (Google Fonts): ~570 kB a 590 kB**
+   - 5 folhas de estilo CSS de fontes (`fonts.googleapis.com`): ~15 kB
+   - Múltiplos arquivos binários WOFF2 (`fonts.gstatic.com`) contendo subsets tipográficos de `Inter` (pesos 400, 500, 600, 700) e `Roboto` (400, 700).
+   - *Fato Arquitetural:* Mais de **72% dos bytes baixados na tela de Login provêm exclusivamente das webfonts externas** do Google Fonts, e não do bundle do FinControl.
+
+#### B. Decomposição da Landing (`/`) — Total medido: ~980 kB a 1.800 kB transferidos:
+1. **JavaScript da Aplicação e Dependências (Gzip): ~244,8 kB**
+   - Recursos base acima: ~183,1 kB
+   - `LandingPage.js`: 17,33 kB gzip (81,81 kB raw)
+   - `vendor-gsap.js`: 44,40 kB gzip (112,16 kB raw)
+2. **CSS, HTML e Favicons: ~27,7 kB**
+3. **Webfonts Externas Completas (Google Fonts): ~700 kB a 1.500 kB**
+   - Baixa fontes adicionais pesadas exclusivas do visual da Landing: `Gloock`, `Basic` e `Concert One`, além de glifos estendidos de `Inter` e `Roboto`.
+   - Conforme a conexão permite maior tempo de janela, mais fontes binárias completam transferência.
+
+---
+
+## 6. Atribuição Factual do LCP da Landing e Proposta Técnica do Firebase
+
+### 6.1. Identificação do Elemento LCP
+A amostragem via `LargestContentfulPaint` API no Chromium identificou como elemento responsável pelo LCP da Landing:
+- **Seletor DOM:** `DIV.lg:col-span-6.flex` contendo o cabeçalho principal `H1.text-4xl.sm:text-5xl` ("Suas faturas sob controle sem compartilhar senhas ou chaves de banco").
+- Não há imagem bitmap de grandes dimensões acima da dobra; o LCP é estritamente textual com tipografia estilizada e layout flexível.
+
+### 6.2. O que domina o tempo do LCP na Landing
+A auditoria da cascata de rede sob Slow 4G comprovou que o LCP é dominado por:
+1. **Cascata de 3 Round-Trips de Rede sob RTT Alto (150ms a 300ms):**
+   `index.html` (1ª requisição) $\rightarrow$ `index.js` (2ª requisição) $\rightarrow$ `LandingPage.js` (rota dinâmica com code-splitting) $\rightarrow$ `vendor-gsap.js` (animação do Hero).
+2. **Disputa de Banda de Rede com Pré-Carregamento do Firebase:**
+   O arquivo `index.html` gerado pelo Vite contém `<link rel="modulepreload">` para `vendor-firebase` (474,8 kB raw / 110,6 kB gzip). Em uma conexão restrita a 400 kbps (Slow 4G), esse chunk concorre com a transferência de `LandingPage.js` e `vendor-gsap.js`, adiando o momento em que o Hero se torna visível.
+3. **Carregamento Bloqueante de Webfonts:**
+   O `<head>` possui 5 links síncronos para `fonts.googleapis.com` (Roboto, Gloock, Basic, Concert One, Inter), que introduzem latência de DNS e TLS sob redes lentas.
+
+### 6.3. Vereditos Honestos por Critério ("LCP no Slow 4G + CPU 4x melhor que a BASE")
+
+- **Login (`/login`): NÃO ATINGIDO.**
+  - BASE: LCP Mediana **5.548ms** (P90 **6.396ms**) | Usável: **5.604ms** | TBT: **253ms**
+  - HEAD: LCP Mediana **5.752ms** (P90 **6.508ms**) | Usável: **5.863ms** | TBT: **177ms**
+  - *Diagnóstico:* Empate técnico com ligeira regressão de ~3,6% no LCP (+204ms) devido ao salto extra de módulo. Embora o TBT tenha melhorado 30% (177ms vs 253ms), a meta de reduzir o LCP da primeira visita não foi superada.
+- **Landing (`/`): NÃO ATINGIDO.**
+  - BASE: LCP Mediana **10.160ms** (P90 **11.688ms**) | Usável: **11.370ms** | TBT: **7.405ms**
+  - HEAD: LCP Mediana **10.888ms** (P90 **13.368ms**) | Usável: **14.255ms** | TBT: **8.295ms**
+  - *Diagnóstico:* O HEAD ficou ~7% mais lento no LCP (+728ms) e ~25% mais lento no tempo até usável (+2.885ms). A fragmentação de vendors em múltiplos arquivos penalizou a primeira visita sob conexões com RTT alto de 150ms-300ms, concorrendo com o pré-carregamento estático de `vendor-firebase`.
+
+### 6.4. Proposta Técnica: Adiar Carregamento do Firebase na Landing Pública
+- **Mecanismo Atual:** `App.jsx` engloba todas as rotas com `AppProvider`. O `AppProvider` importa estaticamente `firebase.js` (`auth`, `db`), forçando o Rollup a considerar o Firebase como dependência compartilhada estática desde a raiz, injetando `<link rel="modulepreload">` no `index.html`.
+- **Proposta Técnica:**
+  1. Extrair a Landing Page (`/`) para fora do `AppProvider`, isolando as rotas públicas de marketing das rotas com contexto autenticado.
+  2. Implementar lazy loading na inicialização do Firebase (`initFirebaseOnDemand()`), instanciando SDKs de auth e firestore apenas quando a rota autenticada (`/dashboard`, `/login`) for requisitada.
+- **Ganho Estimado:** Economia imediata de **110,6 kB gzip (474,8 kB raw)** na Landing pública e redução projetada de **800ms a 1.500ms** no LCP da Landing sob conexões móveis lentas.
+- **Riscos e Cuidados:** Requer reestruturação da árvore de provedores em `App.jsx` para evitar que hooks como `useAppContext` quebrem em páginas públicas, exigindo testes rigorosos de regressão no ciclo de login e redirecionamento. *Conforme a regra do projeto, nenhuma alteração de código foi realizada nesta fase, ficando registrada esta proposta técnica.*
+
+---
+
+## 7. Testes Determinísticos da Fatura (Paginação, KPIs e Limite de 500 do Firestore)
+
+### 7.1. Fixture de Grande Porte ($\ge 130$ Itens no Mês)
+Criada fixture determinística em `e2e/fixtures/invoice130Fixture.js`, gerando 156 itens no mês de competência `2026-11`:
+- 70 compras individuais (70 parcelas)
+- 20 compras compartilhadas entre 2 pessoas (40 parcelas)
+- 40 despesas avulsas de cartão
+- 30 assinaturas ativas com cobrança no mês
+- 16 pendências adicionais, totalizando **156 itens**.
+
+### 7.2. Paginação em Lotes e Zero Drift
+Testes automatizados cobrindo os requisitos constitucionais:
+- **Fatiamento Inicial:** Exibe rigorosamente 50 itens (`<tr>` na tabela desktop, `<div>` nos cards mobile).
+- **Expansão Gradual:** Clicar em "Mostrar mais 50 itens" expande a exibição para 100 itens.
+- **Expansão Total:** Clicar em "Mostrar todos" renderiza todos os 156 itens.
+- **Acessibilidade do Rodapé:** Elemento `<span role="status" aria-live="polite">` anuncia a contagem correta ("Exibindo 50 de 156 itens").
+- **Reset Automático:** Alterar a ordenação por coluna, o filtro de cartão, filtro de pessoa ou o mês selecionado reseta a visualização instantaneamente para o primeiro lote de 50 itens.
+- **Zero Drift nos KPIs:** A soma total da fatura (R$ 29.854,31) e os cartões de "Total", "Você deve" e "A receber" permanecem calculados sobre os 156 itens, com zero desvio de centavos independente da paginação visual.
+
+### 7.3. Auditoria do Limite de 500 Operações no `writeBatch` do Cloud Firestore
+- **Inspeção de Código:** `src/features/dashboard/Dashboard.jsx` (linha 556) instancia um único `const batch = writeBatch(db)` na função `handleMarkAllAsPaid` e executa `await batch.commit()` na linha 665.
+- **Risco Técnico Comprovado:** O Cloud Firestore impõe um limite estrito de **no máximo 500 operações por writeBatch**. Se uma fatura contiver mais de 500 itens pendentes (despesas + assinaturas + parcelas de compras compartilhadas em empréstimos), a chamada falhará em produção com `FirebaseError: [code=invalid-argument]: A write batch can contain at most 500 operations.`
+- **Comprovação Automatizada:** O teste unitário em `tests/invoicePaginationAndBatch.test.js` simula o commit de 140 itens (passa com sucesso) e de 501 itens (demonstra a rejeição matemática pelo limite).
+- **Tratamento:** Risco pré-existente documentado sem alteração no código de produção nesta fase, com recomendação de fatiamento em chunks (`chunkArray(operations, 450)`) na próxima janela arquitetural.
+
+---
+
+## 8. Montagem em Duas Etapas e Medição de Cumulative Layout Shift (CLS)
+
+### 8.1. Arquitetura de Montagem
+O componente `ProSummary` e o `Dashboard` implementam a técnica de Staged Mount:
+- **Etapa 1 (Imediata):** Casca visual, filtros de mês/cartão/pessoa, cards de KPI superiores e skeletons de contenção com altura fixa (`h-[380px]`).
+- **Etapa 2 (Após Frame Ocioso / Fallback 400ms):** Renderização pesada de `ProAnalyticsCharts`, `MonthlyEvolutionChart` e `FutureCommitmentsCard`.
+
+### 8.2. Medição Real de CLS via PerformanceObserver
+Medições automatizadas via Playwright no Chromium com a fixture pesada carregada:
+
+| Cenário de Teste | Resolução Viewport | CLS Medido | Critério Obrigatório | Status |
+| :--- | :---: | :---: | :---: | :---: |
+| **Carga Direta do Resumo** | 1366x768 (Notebook) | **0.0000** | $< 0.05$ (Ideal $< 0.01$) | **Aprovado (Zero Shift)** |
+| **Carga Direta do Resumo** | 1920x1080 (Full HD) | **0.0000** | $< 0.05$ (Ideal $< 0.01$) | **Aprovado (Zero Shift)** |
+| **Troca de Abas (Resumo $\rightarrow$ Movimentações $\rightarrow$ Resumo)** | 1366x768 (Notebook) | **0.0000** | $< 0.05$ (Ideal $< 0.01$) | **Aprovado (Zero Shift)** |
+
+*Explicação Técnica:* A contenção de layout fixa nos placeholders combinada com o véu de transição opaco dissipa qualquer salto de layout antes que a camada visual seja exposta ao usuário.
+
+---
+
+## 9. Tabela Consolidada de Métricas e Estabilidade de Testes
+
+### 9.1. Inventário Completo de Bundles de Produção (`dist/assets/`)
+O endurecimento do `manualChunks` com correspondência exata via `getPackageName` eliminou todos os avisos de Circular Chunk. Abaixo o inventário completo de todos os 21 arquivos gerados pelo Vite no build de produção:
+
+| Arquivo / Chunk | Papel / Módulo | Tamanho Raw | Tamanho Gzip |
+| :--- | :--- | :---: | :---: |
+| `vendor-firebase-C9dS1qb3.js` | Firebase SDKs (app, auth, firestore) | 474,76 kB | 110,56 kB |
+| `vendor-recharts-C3GZJaR8.js` | Recharts, Victory, D3 e dependências gráficas | 400,52 kB | 108,01 kB |
+| `jspdf.es.min-BZBpbbRc.js` | Motor jsPDF para exportação de relatórios | 381,79 kB | 126,00 kB |
+| `PdfImportModal-CHf6Odd7.js` | Parser e modal de importação de PDF de faturas | 343,64 kB | 101,26 kB |
+| `ClientManagement-DlQRcEd1.js` | Gestão de Pessoas e devedores | 226,60 kB | 55,31 kB |
+| `DashboardLayout-Cx4kVL8z.js` | Estrutura principal, sidebar e shell do Dashboard | 198,87 kB | 48,16 kB |
+| `vendor-react-DStowVCe.js` | React, React DOM, Scheduler, React Router | 177,70 kB | 58,22 kB |
+| `index.es-BXnYGkiX.js` | Utilitários de gráficos e componentes auxiliares | 147,04 kB | 50,25 kB |
+| `vendor-gsap-CiEuWA-R.js` | GSAP Core (animações do véu e landing) | 112,16 kB | 44,40 kB |
+| `LandingPage-Dk8L1HQk.js` | Rota pública da Landing Page | 81,81 kB | 17,33 kB |
+| `index-DUqQveDX.css` | Folha de estilos consolidada (Tailwind CSS) | 70,76 kB | 12,71 kB |
+| `TransactionManagement-S3UKEATr.js` | Gestão de Movimentações | 64,21 kB | 13,25 kB |
+| `purify.es-DP5U8-sc.js` | DOMPurify (sanitização de conteúdo) | 28,48 kB | 10,73 kB |
+| `index-CgmIphum.js` | Ponto de entrada da aplicação (`main.jsx`) | 18,84 kB | 6,77 kB |
+| `CardManagement-CGDkv0GJ.js` | Gestão de Cartões de Crédito | 15,42 kB | 4,71 kB |
+| `AuthScreen-DSFpbfSx.js` | Tela de Login e Cadastro | 12,54 kB | 4,09 kB |
+| `SubscriptionManagement-eH1Em2ZF.js` | Gestão de Assinaturas | 12,10 kB | 3,63 kB |
+| `FinControlMark-Dzj9UG65.js` | Logo e marca SVG vetorial do FinControl | 11,06 kB | 2,83 kB |
+| `Modal-sEIWYyVL.js` | Componente base de Modal acessível | 8,55 kB | 2,70 kB |
+| `themeTransition-CGAbprxN.js` | Script de transição de tema | 2,86 kB | 1,12 kB |
+| `planEntitlements-BajWXh5s.js` | Tabela de permissões e limites de planos | 0,74 kB | 0,37 kB |
+
+### 9.2. Estabilidade da Suíte de Testes
+- **Vitest Unitários / Integração:** `tests/invoicePaginationAndBatch.test.js` (11 testes) executado em loop de **10 iterações consecutivas**: **100% de sucesso (0 testes flaky)**.
+- **Playwright E2E:** `e2e/invoice-pagination-and-staging.spec.js` (9 testes) executado contra servidor de desenvolvimento: **9/9 aprovados (0 testes flaky)**.
