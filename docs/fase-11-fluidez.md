@@ -11,11 +11,10 @@ A Fase 11 atacou de forma factual e mensurável os 4 principais gargalos de lat�
 1. **Segunda Visita Instantânea (Cache Imutável no Firebase Hosting):**
    - **Commit:** `bd0f11a` — `perf(cache): adiciona cache-control imutavel para assets com hash no firebase.json`
    - **Resultado:** Eliminação de 100% da transferência de assets com hash na 2ª visita (**0 bytes transferidos pela rede**, contra 191 kB no baseline), carregando instantaneamente do cache de disco (`fromDiskCache: true`) em **2,3s** mesmo sob rede Slow 4G.
-2. **Divisão de Bundles e Code Splitting Estável (`manualChunks` no Rollup):**
-   - **Commit:** `0e00873` — `perf(bundle): divide vendors estaveis via manualchunks no rollup`
-   - **Endurecimento:** `38c459f` — `perf(bundle): endurece manualchunks com correspondencia exata de pacotes`
-   - **Resultado Arquitetural:** O bundle de entrada `index.js` foi reduzido de **677,29 kB para 18,84 kB** raw (6,77 kB gzip). O módulo pesado de gráficos `vendor-recharts` (400,52 kB raw / 108,01 kB gzip) foi totalmente desacoplado da Landing Page e do Login.
-   - **Esclarecimento Importante sobre Primeira Visita (Carga Fria) e Visitante Recorrente:** A hipótese preliminar de que a divisão de chunks reduziria pela metade o FCP/LCP da primeira visita na Landing e Login **não se confirmou na medição científica rigorosa**. Conforme auditado nas Seções 5 e 6, a divisão em múltiplos chunks introduz saltos adicionais de RTT na cascata de módulos e concorre com o pré-carregamento do Firebase, mantendo o Login em empate técnico e a Landing 25% mais lenta na carga fria (+2.885ms). Na segunda visita pós-deploy (Seção 10), a divisão gerou ligeiro ganho de tempo de execução, mas não reduziu bytes de rede (trafegou +2,9 kB e 2 a 3 requisições a mais), recomendando-se a reversão para o split padrão do Vite mantendo o cache imutável no Firebase Hosting.
+2. **Divisão de Bundles via `manualChunks` (Testado e Revertido):**
+   - **Histórico e Reversão:** Testado inicialmente nos commits `0e00873` e `38c459f` e formalmente **REVERTIDO** no commit `5a72ef0` para o split padrão do Vite/Rollup (`c265f81`), mantendo o `Cache-Control` imutável de `/assets/**` no `firebase.json`.
+   - **Motivo da Reversão:** Na medição científica de carga fria ($N = 7$), a fragmentação em múltiplos chunks aumentou a cascata de RTT em conexões móveis lentas (Slow 4G), provocando uma regressão de **+2.885ms (+25%)** no tempo até usável da Landing Page (14.255ms no HEAD vs 11.370ms na BASE; P90 de 19.900ms vs 12.007ms). Na segunda visita pós-deploy, os vendors foram baixados novamente (`fromDiskCache: false`), mostrando que o teste foi inconclusivo e não houve economia líquida de rede (+2,9 kB transferidos).
+   - **Resultado Pós-Reversão (Fase 11.5):** Com o split padrão restaurado, a carga fria da Landing e Login retornou à paridade perfeita com a BASE (Landing: 12.287ms vs 13.379ms; Login: 5.590ms vs 5.589ms), enquanto os ganhos de troca de abas foram 100% preservados.
 3. **Renderização em Lotes da Tabela da Fatura ("Mostrar Mais 50 Itens"):**
    - **Commit:** `f3ca61a` — `perf(dashboard): renderiza itens da fatura em lotes preservando total e acao em massa`
    - **Resultado:** A tabela da fatura e os cards mobile agora renderizam um lote inicial de 50 itens. Com a fixture pesada (300+ itens), mais de 500 nós DOM deixaram de ser criados no mesmo ciclo de render. Filtros e ordenação continuam operando sobre 100% dos dados, KPIs exibem valores consolidados completos, e a ação "Marcar Tudo Como Pago" atualiza 100% dos itens da fatura com contagem explícita.
@@ -259,7 +258,24 @@ A auditoria da cascata de rede sob Slow 4G comprovou que o LCP é dominado por:
   1. Extrair a Landing Page (`/`) para fora do `AppProvider`, isolando as rotas públicas de marketing das rotas com contexto autenticado.
   2. Implementar lazy loading na inicialização do Firebase (`initFirebaseOnDemand()`), instanciando SDKs de auth e firestore apenas quando a rota autenticada (`/dashboard`, `/login`) for requisitada.
 - **Ganho Estimado:** Economia imediata de **110,6 kB gzip (474,8 kB raw)** na Landing pública e redução projetada de **800ms a 1.500ms** no LCP da Landing sob conexões móveis lentas.
-- **Riscos e Cuidados:** Requer reestruturação da árvore de provedores em `App.jsx` para evitar que hooks como `useAppContext` quebrem em páginas públicas, exigindo testes rigorosos de regressão no ciclo de login e redirecionamento. *Conforme a regra do projeto, nenhuma alteração de código foi realizada nesta fase, ficando registrada esta proposta técnica.*
+- **Riscos e Cuidados:** Requer reestruturação da árvore de provedores em `App.jsx` para evitar que hooks como `useAppContext` quebrem em páginas públicas, exigindo testes rigorosos de regressão no ciclo de login e redirecionamento. *Conforme a regra do projeto, nenhuma alteração de código foi realizada nesta fase, ficando registrada esta proposta técnica como pendência para fases futuras.*
+
+### 6.5. Remedição Factual Pós-Reversão do `manualChunks` (Fase 11.5)
+
+Executada a remedição automatizada em A/B de carga fria (BASE `c265f81` vs HEAD novo com split padrão, $N = 7$ intercalados, Slow 4G + CPU 4x, cache desabilitado via CDP):
+
+| Página / Rota | Métrica | BASE (`c265f81`) | HEAD Novo (Revertido) | Diferença (HEAD vs BASE) | Veredito Factual |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Landing (`/`)** | FCP (Med / P90) | 9.916ms / 10.392ms | **9.320ms / 11.176ms** | -596ms no FCP | **HEAD $\approx$ BASE** (Regressão eliminada) |
+| **Landing (`/`)** | LCP (Med / P90) | 9.992ms / 10.428ms | **9.352ms / 11.176ms** | -640ms no LCP | **HEAD $\approx$ BASE** (Regressão eliminada) |
+| **Landing (`/`)** | Usável (Med / P90) | 13.379ms / 17.154ms | **12.287ms / 14.677ms** | **-1.092ms mais rápido** | **HEAD $\approx$ BASE** (Sem penalidade) |
+| **Landing (`/`)** | Bytes na Rede | 1.795,2 kB | 1.795,2 kB | 0 B (Idêntico) | Paridade absoluta de payload |
+| **Login (`/login`)** | FCP (Med / P90) | 5.560ms / 5.752ms | **5.520ms / 5.716ms** | -40ms | **HEAD $\approx$ BASE** |
+| **Login (`/login`)** | LCP (Med / P90) | 5.560ms / 5.752ms | **5.520ms / 5.716ms** | -40ms | **HEAD $\approx$ BASE** |
+| **Login (`/login`)** | Usável (Med / P90) | 5.589ms / 5.773ms | **5.590ms / 5.719ms** | **+1ms (Empate exato)** | **HEAD $\approx$ BASE** |
+| **Login (`/login`)** | Bytes na Rede | 817,8 kB | 817,8 kB | 0 B (Idêntico) | Paridade absoluta de payload |
+
+*Conclusão da Remedição:* A eliminação do `manualChunks` restaurou integralmente o desempenho de carga fria na Landing Page e no Login, removendo a perda de 2,8s que a fragmentação manual impunha sob Slow 4G. Concomitantemente, a montagem em duas etapas (`ProSummary.jsx`) manteve a redução histórica do Max Long Task de **1.055ms para 598ms (-43,3%)** na transição `Assinaturas -> Resumo` sob CPU 4x.
 
 ---
 
@@ -312,32 +328,29 @@ Medições automatizadas via Playwright no Chromium com a fixture pesada carrega
 
 ## 9. Tabela Consolidada de Métricas e Estabilidade de Testes
 
-### 9.1. Inventário Completo de Bundles de Produção (`dist/assets/`)
-O endurecimento do `manualChunks` com correspondência exata via `getPackageName` eliminou todos os avisos de Circular Chunk. Abaixo o inventário completo de todos os 21 arquivos gerados pelo Vite no build de produção:
+### 9.1. Inventário Completo de Bundles de Produção (`dist/assets/` — Split Padrão Rollup/Vite)
+Com a reversão do `manualChunks` no commit `5a72ef0`, o Rollup opera com o code-splitting padrão natural do Vite. Abaixo o inventário completo dos 18 arquivos gerados no build de produção:
 
 | Arquivo / Chunk | Papel / Módulo | Tamanho Raw | Tamanho Gzip |
 | :--- | :--- | :---: | :---: |
-| `vendor-firebase-C9dS1qb3.js` | Firebase SDKs (app, auth, firestore) | 474,76 kB | 110,56 kB |
-| `vendor-recharts-C3GZJaR8.js` | Recharts, Victory, D3 e dependências gráficas | 400,52 kB | 108,01 kB |
-| `jspdf.es.min-BZBpbbRc.js` | Motor jsPDF para exportação de relatórios | 381,79 kB | 126,00 kB |
-| `PdfImportModal-CHf6Odd7.js` | Parser e modal de importação de PDF de faturas | 343,64 kB | 101,26 kB |
-| `ClientManagement-DlQRcEd1.js` | Gestão de Pessoas e devedores | 226,60 kB | 55,31 kB |
-| `DashboardLayout-Cx4kVL8z.js` | Estrutura principal, sidebar e shell do Dashboard | 198,87 kB | 48,16 kB |
-| `vendor-react-DStowVCe.js` | React, React DOM, Scheduler, React Router | 177,70 kB | 58,22 kB |
-| `index.es-BXnYGkiX.js` | Utilitários de gráficos e componentes auxiliares | 147,04 kB | 50,25 kB |
-| `vendor-gsap-CiEuWA-R.js` | GSAP Core (animações do véu e landing) | 112,16 kB | 44,40 kB |
-| `LandingPage-Dk8L1HQk.js` | Rota pública da Landing Page | 81,81 kB | 17,33 kB |
-| `index-DUqQveDX.css` | Folha de estilos consolidada (Tailwind CSS) | 70,76 kB | 12,71 kB |
-| `TransactionManagement-S3UKEATr.js` | Gestão de Movimentações | 64,21 kB | 13,25 kB |
-| `purify.es-DP5U8-sc.js` | DOMPurify (sanitização de conteúdo) | 28,48 kB | 10,73 kB |
-| `index-CgmIphum.js` | Ponto de entrada da aplicação (`main.jsx`) | 18,84 kB | 6,77 kB |
-| `CardManagement-CGDkv0GJ.js` | Gestão de Cartões de Crédito | 15,42 kB | 4,71 kB |
-| `AuthScreen-DSFpbfSx.js` | Tela de Login e Cadastro | 12,54 kB | 4,09 kB |
-| `SubscriptionManagement-eH1Em2ZF.js` | Gestão de Assinaturas | 12,10 kB | 3,63 kB |
-| `FinControlMark-Dzj9UG65.js` | Logo e marca SVG vetorial do FinControl | 11,06 kB | 2,83 kB |
-| `Modal-sEIWYyVL.js` | Componente base de Modal acessível | 8,55 kB | 2,70 kB |
-| `themeTransition-CGAbprxN.js` | Script de transição de tema | 2,86 kB | 1,12 kB |
-| `planEntitlements-BajWXh5s.js` | Tabela de permissões e limites de planos | 0,74 kB | 0,37 kB |
+| `index-B3h9lnd2.js` | Monólito principal de entrada (`main.jsx`, React, Firebase Core) | 677,50 kB | 177,33 kB |
+| `DashboardLayout-Cvk5heyn.js` | Estrutura principal, sidebar e shell do Dashboard | 613,61 kB | 159,65 kB |
+| `jspdf.es.min-DKHyyXwt.js` | Motor jsPDF para exportação de relatórios | 390,79 kB | 128,95 kB |
+| `PdfImportModal-BaDGVFPb.js` | Parser e modal de importação de PDF de faturas | 351,73 kB | 103,61 kB |
+| `ClientManagement-CtXMPdOz.js` | Gestão de Pessoas e devedores | 231,88 kB | 56,59 kB |
+| `index.es-BEfRvFc1.js` | Utilitários de gráficos e componentes auxiliares | 150,49 kB | 51,42 kB |
+| `LandingPage-iDFsIueM.js` | Rota pública da Landing Page (com animações GSAP) | 127,88 kB | 35,77 kB |
+| `themeTransition-tdB_2G60.js` | Script de transição de tema | 73,39 kB | 28,81 kB |
+| `index-DUqQveDX.css` | Folha de estilos consolidada (Tailwind CSS) | 72,46 kB | 13,02 kB |
+| `TransactionManagement-fdwnEr4X.js` | Gestão de Movimentações | 65,45 kB | 13,48 kB |
+| `purify.es-DP5U8-sc.js` | DOMPurify (sanitização de conteúdo) | 29,17 kB | 10,99 kB |
+| `CardManagement-Cv9Kmn2U.js` | Gestão de Cartões de Crédito | 15,64 kB | 4,77 kB |
+| `AuthScreen-CBWyDw1O.js` | Tela de Login e Cadastro | 12,76 kB | 4,15 kB |
+| `SubscriptionManagement-CtVD9jlA.js` | Gestão de Assinaturas | 12,24 kB | 3,65 kB |
+| `FinControlMark-CmxxlcvT.js` | Logo e marca SVG vetorial do FinControl | 11,32 kB | 2,89 kB |
+| `index.esm-Bdq0Vuxw.js` | Dependência utilitária embutida | 10,19 kB | 2,97 kB |
+| `Modal-CBAjMwMc.js` | Componente base de Modal acessível | 8,75 kB | 2,75 kB |
+| `planEntitlements-BajWXh5s.js` | Tabela de permissões e limites de planos | 0,75 kB | 0,37 kB |
 
 ### 9.2. Estabilidade da Suíte de Testes
 - **Vitest Unitários / Integração:** `tests/invoicePaginationAndBatch.test.js` (11 testes) executado em loop de **10 iterações consecutivas**: **100% de sucesso (0 testes flaky)**.
@@ -367,35 +380,29 @@ Avaliar se a divisão de bibliotecas de fornecedores estáveis (`vendor-react`, 
 | **Login (`/login`)** | Slow 4G + 1x | 333,1 kB / 333,1 kB | 336,1 kB / 336,1 kB | 18 | 20 | 2.955ms / 3.576ms | **2.141ms / 4.090ms** | **+814ms mais rápido** (-27,5%) |
 | **Login (`/login`)** | Slow 4G + 4x | 333,1 kB / 333,2 kB | 336,1 kB / 336,2 kB | 18 | 20 | 4.209ms / 5.591ms | **2.869ms / 3.898ms** | **+1.340ms mais rápido** (-31,8%) |
 
-### 10.4. Fato Factual: O que Trafega na Rede na Visita 2 Pós-Deploy
+### 10.4. Auditoria Factual: Teste Inconclusivo de Cache e Ausência de Economia de Rede
 
-A investigação requisição por requisição da Visita 2 (Fase 11.4, $N = 5$, Slow 4G + CPU 4x) revelou com clareza:
-1. **Total de Bytes de JS/CSS da Aplicação na Rede:**
-   - **Landing (`/`):** BASE trafega **259,9 kB** (6 arquivos JS/CSS); HEAD trafega **262,8 kB** (9 arquivos JS/CSS). **O HEAD trafega +2,9 kB a mais pela rede**.
-   - **Login (`/login`):** BASE trafega **197,5 kB** (6 arquivos JS/CSS); HEAD trafega **200,4 kB** (8 arquivos JS/CSS). **O HEAD trafega +2,9 kB a mais pela rede**.
-   - *Conclusão sobre transferência de rede:* **Não há economia de bytes de JS/CSS na rede**. Pelo contrário, o HEAD transfere ~3 kB a mais devido ao overhead de cabeçalhos HTTP dos módulos adicionais.
-2. **Por que os Chunks de Vendor foram Baixados de Novo no HEAD:**
-   - No Chromium via `page.goto()`, a navegação para o novo `index.html` (com `Cache-Control: no-cache` no documento raiz) acarreta o descarregamento do documento anterior.
-   - Em contexto de teste HTTP sem HTTPS e com script modules (`type="module"` e `modulepreload`), os chunks `vendor-react` (59,8 kB gzip), `vendor-firebase` (113,5 kB gzip) e `vendor-gsap` (45,7 kB gzip) foram requisitados com status 200 e `fromDiskCache: false` em todas as rodadas.
-   - A alegação de que "apenas ~3 kB de aplicação trafegam na rede com 98% de economia de JS" foi um equívoco conceitual do relatório anterior e **não é verdadeira** para o tráfego de rede da página.
+A investigação requisição por requisição da Visita 2 pós-deploy (Fase 11.4, $N = 5$, Slow 4G + CPU 4x) revelou que o experimento de visitante recorrente em ambiente sintético foi **INCONCLUSIVO** para comprovar benefícios de cache:
+1. **Ausência de Exercício do Cache no Harness Local:**
+   - Em todas as rodadas, os chunks estáveis de vendor (`vendor-react`, `vendor-firebase`, `vendor-gsap`) foram requisitados com status 200 e `fromDiskCache: false`. O harness local em HTTP plano (`localhost`), sem HTTPS nem infraestrutura de CDN com revalidação condicional (304), não exercitou o cache em disco de forma representativa da produção.
+2. **Transferência de Rede Real (Sem Economia):**
+   - **Landing (`/`):** BASE trafegou **259,9 kB** (6 arquivos JS/CSS); HEAD trafegou **262,8 kB** (9 arquivos JS/CSS). **O HEAD trafegou +2,9 kB a mais pela rede**.
+   - **Login (`/login`):** BASE trafegou **197,5 kB** (6 arquivos JS/CSS); HEAD trafegou **200,4 kB** (8 arquivos JS/CSS). **O HEAD trafegou +2,9 kB a mais pela rede**.
+   - A alegação de que "apenas ~3 kB de aplicação trafegam na rede com 98% de economia de JS" foi um equívoco conceitual do relatório inicial e **não é verdadeira** para o tráfego de rede da página.
 3. **Origem das Requisições Extras do HEAD (26 vs 23 na Landing / 23 vs 21 no Login):**
-   - O HEAD fragmenta os arquivos locais em módulos adicionais:
-     - No BASE, `index-CL9P3dhT.js` engloba React + Firebase + shell (1 arquivo).
-     - No HEAD, isso é desmembrado em: `index-Cg0kwAbb.js`, `vendor-react-DStowVCe.js` (+1 req) e `vendor-firebase-C9dS1qb3.js` (+1 req).
-     - Na Landing, o BASE traz o GSAP embutido em `LandingPage-CqRJB-wy.js`; o HEAD divide em `LandingPage-Dk8L1HQk.js` e `vendor-gsap-CiEuWA-R.js` (+1 req).
-     - Total: **exatamente 3 requisições a mais** no HEAD (na Landing) e **2 requisições a mais** (no Login).
-4. **Hipótese de V8 Code Cache (Não Verificada):**
-   - A explicação de que o ganho de tempo decorre de "reutilização de V8 Code Cache em disco" é uma **hipótese teórica não comprovada por profilagem direta de bytecode do V8**, devendo ser tratada apenas como suposição especulativa. O ganho observado de tempo de montagem sob CPU restrita decorre principalmente do carregamento modular e execução desimpedida de scripts menores.
+   - No BASE, `index-CL9P3dhT.js` engloba React + Firebase + shell (1 arquivo).
+   - No HEAD, isso era desmembrado em: `index-Cg0kwAbb.js`, `vendor-react-DStowVCe.js` (+1 req) e `vendor-firebase-C9dS1qb3.js` (+1 req).
+   - Na Landing, o BASE traz o GSAP embutido em `LandingPage-CqRJB-wy.js`; o HEAD dividia em `LandingPage-Dk8L1HQk.js` e `vendor-gsap-CiEuWA-R.js` (+1 req).
+   - Saldo: **3 requisições a mais** no HEAD na Landing e **2 requisições a mais** no Login.
 
-### 10.5. Veredito Oficial sobre o `manualChunks`
+### 10.5. Decisão e Reversão do `manualChunks`
 
-- **Veredito:** **NEUTRO A NEGATIVO EM BYTES DE REDE** (sem economia mensurável de bytes na rede; acréscimo de +2,9 kB e +2 a +3 requisições adicionais).
-- **Impacto Temporal Global:**
-  - Na **Visita 2 pós-deploy**: o HEAD apresenta ligeira vantagem no tempo até usável sob CPU throttled (entre 577ms e 1.240ms mais rápido no Login/Landing).
-  - Na **Primeira Visita (Carga Fria)**: o HEAD apresenta **regressão severa de até +2.885ms (+25%)** na Landing Page sob Slow 4G + CPU 4x (14.255ms vs 11.370ms), devido à concorrência dos múltiplos chunks na cascata de módulos sobre conexões com RTT alto.
-- **Recomendação Técnica Fundamentada:**
-  - **Recomendação: REVERTER o `manualChunks` endurecido para o split padrão do Rollup/Vite**, mantendo rigorosamente a regra de cache imutável (`Cache-Control: public, max-age=31536000, immutable`) configurada no `firebase.json` para `/assets/**`.
-  - A divisão manual de chunks aumentou a complexidade de manutenção do `vite.config.js`, penalizou severamente a primeira visita da Landing Page (porta de entrada dos novos usuários) e não produziu economia de transferência de rede comprovada na segunda visita.
+- **Veredito Factual:** **INCONCLUSIVO PARA CACHE / NEGATIVO NA PRIMEIRA VISITA**.
+  - Na **Primeira Visita (Carga Fria)**: o HEAD causou **regressão comprovada de +2.885ms (+25%)** na Landing Page sob Slow 4G + CPU 4x (14.255ms vs 11.370ms; P90 de 19.900ms vs 12.007ms) devido à concorrência dos múltiplos chunks na cascata de módulos.
+  - Na **Visita 2 pós-deploy**: o teste não comprovou economia de bytes de rede (+2,9 kB transferidos e requisições adicionais).
+- **Ação Executada (Fase 11.5):**
+  - **O `manualChunks` foi formalmente REVERTIDO** no commit `5a72ef0` para o split padrão do Rollup/Vite (`c265f81`).
+  - A regra de cache imutável de 1 ano configurada no `firebase.json` (`Cache-Control: public, max-age=31536000, immutable` para `/assets/**`) foi **MANTIDA**, garantindo que em produção real (HTTPS com CDN do Firebase Hosting) os assets com hash gerados pelo Vite sejam cacheados perfeitamente sem necessidade de particionamento manual arbitrário.
 
 ---
 
