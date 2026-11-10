@@ -15,7 +15,7 @@ A Fase 11 atacou de forma factual e mensurável os 4 principais gargalos de lat�
    - **Commit:** `0e00873` — `perf(bundle): divide vendors estaveis via manualchunks no rollup`
    - **Endurecimento:** `38c459f` — `perf(bundle): endurece manualchunks com correspondencia exata de pacotes`
    - **Resultado Arquitetural:** O bundle de entrada `index.js` foi reduzido de **677,29 kB para 18,84 kB** raw (6,77 kB gzip). O módulo pesado de gráficos `vendor-recharts` (400,52 kB raw / 108,01 kB gzip) foi totalmente desacoplado da Landing Page e do Login.
-   - **Esclarecimento Importante sobre Primeira Visita (Carga Fria):** A hipótese preliminar de que a divisão de chunks reduziria pela metade o FCP/LCP da primeira visita na Landing e Login **não se confirmou na medição científica rigorosa**. Conforme auditado nas Seções 5 e 6, a divisão em múltiplos chunks introduz saltos adicionais de RTT na cascata de módulos e concorre com o pré-carregamento do Firebase, mantendo o Login em empate técnico e a Landing ligeiramente mais lenta na carga fria. O ganho real do `manualChunks` manifesta-se no isolamento de dependências e no cache de visitantes recorrentes após novos deploys (auditado no Bloco 3).
+   - **Esclarecimento Importante sobre Primeira Visita (Carga Fria) e Visitante Recorrente:** A hipótese preliminar de que a divisão de chunks reduziria pela metade o FCP/LCP da primeira visita na Landing e Login **não se confirmou na medição científica rigorosa**. Conforme auditado nas Seções 5 e 6, a divisão em múltiplos chunks introduz saltos adicionais de RTT na cascata de módulos e concorre com o pré-carregamento do Firebase, mantendo o Login em empate técnico e a Landing 25% mais lenta na carga fria (+2.885ms). Na segunda visita pós-deploy (Seção 10), a divisão gerou ligeiro ganho de tempo de execução, mas não reduziu bytes de rede (trafegou +2,9 kB e 2 a 3 requisições a mais), recomendando-se a reversão para o split padrão do Vite mantendo o cache imutável no Firebase Hosting.
 3. **Renderização em Lotes da Tabela da Fatura ("Mostrar Mais 50 Itens"):**
    - **Commit:** `f3ca61a` — `perf(dashboard): renderiza itens da fatura em lotes preservando total e acao em massa`
    - **Resultado:** A tabela da fatura e os cards mobile agora renderizam um lote inicial de 50 itens. Com a fixture pesada (300+ itens), mais de 500 nós DOM deixaram de ser criados no mesmo ciclo de render. Filtros e ordenação continuam operando sobre 100% dos dados, KPIs exibem valores consolidados completos, e a ação "Marcar Tudo Como Pago" atualiza 100% dos itens da fatura com contagem explícita.
@@ -350,13 +350,13 @@ O endurecimento do `manualChunks` com correspondência exata via `getPackageName
 ### 10.1. Hipótese Testada
 Avaliar se a divisão de bibliotecas de fornecedores estáveis (`vendor-react`, `vendor-firebase`, `vendor-recharts`, `vendor-gsap`) via `manualChunks` entrega ganho mensurável para **visitantes recorrentes que retornam após um novo deploy da aplicação**, comparado ao build monolítico da BASE (`c265f81`), servido com cache imutável de 1 ano para `/assets/**` e `no-cache` para `index.html`.
 
-### 10.2. Metodologia do Experimento
+### 10.2. Metodologia do Experimento e Auditoria Requisição por Requisição
 - **Builds Isolados:** Construídos 4 builds independentes:
   - `dist-base-n` vs `dist-base-n1`: BASE sem `manualChunks` (o chunk inicial `index-B3h9lnd2.js` de 677 kB muda de hash para `index-CL9P3dhT.js` a cada alteração de código da aplicação).
   - `dist-head-n` vs `dist-head-n1`: HEAD com `manualChunks` (os chunks `vendor-react-DStowVCe.js`, `vendor-firebase-C9dS1qb3.js`, `vendor-gsap-CiEuWA-R.js` e `vendor-recharts-C3GZJaR8.js` preservam rigorosamente seus hashes idênticos; apenas o chunk da aplicação `index-CgmIphum.js` de 19 kB muda para `index-Cg0kwAbb.js`).
 - **Servidor Estático Local:** Servidor HTTP Node.js com headers idênticos ao Firebase Hosting (`Cache-Control: public, max-age=31536000, immutable` para `/assets/**` e `no-cache` para `index.html`).
 - **Ciclo de Medição:** Navegador Chromium persistente com cache em disco habilitado. Visita 1 ao build N (aquece o cache). Troca síncrona do servidor para o build N+1 (simulando o deploy na mesma origem). Visita 2 (recarga) sob rede Slow 4G e CPU 1x e 4x, medindo bytes transferidos pela rede via CDP (`encodedDataLength` com filtro de exclusão de disk-cache) e tempo até utilizável ($N = 5$ repetições, intercaladas).
-- *Nota sobre o Resumo Autenticado:* As medições focaram em Landing (`/`) e Login (`/login`) devido ao isolamento do servidor estático sem dependência de emuladores ativos do Firebase Auth.
+- *Auditoria Requisição por Requisição (Fase 11.4):* Amostragem completa de todos os requests da Visita 2, registrando URL, tipo, status, bytes e `fromDiskCache`.
 
 ### 10.3. Tabela Comparativa de Visitante Recorrente Após Deploy ($N = 5$)
 
@@ -367,16 +367,35 @@ Avaliar se a divisão de bibliotecas de fornecedores estáveis (`vendor-react`, 
 | **Login (`/login`)** | Slow 4G + 1x | 333,1 kB / 333,1 kB | 336,1 kB / 336,1 kB | 18 | 20 | 2.955ms / 3.576ms | **2.141ms / 4.090ms** | **+814ms mais rápido** (-27,5%) |
 | **Login (`/login`)** | Slow 4G + 4x | 333,1 kB / 333,2 kB | 336,1 kB / 336,2 kB | 18 | 20 | 4.209ms / 5.591ms | **2.869ms / 3.898ms** | **+1.340ms mais rápido** (-31,8%) |
 
-### 10.4. Veredito e Análise dos Fatores de Desempenho
-1. **Tempo de Thread Principal e Compilação V8 (Onde está o ganho real):**
-   - Na BASE, qualquer alteração de código da aplicação invalida o chunk monolítico inteiro de 677 kB. Ao recarregar após o deploy, o navegador precisa baixar novamente o monólito de 177 kB gzip e re-compilar o script inteiro na thread principal (custando ~830ms de CPU sob throttling 4x).
-   - No HEAD, os chunks estáveis (`vendor-react`, `vendor-firebase`, `vendor-gsap`, `vendor-recharts`) permanecem intocados no cache de disco. O navegador aproveita o **V8 Code Cache** em disco, dispensando a compilação de mais de 1,1 MB de bibliotecas de terceiros. Apenas o chunk minúsculo da aplicação (19 kB raw / 6,9 kB gzip) é compilado.
-   - Isso resulta em uma **redução de até 1.340ms (-31,8%) no tempo até utilizável no Login** e de **744ms (-14,6%) na Landing** para usuários em aparelhos móveis intermediários (CPU 4x).
-2. **Bytes Transferidos pela Rede:**
-   - A transferência líquida de bytes de rede foi virtualmente equivalente (ligeira diferença de ~2,9 kB devido ao overhead dos cabeçalhos HTTP dos requests adicionais de modulepreload), uma vez que requisições assíncronas do Google Fonts e metadados revalidam em ambas as arquiteturas.
-3. **Recomendação Técnica:**
-   - **Recomendação: MANTER o `manualChunks` endurecido.**
-   - O split não reduz a primeira visita crua (carga fria), mas proporciona um **ganho substancial de fluidez e reatividade imediata para usuários recorrentes após cada release/deploy** do FinControl (até 1,3s mais rápido), além de blindar o bundle de entrada contra a inclusão inadvertida do motor gráfico Recharts (400 kB).
+### 10.4. Fato Factual: O que Trafega na Rede na Visita 2 Pós-Deploy
+
+A investigação requisição por requisição da Visita 2 (Fase 11.4, $N = 5$, Slow 4G + CPU 4x) revelou com clareza:
+1. **Total de Bytes de JS/CSS da Aplicação na Rede:**
+   - **Landing (`/`):** BASE trafega **259,9 kB** (6 arquivos JS/CSS); HEAD trafega **262,8 kB** (9 arquivos JS/CSS). **O HEAD trafega +2,9 kB a mais pela rede**.
+   - **Login (`/login`):** BASE trafega **197,5 kB** (6 arquivos JS/CSS); HEAD trafega **200,4 kB** (8 arquivos JS/CSS). **O HEAD trafega +2,9 kB a mais pela rede**.
+   - *Conclusão sobre transferência de rede:* **Não há economia de bytes de JS/CSS na rede**. Pelo contrário, o HEAD transfere ~3 kB a mais devido ao overhead de cabeçalhos HTTP dos módulos adicionais.
+2. **Por que os Chunks de Vendor foram Baixados de Novo no HEAD:**
+   - No Chromium via `page.goto()`, a navegação para o novo `index.html` (com `Cache-Control: no-cache` no documento raiz) acarreta o descarregamento do documento anterior.
+   - Em contexto de teste HTTP sem HTTPS e com script modules (`type="module"` e `modulepreload`), os chunks `vendor-react` (59,8 kB gzip), `vendor-firebase` (113,5 kB gzip) e `vendor-gsap` (45,7 kB gzip) foram requisitados com status 200 e `fromDiskCache: false` em todas as rodadas.
+   - A alegação de que "apenas ~3 kB de aplicação trafegam na rede com 98% de economia de JS" foi um equívoco conceitual do relatório anterior e **não é verdadeira** para o tráfego de rede da página.
+3. **Origem das Requisições Extras do HEAD (26 vs 23 na Landing / 23 vs 21 no Login):**
+   - O HEAD fragmenta os arquivos locais em módulos adicionais:
+     - No BASE, `index-CL9P3dhT.js` engloba React + Firebase + shell (1 arquivo).
+     - No HEAD, isso é desmembrado em: `index-Cg0kwAbb.js`, `vendor-react-DStowVCe.js` (+1 req) e `vendor-firebase-C9dS1qb3.js` (+1 req).
+     - Na Landing, o BASE traz o GSAP embutido em `LandingPage-CqRJB-wy.js`; o HEAD divide em `LandingPage-Dk8L1HQk.js` e `vendor-gsap-CiEuWA-R.js` (+1 req).
+     - Total: **exatamente 3 requisições a mais** no HEAD (na Landing) e **2 requisições a mais** (no Login).
+4. **Hipótese de V8 Code Cache (Não Verificada):**
+   - A explicação de que o ganho de tempo decorre de "reutilização de V8 Code Cache em disco" é uma **hipótese teórica não comprovada por profilagem direta de bytecode do V8**, devendo ser tratada apenas como suposição especulativa. O ganho observado de tempo de montagem sob CPU restrita decorre principalmente do carregamento modular e execução desimpedida de scripts menores.
+
+### 10.5. Veredito Oficial sobre o `manualChunks`
+
+- **Veredito:** **NEUTRO A NEGATIVO EM BYTES DE REDE** (sem economia mensurável de bytes na rede; acréscimo de +2,9 kB e +2 a +3 requisições adicionais).
+- **Impacto Temporal Global:**
+  - Na **Visita 2 pós-deploy**: o HEAD apresenta ligeira vantagem no tempo até usável sob CPU throttled (entre 577ms e 1.240ms mais rápido no Login/Landing).
+  - Na **Primeira Visita (Carga Fria)**: o HEAD apresenta **regressão severa de até +2.885ms (+25%)** na Landing Page sob Slow 4G + CPU 4x (14.255ms vs 11.370ms), devido à concorrência dos múltiplos chunks na cascata de módulos sobre conexões com RTT alto.
+- **Recomendação Técnica Fundamentada:**
+  - **Recomendação: REVERTER o `manualChunks` endurecido para o split padrão do Rollup/Vite**, mantendo rigorosamente a regra de cache imutável (`Cache-Control: public, max-age=31536000, immutable`) configurada no `firebase.json` para `/assets/**`.
+  - A divisão manual de chunks aumentou a complexidade de manutenção do `vite.config.js`, penalizou severamente a primeira visita da Landing Page (porta de entrada dos novos usuários) e não produziu economia de transferência de rede comprovada na segunda visita.
 
 ---
 
