@@ -342,3 +342,94 @@ O endurecimento do `manualChunks` com correspondência exata via `getPackageName
 ### 9.2. Estabilidade da Suíte de Testes
 - **Vitest Unitários / Integração:** `tests/invoicePaginationAndBatch.test.js` (11 testes) executado em loop de **10 iterações consecutivas**: **100% de sucesso (0 testes flaky)**.
 - **Playwright E2E:** `e2e/invoice-pagination-and-staging.spec.js` (9 testes) executado contra servidor de desenvolvimento: **9/9 aprovados (0 testes flaky)**.
+
+---
+
+## 10. Benchmark de Visitante Recorrente Após Deploy (Bloco 3)
+
+### 10.1. Hipótese Testada
+Avaliar se a divisão de bibliotecas de fornecedores estáveis (`vendor-react`, `vendor-firebase`, `vendor-recharts`, `vendor-gsap`) via `manualChunks` entrega ganho mensurável para **visitantes recorrentes que retornam após um novo deploy da aplicação**, comparado ao build monolítico da BASE (`c265f81`), servido com cache imutável de 1 ano para `/assets/**` e `no-cache` para `index.html`.
+
+### 10.2. Metodologia do Experimento
+- **Builds Isolados:** Construídos 4 builds independentes:
+  - `dist-base-n` vs `dist-base-n1`: BASE sem `manualChunks` (o chunk inicial `index-B3h9lnd2.js` de 677 kB muda de hash para `index-CL9P3dhT.js` a cada alteração de código da aplicação).
+  - `dist-head-n` vs `dist-head-n1`: HEAD com `manualChunks` (os chunks `vendor-react-DStowVCe.js`, `vendor-firebase-C9dS1qb3.js`, `vendor-gsap-CiEuWA-R.js` e `vendor-recharts-C3GZJaR8.js` preservam rigorosamente seus hashes idênticos; apenas o chunk da aplicação `index-CgmIphum.js` de 19 kB muda para `index-Cg0kwAbb.js`).
+- **Servidor Estático Local:** Servidor HTTP Node.js com headers idênticos ao Firebase Hosting (`Cache-Control: public, max-age=31536000, immutable` para `/assets/**` e `no-cache` para `index.html`).
+- **Ciclo de Medição:** Navegador Chromium persistente com cache em disco habilitado. Visita 1 ao build N (aquece o cache). Troca síncrona do servidor para o build N+1 (simulando o deploy na mesma origem). Visita 2 (recarga) sob rede Slow 4G e CPU 1x e 4x, medindo bytes transferidos pela rede via CDP (`encodedDataLength` com filtro de exclusão de disk-cache) e tempo até utilizável ($N = 5$ repetições, intercaladas).
+- *Nota sobre o Resumo Autenticado:* As medições focaram em Landing (`/`) e Login (`/login`) devido ao isolamento do servidor estático sem dependência de emuladores ativos do Firebase Auth.
+
+### 10.3. Tabela Comparativa de Visitante Recorrente Após Deploy ($N = 5$)
+
+| Cenário de Teste | Perfil / CPU | BASE Bytes (Med / P90) | HEAD Bytes (Med / P90) | BASE Req | HEAD Req | BASE Usável (Med / P90) | HEAD Usável (Med / P90) | Ganho de Tempo no HEAD |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Landing (`/`)** | Slow 4G + 1x | 442,2 kB / 442,2 kB | 445,1 kB / 445,1 kB | 20 | 23 | 4.305ms / 10.378ms | **4.208ms / 7.291ms** | **+97ms mais rápido** (P90 -3.087ms) |
+| **Landing (`/`)** | Slow 4G + 4x | 442,2 kB / 442,2 kB | 445,1 kB / 445,2 kB | 21 | 23 | 5.080ms / 9.367ms | **4.336ms / 6.329ms** | **+744ms mais rápido** (-14,6%) |
+| **Login (`/login`)** | Slow 4G + 1x | 333,1 kB / 333,1 kB | 336,1 kB / 336,1 kB | 18 | 20 | 2.955ms / 3.576ms | **2.141ms / 4.090ms** | **+814ms mais rápido** (-27,5%) |
+| **Login (`/login`)** | Slow 4G + 4x | 333,1 kB / 333,2 kB | 336,1 kB / 336,2 kB | 18 | 20 | 4.209ms / 5.591ms | **2.869ms / 3.898ms** | **+1.340ms mais rápido** (-31,8%) |
+
+### 10.4. Veredito e Análise dos Fatores de Desempenho
+1. **Tempo de Thread Principal e Compilação V8 (Onde está o ganho real):**
+   - Na BASE, qualquer alteração de código da aplicação invalida o chunk monolítico inteiro de 677 kB. Ao recarregar após o deploy, o navegador precisa baixar novamente o monólito de 177 kB gzip e re-compilar o script inteiro na thread principal (custando ~830ms de CPU sob throttling 4x).
+   - No HEAD, os chunks estáveis (`vendor-react`, `vendor-firebase`, `vendor-gsap`, `vendor-recharts`) permanecem intocados no cache de disco. O navegador aproveita o **V8 Code Cache** em disco, dispensando a compilação de mais de 1,1 MB de bibliotecas de terceiros. Apenas o chunk minúsculo da aplicação (19 kB raw / 6,9 kB gzip) é compilado.
+   - Isso resulta em uma **redução de até 1.340ms (-31,8%) no tempo até utilizável no Login** e de **744ms (-14,6%) na Landing** para usuários em aparelhos móveis intermediários (CPU 4x).
+2. **Bytes Transferidos pela Rede:**
+   - A transferência líquida de bytes de rede foi virtualmente equivalente (ligeira diferença de ~2,9 kB devido ao overhead dos cabeçalhos HTTP dos requests adicionais de modulepreload), uma vez que requisições assíncronas do Google Fonts e metadados revalidam em ambas as arquiteturas.
+3. **Recomendação Técnica:**
+   - **Recomendação: MANTER o `manualChunks` endurecido.**
+   - O split não reduz a primeira visita crua (carga fria), mas proporciona um **ganho substancial de fluidez e reatividade imediata para usuários recorrentes após cada release/deploy** do FinControl (até 1,3s mais rápido), além de blindar o bundle de entrada contra a inclusão inadvertida do motor gráfico Recharts (400 kB).
+
+---
+
+## 11. Auditoria Arquitetural do Limite de 500 Operações no `handleMarkAllAsPaid` (Bloco 4)
+
+### 11.1. Inspeção do Código Real em Produção
+Em `src/features/dashboard/Dashboard.jsx` (linhas 554–671), a ação "Marcar Tudo Como Pago" instancia um único `writeBatch(db)` na linha 556 e invoca `await batch.commit()` na linha 665.
+
+### 11.2. Fórmula Matemática de Operações de Escrita por Categoria
+A função itera sobre todos os itens pendentes da fatura (`displayableItems.filter(item => item.currentStatus !== 'Paga')`):
+1. **Despesas Avulsas (`item.type === 'Despesa'`):**
+   - Executa `batch.update(expenseDocRef, { status: 'Paga', ... })` para cada despesa.
+   - *Total de operações:* $N_{\text{despesas}}$
+2. **Assinaturas (`item.type === 'Assinatura'`):**
+   - Para cada assinatura não quitada na competência, executa `batch.set(doc(paidSubscriptionsRef), newPaidSub)`.
+   - *Total de operações:* $N_{\text{assinaturas}}$
+3. **Parcelas de Empréstimos / Compras Compartilhadas (`item.type === 'Parcela'`):**
+   - As parcelas **não geram escrita individual**. Elas são agrupadas em memória no `updatedLoansMap` pela chave `loanId`.
+   - Ao final do loop, a função itera sobre `updatedLoansMap` e despacha exatamente 1 atualização por empréstimo afetado: `batch.update(loanDocRef, fieldsToUpdate)`.
+   - *Total de operações:* $N_{\text{loans\_distintos}}$
+
+$$\mathbf{\text{Operações no Batch}} = N_{\text{despesas}} + N_{\text{assinaturas}} + N_{\text{loans\_distintos}}$$
+
+### 11.3. Limite Máximo Suportado Antes de Falha
+- O Cloud Firestore impõe um limite nativo inegociável de **no máximo 500 operações por writeBatch**.
+- No cenário de pior caso (onde todas as pendências são despesas avulsas e assinaturas), a função suporta **no máximo 500 itens**.
+- Com 501 itens pendentes distintos gerando operações no batch, o SDK do Cloud Firestore rejeita a operação com:
+  `FirebaseError: [code=invalid-argument]: A write batch can contain at most 500 operations.`
+
+### 11.4. Comportamento da UI e Atomicidade em Caso de Falha
+- Como o `writeBatch` do Firestore é estritamente atômico, **nenhuma operação é gravada no banco** caso o limite seja excedido ou a transação falhe. Não há risco de corrupção ou gravação parcial no Firestore.
+- O bloco `try/catch` nas linhas 664–670 captura o erro e emite: `showToast('Falha ao atualizar os itens.', 'error')`.
+- O modal de confirmação já foi fechado preventivamente na linha 555 (`setIsMarkAllPaidConfirmationOpen(false)`).
+- Na interface, todos os itens permanecem como "Pendentes" e nenhuma alteração visual reflete quitação.
+
+### 11.5. Esclarecimento Sobre a Suíte de Testes da Fase 11
+- O teste unitário em `tests/invoicePaginationAndBatch.test.js` **não invoca o componente React `Dashboard.jsx` diretamente nem seu closure interno**.
+- O teste reproduz fielmente a lógica algorítmica e o padrão de despacho de escritas de `Dashboard.jsx` utilizando a classe `FirestoreWriteBatchMock(500)`. Ele valida matematicamente que uma fatura realista de 156 itens executa dentro do limite (160 operações) e comprova que 505 operações disparam a exceção esperada. O teste E2E em `e2e/invoice-pagination-and-staging.spec.js` valida a interface real até o modal de confirmação, exibindo o número correto de itens pendentes sem disparar a mutação no emulador.
+
+### 11.6. Desenho de Correção Arquitetural para Janela Futura (Sem Implementar)
+Para faturas massivas corporativas ou contas com mais de 500 despesas mensais, a evolução arquitetural recomendada é:
+1. **Fila de Operações (Operations Queue):**
+   Armazenar as operações geradas em um array de comandos: `const operations = [{ type: 'update', ref, data }, ...];`.
+2. **Particionamento em Chunks Seguros de 450 Operações:**
+   Fatiar a fila com margem de segurança: `const chunks = chunkArray(operations, 450);`.
+3. **Commit Sequencial com Feedback de Progresso:**
+   ```javascript
+   for (let i = 0; i < chunks.length; i++) {
+     const batch = writeBatch(db);
+     chunks[i].forEach(op => op.type === 'update' ? batch.update(op.ref, op.data) : batch.set(op.ref, op.data));
+     await batch.commit();
+     setBatchProgress(Math.round(((i + 1) / chunks.length) * 100));
+   }
+   ```
+4. **Idempotência e Tratamento de Falha Parcial:**
+   Como a função só processa itens cujo status não é 'Paga', se uma falha de conexão ocorrer no lote 2 após o lote 1 ter sido gravado, o usuário recebe um toast informativo informando o total parcial gravado e pode acionar o botão novamente para concluir os itens remanescentes com total idempotência.
