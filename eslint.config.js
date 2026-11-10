@@ -7,6 +7,8 @@ export default [
   {
     ignores: [
       'dist',
+      'dist-*',
+      'scratch',
       'node_modules',
       '.firebase',
       'functions/node_modules',

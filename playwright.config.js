@@ -2,6 +2,8 @@
 // playwright.config.js
 import { defineConfig, devices } from '@playwright/test';
 
+const PORT = process.env.PORT || 5173;
+
 /**
  * Configuração do Playwright para E2E Real do FinControl.
  * Executa testes reais em navegador Chromium contra o servidor local Vite.
@@ -18,7 +20,7 @@ export default defineConfig({
     workers: 1,
     reporter: 'list',
     use: {
-        baseURL: 'http://localhost:5173',
+        baseURL: `http://localhost:${PORT}`,
         trace: 'on-first-retry',
         headless: true,
         viewport: { width: 1280, height: 720 },
@@ -32,7 +34,7 @@ export default defineConfig({
     ],
     webServer: {
         command: 'npm run dev',
-        url: 'http://localhost:5173',
+        url: `http://localhost:${PORT}`,
         reuseExistingServer: true,
         timeout: 60 * 1000,
     }

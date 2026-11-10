@@ -80,11 +80,11 @@ test.describe('Bloco B: Véu de transição e Layout Responsivo em Telas Grandes
         expect(boxExp.x).toBeGreaterThanOrEqual(sidebarWidthExpanded - 2);
       }
 
-      // Aguarda fim da transição
+      // Aguarda fim da transição (timeout estendido para 12s para absorver renderização 4K via software no Chromium)
       await expect(async () => {
         const isTrans = await html.evaluate(el => el.classList.contains('fc-transitioning'));
         expect(isTrans).toBe(false);
-      }).toPass({ timeout: 6000 });
+      }).toPass({ timeout: 12000 });
 
       // Confirma que não há scroll horizontal
       const hasHorizontalScrollExp = await page.evaluate(() => {
@@ -125,7 +125,7 @@ test.describe('Bloco B: Véu de transição e Layout Responsivo em Telas Grandes
       await expect(async () => {
         const isTrans = await html.evaluate(el => el.classList.contains('fc-transitioning'));
         expect(isTrans).toBe(false);
-      }).toPass({ timeout: 6000 });
+      }).toPass({ timeout: 12000 });
 
       const hasHorizontalScrollCol = await page.evaluate(() => {
         return document.documentElement.scrollWidth > window.innerWidth;

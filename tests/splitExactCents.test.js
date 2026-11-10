@@ -169,7 +169,9 @@ describe('splitExactCents — Parser de Moeda e Divisão Fiel ao App', () => {
         }
       }
       expect(true).toBe(true);
-    }, 60000);
+      // Timeout estendido para 120s (120000ms): a suíte executa 60.000 iterações matemáticas estritas (5.000 centavos x 12 parcelas).
+      // Isoladamente roda em ~23-45s, mas sob carga concorrente com os outros 56 arquivos de teste do Vitest pode exceder 60s.
+    }, 120000);
   });
 
   describe('4. Algoritmo Legado Auxiliar (splitExactCents)', () => {

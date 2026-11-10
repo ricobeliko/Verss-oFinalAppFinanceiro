@@ -41,6 +41,8 @@ const CreditCardKpiIcon = () => (
     </svg>
 );
 
+const INVOICE_BATCH_SIZE = 50;
+
 // Ícone para a ordenação da tabela
 const SortIcon = ({ direction }) => (
     <svg aria-hidden="true" className="w-4 h-4 inline-block ml-1 text-fc-accent transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -69,6 +71,17 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [isSyncStale, setIsSyncStale] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'dueDate', direction: 'ascending' });
+    const [visibleInvoiceItemsCount, setVisibleInvoiceItemsCount] = useState(INVOICE_BATCH_SIZE);
+    const [isAnalyticsReady, setIsAnalyticsReady] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        if (import.meta.env && (import.meta.env.MODE === 'test' || import.meta.env.VITEST)) return true;
+        return false;
+    });
+    const [isChartsBelowFoldReady, setIsChartsBelowFoldReady] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        if (import.meta.env && (import.meta.env.MODE === 'test' || import.meta.env.VITEST)) return true;
+        return false;
+    });
     const scopeRef = useRef(null);
     const tableScrollRef = useRef(null);
     const [showLeftScrollShadow, setShowLeftScrollShadow] = useState(false);
@@ -83,6 +96,55 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
     }, []);
 
     useEnterStagger(scopeRef, { ready: !isLoading });
+
+    // Montagem em duas etapas (staged mount): adia componentes pesados de gráficos e projeções
+    // Etapa 1: ProAnalyticsCharts ativa na revelação do véu (fc:page-reveal-start)
+    // Etapa 2: Gráficos abaixo da dobra ativam após frame de assentamento ou ciclo ocioso
+    useEffect(() => {
+        if (isAnalyticsReady && isChartsBelowFoldReady) return;
+
+        let idleId;
+        let timeout1;
+        let timeout2;
+
+        const isTransitioning = typeof document !== 'undefined' && document.documentElement.classList.contains('fc-transitioning');
+
+        if (isTransitioning) {
+            const onReveal = () => {
+                window.removeEventListener('fc:page-reveal-start', onReveal);
+                requestAnimationFrame(() => {
+                    setIsAnalyticsReady(true);
+                    timeout2 = setTimeout(() => {
+                        setIsChartsBelowFoldReady(true);
+                    }, 120);
+                });
+            };
+            window.addEventListener('fc:page-reveal-start', onReveal);
+            timeout1 = setTimeout(() => {
+                setIsAnalyticsReady(true);
+                setIsChartsBelowFoldReady(true);
+            }, 400);
+            return () => {
+                window.removeEventListener('fc:page-reveal-start', onReveal);
+                clearTimeout(timeout1);
+                clearTimeout(timeout2);
+            };
+        } else {
+            timeout1 = setTimeout(() => setIsAnalyticsReady(true), 30);
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                idleId = window.requestIdleCallback(() => setIsChartsBelowFoldReady(true), { timeout: 150 });
+            } else {
+                timeout2 = setTimeout(() => setIsChartsBelowFoldReady(true), 120);
+            }
+            return () => {
+                clearTimeout(timeout1);
+                clearTimeout(timeout2);
+                if (idleId && typeof window.cancelIdleCallback === 'function') {
+                    window.cancelIdleCallback(idleId);
+                }
+            };
+        }
+    }, [isAnalyticsReady, isChartsBelowFoldReady]);
 
     useEffect(() => {
         if (!isAuthReady || !db || !userId) {
@@ -473,11 +535,21 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
         setSortConfig({ key, direction });
     };
 
+    // Reseta lote visível para o tamanho padrão ao alterar mês, filtros ou ordenação
+    useEffect(() => {
+        setVisibleInvoiceItemsCount(INVOICE_BATCH_SIZE);
+    }, [selectedMonth, selectedCardFilter, selectedClientFilter, sortConfig]);
+
+    // Lote visível renderizado na tabela e no card mobile (ordenação e filtros já aplicados em 100% dos dados)
+    const visibleDisplayableItems = useMemo(() => {
+        return displayableItems.slice(0, visibleInvoiceItemsCount);
+    }, [displayableItems, visibleInvoiceItemsCount]);
+
     useEffect(() => {
         updateScrollShadows();
         window.addEventListener('resize', updateScrollShadows);
         return () => window.removeEventListener('resize', updateScrollShadows);
-    }, [updateScrollShadows, displayableItems]);
+    }, [updateScrollShadows, visibleDisplayableItems]);
 
     const handleMarkAllAsPaid = async () => {
         setIsMarkAllPaidConfirmationOpen(false);
@@ -755,49 +827,70 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 </div>
 
                 <div className="lg:col-span-2">
-                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full">
-                        <ProAnalyticsCharts
-                            loans={filteredLoansForChart}
-                            clients={clients}
-                            expenses={filteredExpensesForChart}
-                            subscriptions={filteredSubscriptionsForChart}
-                            theme={theme}
-                        />
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-full min-h-[360px] flex flex-col justify-center">
+                        {isAnalyticsReady ? (
+                            <ProAnalyticsCharts
+                                loans={filteredLoansForChart}
+                                clients={clients}
+                                expenses={filteredExpensesForChart}
+                                subscriptions={filteredSubscriptionsForChart}
+                                theme={theme}
+                            />
+                        ) : (
+                            <div className="h-[280px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando gráficos analíticos">
+                                <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                                <span className="text-xs text-[var(--fc-text-muted)]">Carregando indicadores analíticos...</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             {/* Gráficos e Projeção Lado a Lado em Telas Grandes (>= 1536px / 2xl), Empilhados em Telas Menores */}
             <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 items-start">
-                <MonthlyEvolutionChart
-                    loans={loans}
-                    subscriptions={subscriptions}
-                    expenses={expenses}
-                    cards={cards}
-                    selectedMonth={selectedMonth}
-                    selectedCardFilter={selectedCardFilter}
-                    clients={clients}
-                    isPro={isPro}
-                    isTrialActive={isTrialActive}
-                    onUpgradeClick={handleUpgradeClick}
-                    theme={theme}
-                />
-
-                {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
-                {hasProAccess ? (
-                    <FutureCommitmentsCard
+                {isChartsBelowFoldReady ? (
+                    <MonthlyEvolutionChart
                         loans={loans}
                         subscriptions={subscriptions}
+                        expenses={expenses}
+                        cards={cards}
                         selectedMonth={selectedMonth}
+                        selectedCardFilter={selectedCardFilter}
                         clients={clients}
-                        selectedClientName={selectedClientNameForProjection}
+                        isPro={isPro}
+                        isTrialActive={isTrialActive}
+                        onUpgradeClick={handleUpgradeClick}
+                        theme={theme}
                     />
                 ) : (
-                    <ProFeatureLock
-                        title="Projeção de Faturas Futuras"
-                        description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
-                        onAction={() => setIsUpgradeModalOpen(true)}
-                    />
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-[380px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando evolução mensal">
+                        <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                        <span className="text-xs text-[var(--fc-text-muted)]">Carregando evolução da fatura...</span>
+                    </div>
+                )}
+
+                {/* Projeção de Faturas e Descompressão Futura (com seletor por pessoa integrado) */}
+                {isChartsBelowFoldReady ? (
+                    hasProAccess ? (
+                        <FutureCommitmentsCard
+                            loans={loans}
+                            subscriptions={subscriptions}
+                            selectedMonth={selectedMonth}
+                            clients={clients}
+                            selectedClientName={selectedClientNameForProjection}
+                        />
+                    ) : (
+                        <ProFeatureLock
+                            title="Projeção de Faturas Futuras"
+                            description="Visualize a descompressão das suas faturas nos próximos meses e planeje com antecedência."
+                            onAction={() => setIsUpgradeModalOpen(true)}
+                        />
+                    )
+                ) : (
+                    <div className="bg-[var(--fc-surface-1)] border border-[var(--fc-border-default)] p-6 sm:p-8 rounded-3xl shadow-[var(--fc-shadow-md)] h-[380px] flex flex-col items-center justify-center gap-3 animate-pulse" aria-busy="true" aria-label="Carregando projeção de compromissos">
+                        <div className="w-8 h-8 rounded-full border-2 border-[var(--fc-accent)] border-t-transparent animate-spin opacity-60" />
+                        <span className="text-xs text-[var(--fc-text-muted)]">Carregando projeções futuras...</span>
+                    </div>
                 )}
             </div>
 
@@ -895,7 +988,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--fc-border-subtle)] text-sm">
-                                {displayableItems.length > 0 ? displayableItems.map((item) => {
+                                {visibleDisplayableItems.length > 0 ? visibleDisplayableItems.map((item) => {
                                     const client = clients.find(c => c.id === item.clientId);
                                     const card = cards.find(c => c.id === item.cardId);
                                     return (
@@ -971,7 +1064,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
 
                 {/* Modo Cards Empilhados para Mobile (< 640px) */}
                 <div className="block sm:hidden divide-y divide-[var(--fc-border-subtle)]" data-testid="invoice-cards-mobile">
-                    {displayableItems.length > 0 ? displayableItems.map((item) => {
+                    {visibleDisplayableItems.length > 0 ? visibleDisplayableItems.map((item) => {
                         const client = clients.find(c => c.id === item.clientId);
                         const card = cards.find(c => c.id === item.cardId);
                         return (
@@ -1053,6 +1146,33 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                         </div>
                     )}
                 </div>
+
+                {/* Controles de Lotes para Grandes Faturas */}
+                {displayableItems.length > visibleInvoiceItemsCount && (
+                    <div className="p-4 bg-[var(--fc-surface-2)]/40 border-t border-[var(--fc-border-subtle)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--fc-text-secondary)]">
+                        <span role="status" aria-live="polite">
+                            Exibindo <span className="font-semibold text-[var(--fc-text-primary)]">{visibleDisplayableItems.length}</span> de <span className="font-semibold text-[var(--fc-text-primary)]">{displayableItems.length}</span> itens
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setVisibleInvoiceItemsCount(prev => Math.min(prev + INVOICE_BATCH_SIZE, displayableItems.length))}
+                                aria-label={`Mostrar mais ${Math.min(INVOICE_BATCH_SIZE, displayableItems.length - visibleDisplayableItems.length)} itens da fatura`}
+                                className="px-4 py-2 rounded-xl bg-[var(--fc-surface-1)] hover:bg-[var(--fc-surface-2)] text-[var(--fc-text-primary)] font-semibold border border-[var(--fc-border-default)] transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
+                            >
+                                Mostrar mais {Math.min(INVOICE_BATCH_SIZE, displayableItems.length - visibleDisplayableItems.length)} itens
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setVisibleInvoiceItemsCount(displayableItems.length)}
+                                aria-label={`Mostrar todos os ${displayableItems.length} itens da fatura`}
+                                className="px-3 py-2 rounded-xl bg-transparent hover:bg-[var(--fc-surface-2)] text-[var(--fc-accent)] font-semibold border border-[var(--fc-accent)]/30 hover:border-[var(--fc-accent)]/50 transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
+                            >
+                                Mostrar todos
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <GenericModal
@@ -1060,7 +1180,7 @@ function Dashboard({ selectedMonth, setSelectedMonth, selectedCardFilter, setSel
                 onClose={() => setIsMarkAllPaidConfirmationOpen(false)}
                 onConfirm={handleMarkAllAsPaid}
                 title="Confirmar Ação"
-                message="Tem certeza de que deseja marcar TODOS os itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita."
+                message={`Tem certeza de que deseja marcar TODOS os ${displayableItems.filter(item => item.currentStatus !== 'Paga').length} itens pendentes ou atrasados deste mês como PAGOS? Esta ação não pode ser desfeita.`}
                 isConfirmation={true}
             />
 
