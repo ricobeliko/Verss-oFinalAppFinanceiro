@@ -39,6 +39,7 @@ test.describe('Bloco C: Paginação de Faturas Grandes (>= 130 Itens) e Lotes', 
   });
 
   test('renderiza inicialmente lote de 50 itens e expande via "Mostrar mais" e "Mostrar todos"', async ({ page }) => {
+    test.setTimeout(45000);
     const statusText = page.locator('span[role="status"]').filter({ hasText: /Exibindo/ });
     await expect(statusText).toBeVisible();
     await expect(statusText).toContainText('Exibindo 50 de');

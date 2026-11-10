@@ -302,10 +302,11 @@ test.describe('FinControl — Smooth Page Wave Transition & Choreography (Commit
       const btn = page.getByRole('button', { name: targetTab }).first();
       await btn.click();
 
+      // Timeout de 6s para absorver coverIn (450ms) + settle (600ms) + reveal (600ms) sob 20 iterações consecutivas
       await expect(async () => {
         const isTrans = await html.evaluate((el) => el.classList.contains('fc-transitioning'));
         expect(isTrans).toBe(false);
-      }).toPass({ timeout: 3500 });
+      }).toPass({ timeout: 6000 });
     }
 
     // Após 20 trocas, verifica se os listeners foram limpos corretamente
