@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import MonthPicker, { CalendarIcon as MonthCalendarIcon } from '../src/components/MonthPicker';
 import DatePicker, { CalendarIcon as DateCalendarIcon } from '../src/components/DatePicker';
+import { calculateInvoiceDueDate, calculateInstallments } from '../src/services/financialService';
 
 describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso, Integridade e Acessibilidade (Commit 2)', () => {
   describe('1. Parsing e Formatação de Datas sem Dependência de Fuso (Zero Offset Bug)', () => {
@@ -455,6 +456,81 @@ describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso
       harness.open();
       expect(harness.getHeaderText()).toBe('Novembro de 2026');
       expect(harness.getFocusedDay()).toBe(19);
+    });
+  });
+
+  describe('6. Cálculo de Vencimento e Parcelas para Compra no Mês Anterior (Bloco 3)', () => {
+    // Cartão 1: closingDay < dueDay (ex: fechamento dia 5, vencimento dia 12)
+    const cardNubankGold = { id: 'card-1', name: 'Nubank Gold', closingDay: 5, dueDay: 12 };
+    // Cartão 2: closingDay >= dueDay (ex: fechamento dia 25, vencimento dia 5)
+    const cardInter = { id: 'card-2', name: 'Inter Platinum', closingDay: 25, dueDay: 5 };
+    // Cartão 3: closingDay < dueDay com fechamento dia 20 e vencimento dia 28
+    const cardLateClosing = { id: 'card-3', name: 'Cartão Fechamento 20', closingDay: 20, dueDay: 28 };
+
+    it('Caso 1: Compra em 2026-10-15 após o fechamento (dia 5) -> 1ª parcela cai em 2026-11-12 (Novembro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardNubankGold);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-11-12');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      // Parcela 1/3: Novembro/2026
+      expect(installments[0].number).toBe(1);
+      expect(installments[0].dueDate).toBe('2026-11-12');
+      expect(installments[0].status).toBe('Pendente');
+      // Parcela 2/3: Dezembro/2026
+      expect(installments[1].number).toBe(2);
+      expect(installments[1].dueDate).toBe('2026-12-12');
+      expect(installments[1].status).toBe('Pendente');
+      // Parcela 3/3: Janeiro/2027
+      expect(installments[2].number).toBe(3);
+      expect(installments[2].dueDate).toBe('2027-01-12');
+      expect(installments[2].status).toBe('Pendente');
+    });
+
+    it('Caso 2: Compra em 2026-10-15 antes do fechamento (dia 25) com vencimento dia 5 -> 1ª parcela cai em 2026-11-05 (Novembro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardInter);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-11-05');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      expect(installments[0].dueDate).toBe('2026-11-05');
+      expect(installments[1].dueDate).toBe('2026-12-05');
+      expect(installments[2].dueDate).toBe('2027-01-05');
+      installments.forEach(inst => expect(inst.status).toBe('Pendente'));
+    });
+
+    it('Caso 3: Compra em 2026-10-15 antes do fechamento (dia 20) com vencimento dia 28 -> 1ª parcela cai em 2026-10-28 (Outubro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardLateClosing);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-10-28');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      // Parcela 1/3: Outubro/2026
+      expect(installments[0].dueDate).toBe('2026-10-28');
+      // Parcela 2/3: Novembro/2026
+      expect(installments[1].dueDate).toBe('2026-11-28');
+      // Parcela 3/3: Dezembro/2026
+      expect(installments[2].dueDate).toBe('2026-12-28');
+      // Nenhuma parcela do passado é auto-marcada como paga; todas começam como Pendente
+      installments.forEach(inst => expect(inst.status).toBe('Pendente'));
     });
   });
 });
