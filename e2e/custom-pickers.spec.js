@@ -126,4 +126,57 @@ test.describe('E2E — Componentes <MonthPicker> e <DatePicker> Customizados (Ac
     await backdrop.click({ position: { x: 50, y: 50 } });
     await expect(bottomSheet).toBeHidden();
   });
+
+  test('DatePicker no Modal de Compra: navegar para mês anterior não pisca nem reseta e seleciona data do mês passado', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await setupSession(page);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    // Navega para Movimentações e abre modal de Nova Compra
+    await page.locator('button[aria-label="Movimentações"]').first().click();
+    await page.waitForTimeout(600);
+
+    const addPurchaseBtn = page.getByRole('button', { name: 'Adicionar Compra' }).first();
+    await addPurchaseBtn.click();
+
+    const modal = page.locator('div[role="dialog"]').first();
+    await expect(modal).toBeVisible();
+
+    // Trigger do DatePicker de Data da Compra
+    const dateTrigger = modal.locator('button[aria-haspopup="dialog"]').first();
+    await expect(dateTrigger).toBeVisible();
+    await dateTrigger.click();
+
+    // Popover do DatePicker aberto
+    const popover = page.locator('div[style*="position: fixed"]').first();
+    await expect(popover).toBeVisible();
+
+    // Clica no botão "Mês anterior"
+    const prevMonthBtn = popover.locator('button[aria-label="Mês anterior"]').first();
+    await expect(prevMonthBtn).toBeVisible();
+    await prevMonthBtn.click();
+
+    // Aguarda 300ms para confirmar que qualquer re-render não reverte o mês
+    await page.waitForTimeout(300);
+
+    // Seleciona o dia 15 do mês anterior
+    const day15Btn = popover.locator('button:has-text("15")').first();
+    await expect(day15Btn).toBeVisible();
+    await day15Btn.click();
+
+    // Popover fecha
+    await expect(popover).toBeHidden();
+
+    // Calcula o mês anterior esperado (formato dd/mm/aaaa)
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1; // 1-12
+    const targetMonth = curMonth === 1 ? 12 : curMonth - 1;
+    const targetYear = curMonth === 1 ? curYear - 1 : curYear;
+    const expectedDateFormatted = `15/${String(targetMonth).padStart(2, '0')}/${targetYear}`;
+
+    // Verifica que o trigger exibe a data no formato dd/mm/aaaa
+    await expect(dateTrigger).toContainText(expectedDateFormatted);
+  });
 });
