@@ -129,6 +129,9 @@ export default function MonthPicker({
   const popoverRef = useRef(null);
   const nativeInputRef = useRef(null);
 
+  const pYear = parsed?.year;
+  const pMonth = parsed?.month;
+
   // Detecta breakpoint móvel (< 640px)
   useEffect(() => {
     const checkMobile = () => {
@@ -139,14 +142,24 @@ export default function MonthPicker({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Sincroniza ano e foco quando valor mudar
+  // Sincroniza ano e foco com o mês selecionado ao abrir o popover ou quando o valor primitivo mudar
   useEffect(() => {
-    if (parsed) {
-      setViewYear(parsed.year);
-      setFocusedMonth(parsed.month);
-      setYearInput(String(parsed.year));
+    if (isOpen) {
+      setIsEditingYear(false);
+      if (pYear && pMonth) {
+        setViewYear(pYear);
+        setFocusedMonth(pMonth);
+        setYearInput(String(pYear));
+      } else {
+        const curDate = new Date();
+        const curY = curDate.getFullYear();
+        const curM = curDate.getMonth() + 1;
+        setViewYear(curY);
+        setFocusedMonth(curM);
+        setYearInput(String(curY));
+      }
     }
-  }, [value, parsed]);
+  }, [isOpen, pYear, pMonth]);
 
   // Recalcula posição do popover
   const updatePosition = useCallback(() => {

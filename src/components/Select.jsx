@@ -115,6 +115,8 @@ export default function Select({
   const nativeSelectRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   const searchStringRef = useRef('');
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   // Detecta breakpoint móvel (< 640px)
   useEffect(() => {
@@ -170,13 +172,13 @@ export default function Select({
     };
   }, [isOpen, isMobile, updatePosition]);
 
-  // Sincroniza índice destacado ao abrir
+  // Sincroniza índice destacado ao abrir ou quando o valor mudar
   useEffect(() => {
     if (isOpen) {
-      const idx = options.findIndex((o) => String(o.value) === String(value));
+      const idx = optionsRef.current.findIndex((o) => String(o.value) === String(value));
       setHighlightedIndex(idx >= 0 ? idx : 0);
     }
-  }, [isOpen, value, options]);
+  }, [isOpen, value]);
 
   // Fecha ao clicar fora do trigger e do popover
   useEffect(() => {
