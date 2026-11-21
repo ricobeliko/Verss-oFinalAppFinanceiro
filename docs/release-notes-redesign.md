@@ -27,6 +27,7 @@ O FinControl recebeu uma evolução visual e funcional completa, tornando a expe
    - Exportação CSV focada por pessoa na aba Pessoas, facilitando a prestação de contas e divisões compartilhadas.
 6. **Controles Próprios com a Identidade do App:**
    - `Select`, `MonthPicker` e `DatePicker` desenvolvidos internamente com a estética do FinControl, eliminando os popups cinzas e quadrados nativos do navegador.
+   - **Correção Fase 12.0:** Sincronização do DatePicker, MonthPicker e Select estabilizada com dependências primitivas, garantindo navegação contínua entre meses/anos sem resets indesejados ao re-renderizar.
 7. **Marca Animada e Novos Favicons:**
    - Logotipo oficial com 3 ondas fluidas animadas no cabeçalho e login.
    - Conjunto completo de ícones estáticos para navegador e PWA (`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`, `site.webmanifest`).
