@@ -148,6 +148,10 @@ export default function DatePicker({
   const popoverRef = useRef(null);
   const nativeInputRef = useRef(null);
 
+  const pYear = parsed?.year;
+  const pMonth = parsed?.month;
+  const pDay = parsed?.day;
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 640);
@@ -157,13 +161,22 @@ export default function DatePicker({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Sincroniza visão (mês/ano) e foco com a data selecionada ao abrir o popover ou quando o valor primitivo mudar
   useEffect(() => {
-    if (parsed) {
-      setViewYear(parsed.year);
-      setViewMonth(parsed.month);
-      setFocusedDay(parsed.day);
+    if (isOpen) {
+      setViewMode('days');
+      if (pYear && pMonth && pDay) {
+        setViewYear(pYear);
+        setViewMonth(pMonth);
+        setFocusedDay(pDay);
+      } else {
+        const currentToday = getTodayParts();
+        setViewYear(currentToday.year);
+        setViewMonth(currentToday.month);
+        setFocusedDay(currentToday.day);
+      }
     }
-  }, [value, parsed]);
+  }, [isOpen, pYear, pMonth, pDay]);
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current || isMobile) return;

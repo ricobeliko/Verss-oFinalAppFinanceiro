@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import MonthPicker, { CalendarIcon as MonthCalendarIcon } from '../src/components/MonthPicker';
 import DatePicker, { CalendarIcon as DateCalendarIcon } from '../src/components/DatePicker';
+import { calculateInvoiceDueDate, calculateInstallments } from '../src/services/financialService';
 
 describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso, Integridade e Acessibilidade (Commit 2)', () => {
   describe('1. Parsing e Formatação de Datas sem Dependência de Fuso (Zero Offset Bug)', () => {
@@ -222,6 +223,314 @@ describe('Componentes <MonthPicker> e <DatePicker> — Testes Unitários de Fuso
       expect(pickerHtml).toContain('width="16"');
       expect(pickerHtml).toContain('height="16"');
       expect(pickerHtml).toContain('w-4 h-4 shrink-0 text-[var(--fc-text-muted)]');
+    });
+  });
+
+  describe('5. Invariância de Navegação de Meses e Estabilidade sob Re-renders (Bugfix Fase 12.0)', () => {
+    function createDatePickerHarness({ initialValue = '2026-11-19', onChange, useBuggyEffect = false } = {}) {
+      let value = initialValue;
+      let isOpen = false;
+      let viewMode = 'days';
+
+      const parseDateParts = (val) => {
+        if (!val || typeof val !== 'string') return null;
+        const parts = val.split('-');
+        if (parts.length !== 3) return null;
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        if (isNaN(y) || isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) return null;
+        return { year: y, month: m, day: d };
+      };
+
+      const MONTH_NAMES_FULL = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ];
+
+      const initialParsed = parseDateParts(value);
+      let viewYear = initialParsed ? initialParsed.year : 2026;
+      let viewMonth = initialParsed ? initialParsed.month : 11;
+      let focusedDay = initialParsed ? initialParsed.day : 19;
+
+      let prevDeps = null;
+
+      const runRenderAndEffects = () => {
+        const parsed = parseDateParts(value);
+        const pYear = parsed?.year;
+        const pMonth = parsed?.month;
+        const pDay = parsed?.day;
+
+        if (useBuggyEffect) {
+          // Implementação anterior defeituosa (Commit c3f54cd / main):
+          // Dependência [value, parsed]. Como parsed é objeto novo a cada render,
+          // o efeito roda a cada re-render e reseta viewMonth para parsed.month.
+          const currentDeps = [value, parsed];
+          let depsChanged = false;
+          if (!prevDeps) {
+            depsChanged = true;
+          } else {
+            for (let i = 0; i < currentDeps.length; i++) {
+              if (!Object.is(currentDeps[i], prevDeps[i])) {
+                depsChanged = true;
+                break;
+              }
+            }
+          }
+          prevDeps = currentDeps;
+
+          if (depsChanged && parsed) {
+            viewYear = parsed.year;
+            viewMonth = parsed.month;
+            focusedDay = parsed.day;
+          }
+        } else {
+          // Implementação corrigida (Fase 12.0):
+          // Dependências primitivas [isOpen, pYear, pMonth, pDay]
+          const currentDeps = [isOpen, pYear, pMonth, pDay];
+          let depsChanged = false;
+          if (!prevDeps) {
+            depsChanged = true;
+          } else {
+            for (let i = 0; i < currentDeps.length; i++) {
+              if (!Object.is(currentDeps[i], prevDeps[i])) {
+                depsChanged = true;
+                break;
+              }
+            }
+          }
+          prevDeps = currentDeps;
+
+          if (depsChanged && isOpen) {
+            viewMode = 'days';
+            if (pYear && pMonth && pDay) {
+              viewYear = pYear;
+              viewMonth = pMonth;
+              focusedDay = pDay;
+            }
+          }
+        }
+      };
+
+      runRenderAndEffects();
+
+      return {
+        open: () => {
+          isOpen = true;
+          runRenderAndEffects();
+        },
+        close: () => {
+          isOpen = false;
+          runRenderAndEffects();
+        },
+        prevMonth: () => {
+          if (viewMonth === 1) {
+            viewYear -= 1;
+            viewMonth = 12;
+          } else {
+            viewMonth -= 1;
+          }
+          runRenderAndEffects();
+        },
+        nextMonth: () => {
+          if (viewMonth === 12) {
+            viewYear += 1;
+            viewMonth = 1;
+          } else {
+            viewMonth += 1;
+          }
+          runRenderAndEffects();
+        },
+        selectDay: (d) => {
+          const mStr = String(viewMonth).padStart(2, '0');
+          const dStr = String(d).padStart(2, '0');
+          const nextVal = `${viewYear}-${mStr}-${dStr}`;
+          isOpen = false;
+          if (onChange) {
+            onChange({ target: { value: nextVal } });
+          }
+          runRenderAndEffects();
+        },
+        rerender: (newVal) => {
+          if (newVal !== undefined) value = newVal;
+          runRenderAndEffects();
+        },
+        getHeaderText: () => `${MONTH_NAMES_FULL[viewMonth - 1]} de ${viewYear}`,
+        getViewYear: () => viewYear,
+        getViewMonth: () => viewMonth,
+        getFocusedDay: () => focusedDay,
+        getViewMode: () => viewMode,
+        getIsOpen: () => isOpen,
+      };
+    }
+
+    it('PROVA DA FALHA (RED) no modelo anterior: re-render após navegar reseta o mês de volta para Novembro', () => {
+      const buggyHarness = createDatePickerHarness({
+        initialValue: '2026-11-19',
+        useBuggyEffect: true,
+      });
+
+      buggyHarness.open();
+      expect(buggyHarness.getHeaderText()).toBe('Novembro de 2026');
+
+      // Usuário clica em "Mês anterior"
+      buggyHarness.prevMonth();
+
+      // No modelo anterior com defeito, o re-render disparado pelo prevMonth já executava o efeito
+      // devido à nova referência de `parsed`, resetando o mês imediatamente de volta para Novembro!
+      expect(buggyHarness.getHeaderText()).toBe('Novembro de 2026'); // FALHA COMPROVADA!
+    });
+
+    it('PROVA DO SUCESSO (GREEN) no modelo corrigido: navegar para Outubro PERMANECE após re-renders e permite navegar até Setembro', () => {
+      const handleChange = vi.fn();
+      const harness = createDatePickerHarness({
+        initialValue: '2026-11-19',
+        onChange: handleChange,
+        useBuggyEffect: false,
+      });
+
+      harness.open();
+      expect(harness.getHeaderText()).toBe('Novembro de 2026');
+
+      // 1. Clica em "Mês anterior" -> passa para "Outubro de 2026"
+      harness.prevMonth();
+      expect(harness.getHeaderText()).toBe('Outubro de 2026');
+
+      // 2. Re-render com o mesmo value -> PERMANECE "Outubro de 2026"
+      harness.rerender();
+      expect(harness.getHeaderText()).toBe('Outubro de 2026');
+
+      // 3. Clica de novo em "Mês anterior" -> passa para "Setembro de 2026"
+      harness.prevMonth();
+      expect(harness.getHeaderText()).toBe('Setembro de 2026');
+
+      // 4. Volta para Outubro clicando em "Próximo mês"
+      harness.nextMonth();
+      expect(harness.getHeaderText()).toBe('Outubro de 2026');
+
+      // 5. Clica no dia 15 de Outubro e verifica onChange com "2026-10-15"
+      harness.selectDay(15);
+      expect(handleChange).toHaveBeenCalledTimes(1);
+      expect(handleChange).toHaveBeenCalledWith({
+        target: { value: '2026-10-15' },
+      });
+      expect(harness.getIsOpen()).toBe(false);
+    });
+
+    it('trata virada de ano corretamente: value="2026-01-10", voltar um mês -> "Dezembro de 2025" e permanece após re-render', () => {
+      const harness = createDatePickerHarness({
+        initialValue: '2026-01-10',
+        useBuggyEffect: false,
+      });
+
+      harness.open();
+      expect(harness.getHeaderText()).toBe('Janeiro de 2026');
+
+      // Volta um mês (virada de ano)
+      harness.prevMonth();
+      expect(harness.getHeaderText()).toBe('Dezembro de 2025');
+
+      // Re-render deve preservar Dezembro de 2025
+      harness.rerender();
+      expect(harness.getHeaderText()).toBe('Dezembro de 2025');
+    });
+
+    it('fechar e reabrir após navegar restaura o mês do value selecionado', () => {
+      const harness = createDatePickerHarness({
+        initialValue: '2026-11-19',
+        useBuggyEffect: false,
+      });
+
+      harness.open();
+      expect(harness.getHeaderText()).toBe('Novembro de 2026');
+
+      // Navega para Outubro sem selecionar nada
+      harness.prevMonth();
+      expect(harness.getHeaderText()).toBe('Outubro de 2026');
+
+      // Fecha o calendário
+      harness.close();
+      expect(harness.getIsOpen()).toBe(false);
+
+      // Reabre o calendário: deve ressincronizar com a data de value
+      harness.open();
+      expect(harness.getHeaderText()).toBe('Novembro de 2026');
+      expect(harness.getFocusedDay()).toBe(19);
+    });
+  });
+
+  describe('6. Cálculo de Vencimento e Parcelas para Compra no Mês Anterior (Bloco 3)', () => {
+    // Cartão 1: closingDay < dueDay (ex: fechamento dia 5, vencimento dia 12)
+    const cardNubankGold = { id: 'card-1', name: 'Nubank Gold', closingDay: 5, dueDay: 12 };
+    // Cartão 2: closingDay >= dueDay (ex: fechamento dia 25, vencimento dia 5)
+    const cardInter = { id: 'card-2', name: 'Inter Platinum', closingDay: 25, dueDay: 5 };
+    // Cartão 3: closingDay < dueDay com fechamento dia 20 e vencimento dia 28
+    const cardLateClosing = { id: 'card-3', name: 'Cartão Fechamento 20', closingDay: 20, dueDay: 28 };
+
+    it('Caso 1: Compra em 2026-10-15 após o fechamento (dia 5) -> 1ª parcela cai em 2026-11-12 (Novembro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardNubankGold);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-11-12');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      // Parcela 1/3: Novembro/2026
+      expect(installments[0].number).toBe(1);
+      expect(installments[0].dueDate).toBe('2026-11-12');
+      expect(installments[0].status).toBe('Pendente');
+      // Parcela 2/3: Dezembro/2026
+      expect(installments[1].number).toBe(2);
+      expect(installments[1].dueDate).toBe('2026-12-12');
+      expect(installments[1].status).toBe('Pendente');
+      // Parcela 3/3: Janeiro/2027
+      expect(installments[2].number).toBe(3);
+      expect(installments[2].dueDate).toBe('2027-01-12');
+      expect(installments[2].status).toBe('Pendente');
+    });
+
+    it('Caso 2: Compra em 2026-10-15 antes do fechamento (dia 25) com vencimento dia 5 -> 1ª parcela cai em 2026-11-05 (Novembro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardInter);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-11-05');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      expect(installments[0].dueDate).toBe('2026-11-05');
+      expect(installments[1].dueDate).toBe('2026-12-05');
+      expect(installments[2].dueDate).toBe('2027-01-05');
+      installments.forEach(inst => expect(inst.status).toBe('Pendente'));
+    });
+
+    it('Caso 3: Compra em 2026-10-15 antes do fechamento (dia 20) com vencimento dia 28 -> 1ª parcela cai em 2026-10-28 (Outubro)', () => {
+      const firstDue = calculateInvoiceDueDate('2026-10-15', cardLateClosing);
+      const firstDueStr = firstDue.toISOString().split('T')[0];
+      expect(firstDueStr).toBe('2026-10-28');
+
+      const installments = calculateInstallments({
+        totalValue: 300,
+        count: 3,
+        startDate: firstDueStr,
+      });
+
+      expect(installments).toHaveLength(3);
+      // Parcela 1/3: Outubro/2026
+      expect(installments[0].dueDate).toBe('2026-10-28');
+      // Parcela 2/3: Novembro/2026
+      expect(installments[1].dueDate).toBe('2026-11-28');
+      // Parcela 3/3: Dezembro/2026
+      expect(installments[2].dueDate).toBe('2026-12-28');
+      // Nenhuma parcela do passado é auto-marcada como paga; todas começam como Pendente
+      installments.forEach(inst => expect(inst.status).toBe('Pendente'));
     });
   });
 });
